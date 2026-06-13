@@ -119,7 +119,7 @@ export default function Layout() {
       </div>
 
       {/* Main */}
-      <div className="flex min-h-screen flex-1 flex-col lg:pl-60">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:pl-60">
         {/* Mobile top bar */}
         <header className="glass-strong sticky top-0 z-20 flex items-center gap-3 border-b border-white/50 px-4 py-3 lg:hidden">
           <button
@@ -134,7 +134,7 @@ export default function Layout() {
           <BrandMark />
         </header>
 
-        <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <main className="mx-auto w-full min-w-0 max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <Outlet />
         </main>
       </div>
