@@ -43,6 +43,13 @@ campaign + traffic `source` (cost).
 
 ## Setup
 
+### 0. Clone the repo
+
+```bash
+git clone https://github.com/keoze2026/crm.git
+cd crm
+```
+
 ### 1. Database
 
 ```bash
