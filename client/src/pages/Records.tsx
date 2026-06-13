@@ -174,7 +174,7 @@ export default function Records() {
 
       {/* Filters */}
       <Card className="mb-4 p-4">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           <Select label="Type" value={filters.type} onChange={(e) => set({ type: e.target.value as RecordType | '' })}>
             <option value="">All types</option>
             <option value="buyer">Buyer (revenue)</option>
@@ -403,7 +403,7 @@ function RecordForm({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Input label="Date" type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} required />
 
         {type === 'buyer' && !isEdit && (
