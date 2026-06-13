@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Poppins', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+html,
+body,
+#root {
+  min-height: 100vh;
+}
+
+body {
+  font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+  color: #0f172a;
+  /* Soft colour blobs behind the frosted-glass UI */
+  background:
+    radial-gradient(38rem 38rem at 105% -8%, rgba(37, 99, 235, 0.20), transparent 60%),
+    radial-gradient(34rem 34rem at -8% 18%, rgba(99, 102, 241, 0.18), transparent 60%),
+    radial-gradient(30rem 30rem at 55% 118%, rgba(14, 165, 233, 0.16), transparent 60%),
+    linear-gradient(135deg, #eef2ff 0%, #f8fafc 50%, #eff6ff 100%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer utilities {
+  /* Frosted glass surfaces */
+  .glass {
+    background-color: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+  }
+  .glass-strong {
+    background-color: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(22px) saturate(170%);
+    -webkit-backdrop-filter: blur(22px) saturate(170%);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+  }
+  .glass-input {
+    background-color: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+}
+
+/* Recharts: keep tooltips/cursors tidy on glass */
+.recharts-default-tooltip {
+  border-radius: 0.75rem !important;
+}

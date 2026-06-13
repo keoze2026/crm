@@ -1,0 +1,149 @@
+import { useState } from 'react'
+import { api } from '../api/client'
+import { PageHeader } from '../components/Layout'
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  Modal,
+  Select,
+  Spinner,
+} from '../components/ui'
+import { formatDate, money, num } from '../lib/format'
+import { useAsync } from '../lib/useAsync'
+import type { Campaign } from '../types'
+
+export default function Campaigns() {
+  const [search, setSearch] = useState('')
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editing, setEditing] = useState<Campaign | null>(null)
+
+  const campaigns = useAsync(() => api.campaigns(search), [search])
+
+  const openNew = () => { setEditing(null); setModalOpen(true) }
+  const openEdit = (c: Campaign) => { setEditing(c); setModalOpen(true) }
+  const onSaved = () => { setModalOpen(false); campaigns.reload() }
+
+  const onDelete = async (c: Campaign) => {
+    if (!confirm(`Delete campaign ${c.code}? This also deletes its ${num(c.records)} call records.`)) return
+    await api.deleteCampaign(c.id)
+    campaigns.reload()
+  }
+
+  const list = campaigns.data ?? []
+
+  return (
+    <div>
+      <PageHeader title="Campaigns" subtitle="Media-buying campaigns that source calls (cost side)">
+        <Input placeholder="Search campaigns…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-48" />
+        <Button onClick={openNew}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+          Add campaign
+        </Button>
+      </PageHeader>
+
+      {campaigns.loading ? (
+        <div className="flex justify-center py-16"><Spinner className="h-6 w-6" /></div>
+      ) : list.length === 0 ? (
+        <Card><EmptyState message="No campaigns yet. Add your first campaign to get started." /></Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {list.map((c) => {
+            const answerRate = c.answered + c.missed > 0 ? Math.round((c.answered / (c.answered + c.missed)) * 100) : 0
+            return (
+              <Card key={c.id} className="p-5">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-semibold text-slate-900">{c.code}</span>
+                      <Badge color={c.status === 'active' ? 'green' : 'slate'}>{c.status}</Badge>
+                    </div>
+                    {c.name && <p className="text-sm text-slate-500">{c.name}</p>}
+                  </div>
+                  <div className="flex gap-1">
+                    <button onClick={() => openEdit(c)} className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600" title="Edit">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                    </button>
+                    <button onClick={() => onDelete(c)} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-xl bg-amber-50/70 px-3 py-2">
+                  <div className="text-xs text-amber-700">Total running fee</div>
+                  <div className="text-xl font-bold text-amber-700">{money(c.cost)}</div>
+                </div>
+
+                <dl className="mt-3 grid grid-cols-2 gap-y-2 text-sm">
+                  <dt className="text-slate-500">Counted</dt>
+                  <dd className="text-right font-medium text-slate-700">{num(c.counted)}</dd>
+                  <dt className="text-slate-500">Sources</dt>
+                  <dd className="text-right font-medium text-slate-700">{num(c.sources)}</dd>
+                  <dt className="text-slate-500">Answer rate</dt>
+                  <dd className="text-right font-medium text-slate-700">{answerRate}%</dd>
+                  <dt className="text-slate-500">Last activity</dt>
+                  <dd className="text-right font-medium text-slate-700">{formatDate(c.last_activity)}</dd>
+                </dl>
+              </Card>
+            )
+          })}
+        </div>
+      )}
+
+      {campaigns.error && <p className="mt-4 text-sm text-red-600">{campaigns.error}</p>}
+
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? `Edit ${editing.code}` : 'Add campaign'}>
+        <CampaignForm editing={editing} onSaved={onSaved} onCancel={() => setModalOpen(false)} />
+      </Modal>
+    </div>
+  )
+}
+
+function CampaignForm({ editing, onSaved, onCancel }: { editing: Campaign | null; onSaved: () => void; onCancel: () => void }) {
+  const [code, setCode] = useState(editing?.code ?? '')
+  const [name, setName] = useState(editing?.name ?? '')
+  const [status, setStatus] = useState(editing?.status ?? 'active')
+  const [notes, setNotes] = useState(editing?.notes ?? '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true); setError(null)
+    try {
+      const data = { code, name: name || null, status, notes: notes || null }
+      if (editing) await api.updateCampaign(editing.id, data)
+      else await api.createCampaign(data)
+      onSaved()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <Input label="Code" placeholder="e.g. C-05" value={code} onChange={(e) => setCode(e.target.value)} required />
+        <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </Select>
+      </div>
+      <Input label="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
+      <label className="block">
+        <span className="mb-1 block text-sm font-medium text-slate-700">Notes</span>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="glass-input w-full rounded-xl border border-white/70 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+      </label>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+        <Button type="submit" disabled={saving}>{saving && <Spinner className="h-4 w-4 text-white" />}{editing ? 'Save' : 'Add campaign'}</Button>
+      </div>
+    </form>
+  )
+}
