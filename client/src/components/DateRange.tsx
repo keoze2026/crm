@@ -26,14 +26,14 @@ export function DateRangeControl({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
       <div className="glass-input flex rounded-xl border border-white/70 p-0.5">
         {PRESETS.map((p) => (
           <button
             key={p.label}
             onClick={() => onChange(p.range())}
             className={cx(
-              'rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
+              'flex-1 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors sm:flex-none',
               matchesPreset(p) ? 'bg-linear-to-b from-blue-500 to-blue-600 text-white shadow' : 'text-slate-600 hover:bg-white/60',
             )}
           >
@@ -41,22 +41,24 @@ export function DateRangeControl({
           </button>
         ))}
       </div>
-      <input
-        type="date"
-        value={value.from}
-        max={value.to}
-        onChange={(e) => onChange({ ...value, from: e.target.value })}
-        className="glass-input rounded-xl border border-white/70 px-2.5 py-1.5 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-      />
-      <span className="text-slate-400">→</span>
-      <input
-        type="date"
-        value={value.to}
-        min={value.from}
-        max={today()}
-        onChange={(e) => onChange({ ...value, to: e.target.value })}
-        className="glass-input rounded-xl border border-white/70 px-2.5 py-1.5 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-      />
+      <div className="flex flex-1 items-center gap-2 sm:flex-none">
+        <input
+          type="date"
+          value={value.from}
+          max={value.to}
+          onChange={(e) => onChange({ ...value, from: e.target.value })}
+          className="glass-input min-w-0 flex-1 rounded-xl border border-white/70 px-2.5 py-1.5 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 sm:flex-none"
+        />
+        <span className="text-slate-400">→</span>
+        <input
+          type="date"
+          value={value.to}
+          min={value.from}
+          max={today()}
+          onChange={(e) => onChange({ ...value, to: e.target.value })}
+          className="glass-input min-w-0 flex-1 rounded-xl border border-white/70 px-2.5 py-1.5 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 sm:flex-none"
+        />
+      </div>
     </div>
   )
 }

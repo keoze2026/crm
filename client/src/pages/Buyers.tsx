@@ -37,7 +37,9 @@ export default function Buyers() {
   return (
     <div>
       <PageHeader title="Buyers" subtitle="Customers who purchase forwarded calls (revenue side)">
-        <Input placeholder="Search buyers…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-48" />
+        <div className="w-full sm:w-auto">
+          <Input placeholder="Search buyers…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full sm:w-48" />
+        </div>
         <Button onClick={openNew}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
           Add buyer
