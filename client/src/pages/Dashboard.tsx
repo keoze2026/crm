@@ -23,7 +23,13 @@ import { Button, Card, CardHeader, cx, Spinner } from '../components/ui'
 import { daysAgo, formatPeriod, money, num, pct, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 
-type Granularity = 'day' | 'month' | 'year'
+type Granularity = 'day' | '4day' | 'week'
+
+const GRANULARITIES: { value: Granularity; label: string }[] = [
+  { value: 'day', label: 'Daily' },
+  { value: '4day', label: '4 Days' },
+  { value: 'week', label: 'Weekly' },
+]
 
 const COLORS = {
   revenue: '#2563eb',
@@ -115,7 +121,8 @@ async function generateDashboardPdf(data: DashboardData) {
   y = addTable(doc, y, kpiHead, kpiRows) + 20
 
   // ── Trends ─────────────────────────────────────────────────────────────────
-  y = addSection(doc, `Revenue / Running Fee / Profit Trend  (${granularity})`, y)
+  const granularityLabel = GRANULARITIES.find((g) => g.value === granularity)?.label ?? granularity
+  y = addSection(doc, `Revenue / Running Fee / Profit Trend  (${granularityLabel})`, y)
   const trendRows = trends.map((t) => [
     formatPeriod(t.period),
     `$${t.revenue.toFixed(2)}`,
@@ -160,7 +167,7 @@ async function generateDashboardPdf(data: DashboardData) {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const [range, setRange] = useState<Range>({ from: daysAgo(89), to: today() })
+  const [range, setRange] = useState<Range>({ from: daysAgo(6), to: today() })
   const [granularity, setGranularity] = useState<Granularity>('day')
   const [pdfLoading, setPdfLoading] = useState(false)
 
@@ -236,18 +243,18 @@ export default function Dashboard() {
           subtitle="Income trend across the selected period"
           action={
             <div className="glass-input flex rounded-xl border border-white/70 p-0.5">
-              {(['day', 'month', 'year'] as Granularity[]).map((g) => (
+              {GRANULARITIES.map((g) => (
                 <button
-                  key={g}
-                  onClick={() => setGranularity(g)}
+                  key={g.value}
+                  onClick={() => setGranularity(g.value)}
                   className={cx(
-                    'rounded-lg px-2.5 py-1 text-xs font-medium capitalize transition-colors',
-                    granularity === g
+                    'rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
+                    granularity === g.value
                       ? 'bg-linear-to-b from-blue-500 to-blue-600 text-white shadow'
                       : 'text-slate-600 hover:bg-white/60',
                   )}
                 >
-                  {g}
+                  {g.label}
                 </button>
               ))}
             </div>

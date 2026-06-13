@@ -42,8 +42,12 @@ final class AnalyticsController
     {
         $granularity = Http::query('granularity', 'day');
         $period = match ($granularity) {
-            'month' => "to_char(record_date, 'YYYY-MM')",
             'year'  => "to_char(record_date, 'YYYY')",
+            'month' => "to_char(record_date, 'YYYY-MM')",
+            // Week bucket → the Monday that starts the ISO week.
+            'week'  => "to_char(date_trunc('week', record_date), 'YYYY-MM-DD')",
+            // 4-day bucket → start date of each fixed 4-day window (anchored at 2000-01-01).
+            '4day'  => "to_char(DATE '2000-01-01' + ((record_date - DATE '2000-01-01') / 4) * 4, 'YYYY-MM-DD')",
             default => "to_char(record_date, 'YYYY-MM-DD')",
         };
 

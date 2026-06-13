@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api/client'
 import { PageHeader } from '../components/Layout'
+import RecordsSection from '../components/RecordsSection'
 import {
   Badge,
   Button,
@@ -82,7 +83,7 @@ export default function Campaigns() {
                 <dl className="mt-3 grid grid-cols-2 gap-y-2 text-sm">
                   <dt className="text-slate-500">Counted</dt>
                   <dd className="text-right font-medium text-slate-700">{num(c.counted)}</dd>
-                  <dt className="text-slate-500">Sources</dt>
+                  <dt className="text-slate-500">Destinations</dt>
                   <dd className="text-right font-medium text-slate-700">{num(c.sources)}</dd>
                   <dt className="text-slate-500">Answer rate</dt>
                   <dd className="text-right font-medium text-slate-700">{answerRate}%</dd>
@@ -96,6 +97,15 @@ export default function Campaigns() {
       )}
 
       {campaigns.error && <p className="mt-4 text-sm text-red-600">{campaigns.error}</p>}
+
+      {/* Cost records — campaign (cost) entries, mirroring the Call Records table */}
+      <RecordsSection
+        type="campaign"
+        title="Cost records"
+        subtitle="Cost — campaign call records"
+        compact
+        onChange={() => campaigns.reload()}
+      />
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? `Edit ${editing.code}` : 'Add campaign'}>
         <CampaignForm editing={editing} onSaved={onSaved} onCancel={() => setModalOpen(false)} />

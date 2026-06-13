@@ -2,6 +2,18 @@
 -- Pay-per-call / call-forwarding CRM.
 -- Run with: psql -U postgres -d crm -f database/schema.sql
 
+-- Users / operators. This is the one table the 40-day data-retention job never
+-- touches (see database/cleanup.php). Created but deliberately NOT dropped on
+-- reseed so accounts survive a schema reload.
+CREATE TABLE IF NOT EXISTS users (
+    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    email         TEXT        NOT NULL UNIQUE,
+    name          TEXT,
+    password_hash TEXT,
+    role          TEXT        NOT NULL DEFAULT 'member',
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 DROP TABLE IF EXISTS call_records CASCADE;
 DROP TABLE IF EXISTS buyers CASCADE;
 DROP TABLE IF EXISTS campaigns CASCADE;

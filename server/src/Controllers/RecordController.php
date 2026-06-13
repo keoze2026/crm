@@ -33,7 +33,7 @@ final class RecordController
             'answered'    => 'r.answered',
             'missed'      => 'r.missed',
         ];
-        $sort = $sortMap[Http::query('sort', 'record_date')] ?? 'r.record_date';
+        $sort = $sortMap[Http::query('sort', 'total_bill')] ?? 'r.total_bill';
         $dir = strtolower((string) Http::query('dir', 'desc')) === 'asc' ? 'ASC' : 'DESC';
 
         $page = max(1, (int) Http::query('page', '1'));
@@ -114,7 +114,7 @@ final class RecordController
         $stmt = $pdo->prepare(
             'UPDATE call_records SET
                 record_date = COALESCE(:d, record_date),
-                source      = :src,
+                source      = COALESCE(:src, source),
                 answered    = COALESCE(:a, answered),
                 missed      = COALESCE(:m, missed),
                 counted     = COALESCE(:c, counted),
@@ -147,7 +147,7 @@ final class RecordController
     public function export(): void
     {
         [$where, $params] = RecordFilter::build();
-        $stmt = Database::connection()->prepare(self::SELECT . " {$where} ORDER BY r.record_date DESC, r.id DESC");
+        $stmt = Database::connection()->prepare(self::SELECT . " {$where} ORDER BY r.total_bill DESC, r.id DESC");
         $stmt->execute($params);
 
         $rows = (function () use ($stmt) {
@@ -157,7 +157,6 @@ final class RecordController
                     $r['record_type'],
                     $r['buyer_code'] ?? '',
                     $r['campaign_code'] ?? '',
-                    $r['source'] ?? '',
                     $r['answered'],
                     $r['missed'],
                     $r['counted'],
@@ -169,7 +168,7 @@ final class RecordController
 
         Http::csv(
             'call-records.csv',
-            ['Date', 'Type', 'Buyer', 'Campaign', 'Source', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill'],
+            ['Date', 'Type', 'Buyer', 'Campaign', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill'],
             $rows
         );
     }

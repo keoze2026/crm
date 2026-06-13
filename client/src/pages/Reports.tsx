@@ -61,7 +61,7 @@ function buildPdf(
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function Reports() {
-  const [range, setRange] = useState<Range>({ from: daysAgo(89), to: today() })
+  const [range, setRange] = useState<Range>({ from: daysAgo(6), to: today() })
   const [pdfLoading, setPdfLoading] = useState<Record<string, boolean>>({})
 
   const summary      = useAsync(() => api.summary(range),                              [range.from, range.to])
@@ -89,7 +89,6 @@ export default function Reports() {
       r.record_type,
       r.buyer_code ?? '',
       r.campaign_code ?? '',
-      r.source ?? '',
       r.answered,
       r.missed,
       r.counted,
@@ -99,7 +98,7 @@ export default function Reports() {
     buildPdf(
       'Call Records Export',
       rangeLabel,
-      ['Date', 'Type', 'Buyer', 'Campaign', 'Source', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill'],
+      ['Date', 'Type', 'Buyer', 'Campaign', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill'],
       rows,
     ).save('call-records.pdf')
   })
@@ -151,7 +150,7 @@ export default function Reports() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <DownloadCard
           title="Call records export"
-          desc="Every call record in the selected range — dates, buyers, campaigns, sources and billing."
+          desc="Every call record in the selected range — dates, buyers, campaigns and billing."
           csvHref={api.recordsExportUrl({ from: range.from, to: range.to })}
           onPdf={downloadRecordsPdf}
           pdfLoading={!!pdfLoading['records']}
@@ -235,11 +234,11 @@ export default function Reports() {
       </div>
 
       <Card className="mt-6">
-        <CardHeader title="Top traffic sources" subtitle="Campaign spend by source" />
+        <CardHeader title="Top destinations" subtitle="Campaign spend by destination" />
         <Table
           loading={topSources.loading}
           empty={(topSources.data?.length ?? 0) === 0}
-          head={['Source', 'Running Fee', 'Counted', 'Avg. fee / call']}
+          head={['Destination', 'Running Fee', 'Counted', 'Avg. fee / call']}
           rows={(topSources.data ?? []).map((s) => [
             s.source,
             money(s.cost),

@@ -50,7 +50,7 @@ export const api = {
   // Analytics
   summary: (range: DateRange) =>
     request<Summary>(`/analytics/summary${qs(range)}`),
-  trends: (range: DateRange & { granularity: 'day' | 'month' | 'year' }) =>
+  trends: (range: DateRange & { granularity: 'day' | '4day' | 'week' | 'month' | 'year' }) =>
     request<TrendPoint[]>(`/analytics/trends${qs(range)}`),
   topBuyers: (params: DateRange & { limit?: number; metric?: string }) =>
     request<TopBuyer[]>(`/analytics/top-buyers${qs(params)}`),

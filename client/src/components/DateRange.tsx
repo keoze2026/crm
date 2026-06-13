@@ -6,11 +6,12 @@ export interface Range {
   to: string
 }
 
+// Short-window presets only — the CRM keeps a rolling 40-day window and has no
+// long-term data, so the date filter is limited to Daily / 4 Days / Weekly.
 const PRESETS: { label: string; range: () => Range }[] = [
-  { label: '7D', range: () => ({ from: daysAgo(6), to: today() }) },
-  { label: '30D', range: () => ({ from: daysAgo(29), to: today() }) },
-  { label: '90D', range: () => ({ from: daysAgo(89), to: today() }) },
-  { label: 'YTD', range: () => ({ from: `${today().slice(0, 4)}-01-01`, to: today() }) },
+  { label: 'Daily', range: () => ({ from: today(), to: today() }) },
+  { label: '4 Days', range: () => ({ from: daysAgo(3), to: today() }) },
+  { label: 'Weekly', range: () => ({ from: daysAgo(6), to: today() }) },
 ]
 
 export function DateRangeControl({
@@ -26,39 +27,19 @@ export function DateRangeControl({
   }
 
   return (
-    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-      <div className="glass-input flex rounded-xl border border-white/70 p-0.5">
-        {PRESETS.map((p) => (
-          <button
-            key={p.label}
-            onClick={() => onChange(p.range())}
-            className={cx(
-              'flex-1 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors sm:flex-none',
-              matchesPreset(p) ? 'bg-linear-to-b from-blue-500 to-blue-600 text-white shadow' : 'text-slate-600 hover:bg-white/60',
-            )}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-      <div className="flex flex-1 items-center gap-2 sm:flex-none">
-        <input
-          type="date"
-          value={value.from}
-          max={value.to}
-          onChange={(e) => onChange({ ...value, from: e.target.value })}
-          className="glass-input min-w-0 flex-1 rounded-xl border border-white/70 px-2.5 py-1.5 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 sm:flex-none"
-        />
-        <span className="text-slate-400">→</span>
-        <input
-          type="date"
-          value={value.to}
-          min={value.from}
-          max={today()}
-          onChange={(e) => onChange({ ...value, to: e.target.value })}
-          className="glass-input min-w-0 flex-1 rounded-xl border border-white/70 px-2.5 py-1.5 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 sm:flex-none"
-        />
-      </div>
+    <div className="glass-input flex w-full flex-wrap rounded-xl border border-white/70 p-0.5 sm:w-auto">
+      {PRESETS.map((p) => (
+        <button
+          key={p.label}
+          onClick={() => onChange(p.range())}
+          className={cx(
+            'flex-1 whitespace-nowrap rounded-lg px-3 py-1 text-xs font-medium transition-colors sm:flex-none',
+            matchesPreset(p) ? 'bg-linear-to-b from-blue-500 to-blue-600 text-white shadow' : 'text-slate-600 hover:bg-white/60',
+          )}
+        >
+          {p.label}
+        </button>
+      ))}
     </div>
   )
 }
