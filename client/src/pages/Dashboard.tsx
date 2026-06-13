@@ -1,3 +1,5 @@
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import { useState } from 'react'
 import {
   Area,
@@ -17,61 +19,214 @@ import {
 import { api } from '../api/client'
 import { DateRangeControl, DownloadButton, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
-import { Card, CardHeader, cx, Spinner } from '../components/ui'
+import { Button, Card, CardHeader, cx, Spinner } from '../components/ui'
 import { daysAgo, formatPeriod, money, num, pct, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 
 type Granularity = 'day' | 'month' | 'year'
 
 const COLORS = {
-  revenue: '#2563eb', // blue-600
-  cost: '#cbd5e1', // slate-300
-  margin: '#16a34a', // green-600
+  revenue: '#2563eb',
+  cost: '#cbd5e1',
+  margin: '#16a34a',
   answered: '#2563eb',
-  missed: '#f43f5e', // rose-500
+  missed: '#f43f5e',
 }
+
+// ─── PDF generation ──────────────────────────────────────────────────────────
+
+function pdfHeader(doc: jsPDF, title: string, subtitle: string) {
+  const pageW = doc.internal.pageSize.getWidth()
+  doc.setFontSize(18)
+  doc.setTextColor(30, 64, 175)
+  doc.setFont('helvetica', 'bold')
+  doc.text('CallFlow CRM', 40, 44)
+
+  doc.setFontSize(13)
+  doc.setTextColor(15, 23, 42)
+  doc.text(title, 40, 64)
+
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(100, 116, 139)
+  doc.text(subtitle, 40, 80)
+  doc.text(`Generated ${new Date().toLocaleString()}`, pageW - 40, 80, { align: 'right' })
+}
+
+function addSection(doc: jsPDF, label: string, y: number): number {
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(30, 64, 175)
+  doc.text(label, 40, y)
+  return y + 6
+}
+
+function addTable(
+  doc: jsPDF,
+  startY: number,
+  head: string[],
+  rows: (string | number)[][],
+): number {
+  autoTable(doc, {
+    startY,
+    head: [head],
+    body: rows.map((r) => r.map(String)),
+    styles: { fontSize: 9, cellPadding: 4 },
+    headStyles: { fillColor: [30, 64, 175], textColor: 255, fontStyle: 'bold', halign: 'left' },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: Object.fromEntries(
+      head.slice(1).map((_, i) => [i + 1, { halign: 'right' }])
+    ),
+    margin: { left: 40, right: 40 },
+  })
+  return (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY
+}
+
+interface DashboardData {
+  summary: ReturnType<typeof api.summary> extends Promise<infer T> ? T : never
+  trends: Awaited<ReturnType<typeof api.trends>>
+  topBuyers: Awaited<ReturnType<typeof api.topBuyers>>
+  topSources: Awaited<ReturnType<typeof api.topSources>>
+  range: Range
+  granularity: Granularity
+}
+
+async function generateDashboardPdf(data: DashboardData) {
+  const { summary: s, trends, topBuyers, topSources, range, granularity } = data
+  const rangeLabel = `${range.from}  →  ${range.to}`
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
+  pdfHeader(doc, 'Dashboard Summary', rangeLabel)
+
+  // ── KPI block ──────────────────────────────────────────────────────────────
+  let y = addSection(doc, 'Key Performance Indicators', 100)
+
+  const kpiHead = ['Metric', 'Value', 'vs Previous Period']
+  const kpiRows: (string | number)[][] = [
+    ['Revenue (billed)',   money(s.revenue), s.deltas.revenue  != null ? pct(s.deltas.revenue)  : '—'],
+    ['Running Fee',        money(s.cost),    s.deltas.cost     != null ? pct(s.deltas.cost)     : '—'],
+    ['Profit',             money(s.margin),  s.deltas.margin   != null ? pct(s.deltas.margin)   : '—'],
+    ['Counted Calls',      num(s.counted),   s.deltas.counted  != null ? pct(s.deltas.counted)  : '—'],
+    ['Answer Rate',        `${s.answer_rate}%`,  ''],
+    ['Profit Margin',      `${s.margin_pct}%`,   ''],
+    ['Active Buyers',      s.active_buyers,      ''],
+    ['Active Campaigns',   s.active_campaigns,   ''],
+  ]
+  y = addTable(doc, y, kpiHead, kpiRows) + 20
+
+  // ── Trends ─────────────────────────────────────────────────────────────────
+  y = addSection(doc, `Revenue / Running Fee / Profit Trend  (${granularity})`, y)
+  const trendRows = trends.map((t) => [
+    formatPeriod(t.period),
+    `$${t.revenue.toFixed(2)}`,
+    `$${t.cost.toFixed(2)}`,
+    `$${t.margin.toFixed(2)}`,
+    t.counted,
+    t.answered,
+    t.missed,
+  ])
+  y = addTable(doc, y, ['Period', 'Revenue', 'Running Fee', 'Profit', 'Counted', 'Answered', 'Missed'], trendRows) + 20
+
+  // ── Top buyers (new page if not enough space) ───────────────────────────────
+  const pageH = doc.internal.pageSize.getHeight()
+  if (y > pageH - 120) { doc.addPage(); y = 60 }
+
+  y = addSection(doc, 'Top Buyers  (by revenue)', y)
+  const buyerRows = topBuyers.map((b) => [
+    b.code,
+    b.name ?? '',
+    `$${b.revenue.toFixed(2)}`,
+    b.counted,
+    b.answered,
+    b.missed,
+  ])
+  y = addTable(doc, y, ['Buyer', 'Name', 'Revenue', 'Counted', 'Answered', 'Missed'], buyerRows) + 20
+
+  // ── Top sources ─────────────────────────────────────────────────────────────
+  if (y > pageH - 120) { doc.addPage(); y = 60 }
+
+  y = addSection(doc, 'Top Traffic Sources  (by spend)', y)
+  const sourceRows = topSources.map((s) => [
+    s.source,
+    `$${s.cost.toFixed(2)}`,
+    s.counted,
+    s.counted > 0 ? `$${(s.cost / s.counted).toFixed(2)}` : '—',
+  ])
+  addTable(doc, y, ['Source', 'Spend', 'Counted', 'Avg. / call'], sourceRows)
+
+  doc.save('dashboard-summary.pdf')
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const [range, setRange] = useState<Range>({ from: daysAgo(89), to: today() })
   const [granularity, setGranularity] = useState<Granularity>('day')
+  const [pdfLoading, setPdfLoading] = useState(false)
 
-  const summary = useAsync(() => api.summary(range), [range.from, range.to])
-  const trends = useAsync(
-    () => api.trends({ ...range, granularity }),
-    [range.from, range.to, granularity],
-  )
-  const topBuyers = useAsync(
-    () => api.topBuyers({ ...range, limit: 8 }),
-    [range.from, range.to],
-  )
-  const topSources = useAsync(
-    () => api.topSources({ ...range, limit: 6 }),
-    [range.from, range.to],
-  )
+  const summary    = useAsync(() => api.summary(range),                             [range.from, range.to])
+  const trends     = useAsync(() => api.trends({ ...range, granularity }),          [range.from, range.to, granularity])
+  const topBuyers  = useAsync(() => api.topBuyers({ ...range, limit: 8 }),          [range.from, range.to])
+  const topSources = useAsync(() => api.topSources({ ...range, limit: 6 }),         [range.from, range.to])
 
   const s = summary.data
+
+  const handlePdf = async () => {
+    if (!summary.data || !trends.data || !topBuyers.data || !topSources.data) return
+    setPdfLoading(true)
+    try {
+      await generateDashboardPdf({
+        summary: summary.data,
+        trends: trends.data,
+        topBuyers: topBuyers.data,
+        topSources: topSources.data,
+        range,
+        granularity,
+      })
+    } finally {
+      setPdfLoading(false)
+    }
+  }
+
+  const dataReady = !!(summary.data && trends.data && topBuyers.data && topSources.data)
 
   return (
     <div>
       <PageHeader title="Dashboard" subtitle="Performance overview of calls, revenue and margin">
         <DateRangeControl value={range} onChange={setRange} />
-        <DownloadButton href={api.reportUrl(range)}>Report</DownloadButton>
+        <DownloadButton href={api.reportUrl(range)}>CSV</DownloadButton>
+        <Button
+          variant="secondary"
+          onClick={handlePdf}
+          disabled={pdfLoading || !dataReady}
+        >
+          {pdfLoading ? (
+            <Spinner className="h-3.5 w-3.5" />
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <path d="M14 2v6h6" />
+              <path d="M16 13H8M16 17H8M10 9H8" />
+            </svg>
+          )}
+          PDF
+        </Button>
       </PageHeader>
 
       {/* KPI cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Revenue (billed)" value={s ? money(s.revenue) : '—'} delta={s?.deltas.revenue} loading={summary.loading} positiveIsGood />
-        <StatCard label="Running Fee" value={s ? money(s.cost) : '—'} delta={s?.deltas.cost} loading={summary.loading} positiveIsGood={false} />
-        <StatCard label="Profit" value={s ? money(s.margin) : '—'} delta={s?.deltas.margin} loading={summary.loading} positiveIsGood accent />
-        <StatCard label="Counted Calls" value={s ? num(s.counted) : '—'} delta={s?.deltas.counted} loading={summary.loading} positiveIsGood />
+        <StatCard label="Revenue (billed)"  value={s ? money(s.revenue) : '—'} delta={s?.deltas.revenue} loading={summary.loading} positiveIsGood />
+        <StatCard label="Running Fee"       value={s ? money(s.cost)    : '—'} delta={s?.deltas.cost}    loading={summary.loading} positiveIsGood={false} />
+        <StatCard label="Profit"            value={s ? money(s.margin)  : '—'} delta={s?.deltas.margin}  loading={summary.loading} positiveIsGood accent />
+        <StatCard label="Counted Calls"     value={s ? num(s.counted)   : '—'} delta={s?.deltas.counted} loading={summary.loading} positiveIsGood />
       </div>
 
       {/* Secondary metrics */}
       <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <MiniStat label="Answer Rate" value={s ? `${s.answer_rate}%` : '—'} />
-        <MiniStat label="Profit Margin" value={s ? `${s.margin_pct}%` : '—'} />
-        <MiniStat label="Active Buyers" value={s ? num(s.active_buyers) : '—'} />
-        <MiniStat label="Active Campaigns" value={s ? num(s.active_campaigns) : '—'} />
+        <MiniStat label="Answer Rate"       value={s ? `${s.answer_rate}%` : '—'} />
+        <MiniStat label="Profit Margin"     value={s ? `${s.margin_pct}%`  : '—'} />
+        <MiniStat label="Active Buyers"     value={s ? num(s.active_buyers)     : '—'} />
+        <MiniStat label="Active Campaigns"  value={s ? num(s.active_campaigns)  : '—'} />
       </div>
 
       {/* Revenue / cost / margin trend */}
@@ -87,7 +242,9 @@ export default function Dashboard() {
                   onClick={() => setGranularity(g)}
                   className={cx(
                     'rounded-lg px-2.5 py-1 text-xs font-medium capitalize transition-colors',
-                    granularity === g ? 'bg-linear-to-b from-blue-500 to-blue-600 text-white shadow' : 'text-slate-600 hover:bg-white/60',
+                    granularity === g
+                      ? 'bg-linear-to-b from-blue-500 to-blue-600 text-white shadow'
+                      : 'text-slate-600 hover:bg-white/60',
                   )}
                 >
                   {g}
@@ -104,7 +261,7 @@ export default function Dashboard() {
               <AreaChart data={trends.data ?? []} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={COLORS.revenue} stopOpacity={0.3} />
+                    <stop offset="5%"  stopColor={COLORS.revenue} stopOpacity={0.3} />
                     <stop offset="95%" stopColor={COLORS.revenue} stopOpacity={0} />
                   </linearGradient>
                 </defs>
@@ -113,9 +270,9 @@ export default function Dashboard() {
                 <YAxis tickFormatter={(v) => `$${Math.round(v / 1000)}k`} tick={{ fontSize: 12, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={48} />
                 <Tooltip content={<MoneyTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Area type="monotone" dataKey="revenue" name="Revenue" stroke={COLORS.revenue} strokeWidth={2} fill="url(#rev)" />
-                <Area type="monotone" dataKey="cost" name="Running Fee" stroke={COLORS.cost} strokeWidth={2} fill="transparent" />
-                <Area type="monotone" dataKey="margin" name="Profit" stroke={COLORS.margin} strokeWidth={2} fill="transparent" />
+                <Area type="monotone" dataKey="revenue" name="Revenue"     stroke={COLORS.revenue} strokeWidth={2} fill="url(#rev)" />
+                <Area type="monotone" dataKey="cost"    name="Running Fee" stroke={COLORS.cost}    strokeWidth={2} fill="transparent" />
+                <Area type="monotone" dataKey="margin"  name="Profit"      stroke={COLORS.margin}  strokeWidth={2} fill="transparent" />
               </AreaChart>
             </ResponsiveContainer>
           )}
@@ -158,7 +315,7 @@ export default function Dashboard() {
                   <Tooltip />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Line type="monotone" dataKey="answered" name="Answered" stroke={COLORS.answered} strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="missed" name="Missed" stroke={COLORS.missed} strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="missed"   name="Missed"   stroke={COLORS.missed}   strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -199,13 +356,10 @@ export default function Dashboard() {
   )
 }
 
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
 function StatCard({
-  label,
-  value,
-  delta,
-  loading,
-  positiveIsGood,
-  accent,
+  label, value, delta, loading, positiveIsGood, accent,
 }: {
   label: string
   value: string
