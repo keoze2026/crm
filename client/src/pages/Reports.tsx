@@ -1,3 +1,201 @@
+import { useState } from 'react'
+import { api } from '../api/client'
+import { DateRangeControl, type Range } from '../components/DateRange'
+import { PageHeader } from '../components/Layout'
+import { Card, EmptyState, Spinner } from '../components/ui'
+import { daysAgo, formatDmy, money, money2, num, today } from '../lib/format'
+import { useAsync } from '../lib/useAsync'
+import type { CompleteReport } from '../types'
+
+// Palette mirrors the downloadable PDF (navy bands, cyan body, cyan date column).
+const NAVY = 'rgb(26, 54, 84)'
+const CYAN = 'rgb(212, 233, 242)'
+const CYAN_DATE = 'rgb(191, 222, 235)'
+const INK = 'rgb(15, 23, 42)'
+
+/** Human-readable date label: single day, range, or em-dash when unset. */
+function rangeText(from: string | null, to: string | null): string {
+  if (!from && !to) return '—'
+  if (from && to && from !== to) return `${formatDmy(from)}  –  ${formatDmy(to)}`
+  return formatDmy(from ?? to)
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
+export default function Reports() {
+  const [range, setRange] = useState<Range>({ from: daysAgo(6), to: today() })
+  const report = useAsync(() => api.completeReport(range), [range.from, range.to])
+  const data = report.data
+
+  return (
+    <div>
+      <PageHeader title="Reports" subtitle="Complete report for the selected period">
+        <DateRangeControl value={range} onChange={setRange} />
+      </PageHeader>
+
+      <Card className="p-6">
+        {report.loading ? (
+          <div className="flex justify-center py-16"><Spinner className="h-7 w-7" /></div>
+        ) : report.error ? (
+          <p className="py-10 text-center text-sm text-red-600">{report.error}</p>
+        ) : !data || (data.buyers.length === 0 && data.campaigns.length === 0) ? (
+          <EmptyState message="No data for this period." />
+        ) : (
+          <CompleteReportView data={data} />
+        )}
+      </Card>
+    </div>
+  )
+}
+
+// ─── Rendered complete report (same layout as the PDF) ─────────────────────────
+
+function CompleteReportView({ data }: { data: CompleteReport }) {
+  const dateLabel = rangeText(data.from, data.to)
+  const bt = data.buyer_totals
+  const ct = data.campaign_totals
+
+  const buyerRows = data.buyers.map((b) => [
+    b.code, num(b.answered), num(b.missed), num(b.counted), money2(b.rate), money2(b.total_bill),
+  ])
+  const buyerFoot = [
+    'TOTAL', num(bt.destinations), num(bt.answered), num(bt.missed),
+    num(bt.counted), money(bt.rate), money(bt.total_bill),
+  ]
+
+  const campRows = data.campaigns.map((c) => [
+    c.camp, c.destination, num(c.answered), num(c.missed), num(c.counted), money2(c.rate), money2(c.total_bill),
+  ])
+  const campFoot = [
+    'TOTAL', num(ct.camps), num(ct.destinations), num(ct.answered),
+    num(ct.missed), num(ct.counted), money(ct.rate), money(ct.total_bill),
+  ]
+
+  return (
+    <div className="mx-auto max-w-3xl">
+      {/* Title block */}
+      <div className="mb-4">
+        <h2 className="text-lg font-bold" style={{ color: NAVY }}>Complete Report</h2>
+        <div className="mt-0.5 flex flex-wrap justify-between gap-x-4 text-xs text-slate-500">
+          <span>Period: {dateLabel}</span>
+          <span>Generated {new Date().toLocaleString()}</span>
+        </div>
+      </div>
+
+      {/* Revenue side — one row per destination (buyer) */}
+      <div className="overflow-x-auto">
+        <ReportTable
+          columns={['DATE', 'DESTINATION', 'ANSWERED', 'MISSED', 'COUNTED', 'RATE', 'TOTAL BILL']}
+          rows={buyerRows}
+          foot={buyerFoot}
+          dateLabel={dateLabel}
+          cyanBody
+        />
+      </div>
+
+      {/* Profit badge */}
+      <div className="my-5 flex justify-center">
+        <div style={{ backgroundColor: NAVY }} className="rounded-lg px-10 py-2.5 text-2xl font-bold text-white shadow-md">
+          {money(data.profit)}
+        </div>
+      </div>
+
+      {/* Cost side — one row per campaign + destination */}
+      <div className="overflow-x-auto">
+        <ReportTable
+          columns={['DATE', 'CAMP', 'DESTINATION', 'ANSWERED', 'MISSED', 'COUNTED', 'RATE', 'TOTAL BILL']}
+          rows={campRows}
+          foot={campFoot}
+          dateLabel={dateLabel}
+          cyanBody={false}
+        />
+      </div>
+    </div>
+  )
+}
+
+/** A single report table with a navy header/footer and a merged DATE column. */
+function ReportTable({
+  columns,
+  rows,
+  foot,
+  dateLabel,
+  cyanBody,
+}: {
+  columns: string[]
+  rows: string[][]
+  foot: string[]
+  dateLabel: string
+  cyanBody: boolean
+}) {
+  const bodyBg = cyanBody ? CYAN : 'white'
+  const cellBorder = '1px solid white'
+  return (
+    <table className="w-full text-[11px]" style={{ borderCollapse: 'collapse' }}>
+      <thead>
+        <tr>
+          {columns.map((c) => (
+            <th
+              key={c}
+              style={{ backgroundColor: NAVY, color: 'white', border: cellBorder }}
+              className="px-2 py-1.5 text-center font-bold uppercase tracking-wide"
+            >
+              {c}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length === 0 ? (
+          <tr>
+            <td style={{ backgroundColor: CYAN_DATE, color: INK, border: cellBorder }} className="px-2 py-1.5 text-center font-semibold">
+              {dateLabel}
+            </td>
+            {columns.slice(1).map((_, i) => (
+              <td key={i} style={{ backgroundColor: bodyBg, color: INK, border: cellBorder }} className="px-2 py-1.5">—</td>
+            ))}
+          </tr>
+        ) : (
+          rows.map((cells, ri) => (
+            <tr key={ri}>
+              {ri === 0 && (
+                <td
+                  rowSpan={rows.length}
+                  style={{ backgroundColor: CYAN_DATE, color: INK, border: cellBorder }}
+                  className="whitespace-nowrap px-2 text-center align-middle font-semibold"
+                >
+                  {dateLabel}
+                </td>
+              )}
+              {cells.map((cell, ci) => (
+                <td key={ci} style={{ backgroundColor: bodyBg, color: INK, border: cellBorder }} className="px-2 py-1.5">
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))
+        )}
+      </tbody>
+      <tfoot>
+        <tr>
+          {foot.map((cell, i) => (
+            <td key={i} style={{ backgroundColor: NAVY, color: 'white', border: cellBorder }} className="px-2 py-1.5 font-bold">
+              {cell}
+            </td>
+          ))}
+        </tr>
+      </tfoot>
+    </table>
+  )
+}
+
+/* =============================================================================
+   PREVIOUS REPORTS PAGE — commented out (kept for reference / re-enabling).
+   This was the multi-report page with downloadable CSV / Excel / PDF exports,
+   including the downloadable complete report. The active page above renders the
+   complete report on screen instead.
+=============================================================================
+
 import { jsPDF } from 'jspdf'
 import autoTable, { type CellDef, type RowInput, type Styles } from 'jspdf-autotable'
 import { useState } from 'react'
@@ -60,14 +258,14 @@ const CYAN_DATE: [number, number, number] = [191, 222, 235]
 const INK: [number, number, number] = [15, 23, 42]
 const WHITE: [number, number, number] = [255, 255, 255]
 
-/** Human-readable date label: single day, range, or em-dash when unset. */
+// Human-readable date label: single day, range, or em-dash when unset.
 function rangeText(from: string | null, to: string | null): string {
   if (!from && !to) return '—'
   if (from && to && from !== to) return `${formatDmy(from)}  –  ${formatDmy(to)}`
   return formatDmy(from ?? to)
 }
 
-/** Renders the two stacked tables + profit badge exactly like the company report. */
+// Renders the two stacked tables + profit badge exactly like the company report.
 function buildCompleteReportPdf(data: CompleteReport): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()
@@ -116,7 +314,7 @@ function buildCompleteReportPdf(data: CompleteReport): jsPDF {
     styles: { fillColor: CYAN_DATE, halign: 'center', fontStyle: 'bold', valign: 'middle' },
   })
 
-  // ── Table 1 — revenue side (one row per buyer / destination) ──
+  // Table 1 — revenue side (one row per buyer / destination)
   const bt = data.buyer_totals
   const buyerBody: RowInput[] = data.buyers.map((b, i) => {
     const cells: (string | CellDef)[] = [
@@ -151,7 +349,7 @@ function buildCompleteReportPdf(data: CompleteReport): jsPDF {
     margin: { left: M, right: M },
   })
 
-  // ── Profit badge ──
+  // Profit badge
   let y = lastY(doc) + 18
   const boxW = 160
   const boxH = 34
@@ -166,7 +364,7 @@ function buildCompleteReportPdf(data: CompleteReport): jsPDF {
   doc.setTextColor(...WHITE)
   doc.text(money(data.profit), pageW / 2, y + boxH / 2, { align: 'center', baseline: 'middle' })
 
-  // ── Table 2 — cost side (one row per campaign + destination) ──
+  // Table 2 — cost side (one row per campaign + destination)
   const ct = data.campaign_totals
   const campBody: RowInput[] = data.campaigns.map((c, i) => {
     const cells: (string | CellDef)[] = [
@@ -204,12 +402,12 @@ function buildCompleteReportPdf(data: CompleteReport): jsPDF {
   return doc
 }
 
-/** jspdf-autotable records the last table's end position on the doc. */
+// jspdf-autotable records the last table's end position on the doc.
 function lastY(doc: jsPDF): number {
   return (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY
 }
 
-/** The same complete report as an .xlsx workbook (Summary + Revenue + Cost sheets). */
+// The same complete report as an .xlsx workbook (Summary + Revenue + Cost sheets).
 function completeReportSheets(data: CompleteReport): XlsxSheet[] {
   const label = rangeText(data.from, data.to)
   const bt = data.buyer_totals
@@ -355,7 +553,7 @@ export default function Reports() {
         <DateRangeControl value={range} onChange={setRange} />
       </PageHeader>
 
-      {/* Complete report — the full-system formatted export */}
+      {/* Complete report — the full-system formatted export *}
       <Card className="mb-6 flex flex-col items-start gap-4 border-white/20 bg-linear-to-br from-slate-800 to-blue-900 p-5 text-white shadow-xl shadow-blue-900/25 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15">
@@ -369,7 +567,7 @@ export default function Reports() {
             <h3 className="text-lg font-bold">Complete report</h3>
             <p className="mt-0.5 max-w-xl text-sm text-blue-100">
               The selected date range in one formatted PDF — revenue per destination, profit,
-              and cost per campaign &amp; destination, with grand totals.
+              and cost per campaign and destination, with grand totals.
             </p>
           </div>
         </div>
@@ -391,7 +589,7 @@ export default function Reports() {
         </div>
       </Card>
 
-      {/* Download cards */}
+      {/* Download cards *}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <DownloadCard
           title="Call records export"
@@ -422,7 +620,7 @@ export default function Reports() {
         </Card>
       </div>
 
-      {/* Monthly breakdown */}
+      {/* Monthly breakdown *}
       <Card className="mt-6">
         <CardHeader
           title="Monthly breakdown"
@@ -633,3 +831,5 @@ function Table({
     </div>
   )
 }
+
+============================================================================= */
