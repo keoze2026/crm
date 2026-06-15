@@ -277,7 +277,7 @@ export default function Reports() {
     api.records({ from: range.from, to: range.to, per_page: 5000, page: 1 }).then((r) => r.data)
 
   const RECORDS_HEAD = ['Date', 'Type', 'Buyer', 'Campaign', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill']
-  const BUYER_HEAD = ['Buyer', 'Name', 'Answered', 'Missed', 'Counted', 'Revenue']
+  const BUYER_HEAD = ['Destination', 'Name', 'Answered', 'Missed', 'Counted', 'Revenue']
   const MONTHLY_HEAD = ['Month', 'Revenue', 'Running Fee', 'Profit', 'Counted', 'Answered', 'Missed']
   const monthlyRows = (): AnyRow[] =>
     (monthly.data ?? []).map((m) => [formatPeriod(m.period), m.revenue, m.cost, m.margin, m.counted, m.answered, m.missed])

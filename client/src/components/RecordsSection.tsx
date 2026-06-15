@@ -250,7 +250,7 @@ function RecordForm({ type, editing, entities, onSaved, onCancel }: {
   type: RecordType; editing: CallRecord | null; entities: Entity[]; onSaved: () => void; onCancel: () => void
 }) {
   const isBuyer    = type === 'buyer'
-  const entityLabel = isBuyer ? 'Buyer' : 'Campaign'
+  const entityLabel = isBuyer ? 'Destination' : 'Campaign'
   const isEdit     = !!editing
 
   const [date,     setDate]     = useState(editing?.record_date ?? today())
