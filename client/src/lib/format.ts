@@ -19,12 +19,12 @@ export const num = (n: number): string => numberFmt.format(n || 0)
 export const pct = (n: number | null | undefined): string =>
   n === null || n === undefined ? '—' : `${n > 0 ? '+' : ''}${n.toFixed(1)}%`
 
-/** Format an ISO date (YYYY-MM-DD) as e.g. "11 Jun 2026". */
+/** Format an ISO date (YYYY-MM-DD) as e.g. "Jun 11, 2026". */
 export function formatDate(iso: string | null): string {
   if (!iso) return '—'
   const d = new Date(iso + 'T00:00:00')
   if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
+  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
 }
 
 /** Format a trend period key (day/month/year) into a short axis label. */
