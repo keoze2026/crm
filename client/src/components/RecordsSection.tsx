@@ -24,18 +24,16 @@ const TrashIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="no
 function buildPdf(title: string, subtitle: string, columns: string[], rows: (string | number)[][], numericFrom: number): jsPDF {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()
-  doc.setFontSize(18); doc.setTextColor(30, 64, 175); doc.setFont('helvetica', 'bold')
-  doc.text('CallFlow CRM', 40, 44)
-  doc.setFontSize(13); doc.setTextColor(15, 23, 42)
-  doc.text(title, 40, 64)
+  doc.setFontSize(13); doc.setTextColor(15, 23, 42); doc.setFont('helvetica', 'bold')
+  doc.text(title, 40, 46)
   doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139)
-  doc.text(subtitle, 40, 80)
-  doc.text(`Generated ${new Date().toLocaleString()}`, pageW - 40, 80, { align: 'right' })
+  doc.text(subtitle, 40, 62)
+  doc.text(`Generated ${new Date().toLocaleString()}`, pageW - 40, 62, { align: 'right' })
   autoTable(doc, {
-    startY: 96, head: [columns], body: rows.map((r) => r.map(String)),
-    styles: { fontSize: 8, cellPadding: 4 },
-    headStyles: { fillColor: [30, 64, 175], textColor: 255, fontStyle: 'bold', halign: 'left' },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
+    startY: 78, theme: 'grid', head: [columns], body: rows.map((r) => r.map(String)),
+    styles: { fontSize: 8, cellPadding: 4, lineColor: [255, 255, 255], lineWidth: 1, textColor: [15, 23, 42], valign: 'middle' },
+    headStyles: { fillColor: [26, 54, 84], textColor: 255, fontStyle: 'bold', halign: 'left', lineColor: [26, 54, 84], lineWidth: 1 },
+    bodyStyles: { fillColor: [212, 233, 242] },
     columnStyles: Object.fromEntries(columns.flatMap((_, i) => (i >= numericFrom ? [[i, { halign: 'right' as const }]] : []))),
     margin: { left: 40, right: 40 },
   })

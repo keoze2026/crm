@@ -48,6 +48,7 @@ $router->get('/analytics/top-buyers',    fn () => $analytics->topBuyers());
 $router->get('/analytics/top-campaigns', fn () => $analytics->topCampaigns());
 $router->get('/analytics/top-sources',   fn () => $analytics->topSources());
 $router->get('/analytics/report',        fn () => $analytics->report());
+$router->get('/analytics/complete-report', fn () => $analytics->completeReport());
 
 // Buyers
 $buyers = new BuyerController();

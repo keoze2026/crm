@@ -57,6 +57,52 @@ export interface TopSource {
   counted: number
 }
 
+export interface CompleteReportBuyerRow {
+  code: string
+  answered: number
+  missed: number
+  counted: number
+  rate: number
+  total_bill: number
+}
+
+export interface CompleteReportCampaignRow {
+  camp: string
+  destination: string
+  answered: number
+  missed: number
+  counted: number
+  rate: number
+  total_bill: number
+}
+
+export interface CompleteReport {
+  from: string | null
+  to: string | null
+  buyers: CompleteReportBuyerRow[]
+  campaigns: CompleteReportCampaignRow[]
+  buyer_totals: {
+    destinations: number
+    answered: number
+    missed: number
+    counted: number
+    rate: number
+    total_bill: number
+  }
+  campaign_totals: {
+    camps: number
+    destinations: number
+    answered: number
+    missed: number
+    counted: number
+    rate: number
+    total_bill: number
+  }
+  revenue: number
+  cost: number
+  profit: number
+}
+
 export interface Buyer {
   id: number
   code: string

@@ -43,26 +43,22 @@ const COLORS = {
 
 function pdfHeader(doc: jsPDF, title: string, subtitle: string) {
   const pageW = doc.internal.pageSize.getWidth()
-  doc.setFontSize(18)
-  doc.setTextColor(30, 64, 175)
-  doc.setFont('helvetica', 'bold')
-  doc.text('CallFlow CRM', 40, 44)
-
   doc.setFontSize(13)
   doc.setTextColor(15, 23, 42)
-  doc.text(title, 40, 64)
+  doc.setFont('helvetica', 'bold')
+  doc.text(title, 40, 46)
 
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(100, 116, 139)
-  doc.text(subtitle, 40, 80)
-  doc.text(`Generated ${new Date().toLocaleString()}`, pageW - 40, 80, { align: 'right' })
+  doc.text(subtitle, 40, 62)
+  doc.text(`Generated ${new Date().toLocaleString()}`, pageW - 40, 62, { align: 'right' })
 }
 
 function addSection(doc: jsPDF, label: string, y: number): number {
   doc.setFontSize(10)
   doc.setFont('helvetica', 'bold')
-  doc.setTextColor(30, 64, 175)
+  doc.setTextColor(26, 54, 84)
   doc.text(label, 40, y)
   return y + 6
 }
@@ -75,11 +71,12 @@ function addTable(
 ): number {
   autoTable(doc, {
     startY,
+    theme: 'grid',
     head: [head],
     body: rows.map((r) => r.map(String)),
-    styles: { fontSize: 9, cellPadding: 4 },
-    headStyles: { fillColor: [30, 64, 175], textColor: 255, fontStyle: 'bold', halign: 'left' },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
+    styles: { fontSize: 9, cellPadding: 4, lineColor: [255, 255, 255], lineWidth: 1, textColor: [15, 23, 42], valign: 'middle' },
+    headStyles: { fillColor: [26, 54, 84], textColor: 255, fontStyle: 'bold', halign: 'left', lineColor: [26, 54, 84], lineWidth: 1 },
+    bodyStyles: { fillColor: [212, 233, 242] },
     columnStyles: Object.fromEntries(
       head.slice(1).map((_, i) => [i + 1, { halign: 'right' }])
     ),
@@ -105,7 +102,7 @@ async function generateDashboardPdf(data: DashboardData) {
   pdfHeader(doc, 'Dashboard Summary', rangeLabel)
 
   // ── KPI block ──────────────────────────────────────────────────────────────
-  let y = addSection(doc, 'Key Performance Indicators', 100)
+  let y = addSection(doc, 'Key Performance Indicators', 82)
 
   const kpiHead = ['Metric', 'Value', 'vs Previous Period']
   const kpiRows: (string | number)[][] = [

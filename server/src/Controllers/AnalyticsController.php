@@ -189,7 +189,114 @@ final class AnalyticsController
         );
     }
 
+    /**
+     * Complete system report (JSON): the full revenue side (per buyer) and the
+     * full cost side (per campaign + destination), with grand totals and profit.
+     * Unlike the ranked endpoints this is unlimited — it returns *every* row so
+     * the frontend can render the formatted "Complete Report" download.
+     */
+    public function completeReport(): void
+    {
+        $pdo = Database::connection();
+        [$where, $params] = $this->dateWhere('AND');
+
+        // Revenue side — one row per buyer (the "DESTINATION" in the revenue table).
+        $buyerSql = "
+            SELECT b.code,
+                   COALESCE(SUM(r.answered), 0)   AS answered,
+                   COALESCE(SUM(r.missed), 0)     AS missed,
+                   COALESCE(SUM(r.counted), 0)    AS counted,
+                   COALESCE(SUM(r.total_bill), 0) AS total_bill,
+                   CASE WHEN COALESCE(SUM(r.counted), 0) > 0
+                        THEN COALESCE(SUM(r.total_bill), 0) / SUM(r.counted)
+                        ELSE 0 END                AS rate
+            FROM call_records r
+            JOIN buyers b ON b.id = r.buyer_id
+            WHERE r.record_type = 'buyer' {$where}
+            GROUP BY b.id, b.code
+            ORDER BY rate DESC, total_bill DESC, b.code
+        ";
+        $stmt = $pdo->prepare($buyerSql);
+        $stmt->execute($params);
+        $buyers = $this->numerify($stmt->fetchAll(), ['answered', 'missed', 'counted', 'total_bill', 'rate']);
+
+        // Cost side — one row per campaign + traffic source (the "DESTINATION").
+        $campSql = "
+            SELECT c.code AS camp,
+                   COALESCE(NULLIF(r.source, ''), '(none)') AS destination,
+                   COALESCE(SUM(r.answered), 0)   AS answered,
+                   COALESCE(SUM(r.missed), 0)     AS missed,
+                   COALESCE(SUM(r.counted), 0)    AS counted,
+                   COALESCE(SUM(r.total_bill), 0) AS total_bill,
+                   CASE WHEN COALESCE(SUM(r.counted), 0) > 0
+                        THEN COALESCE(SUM(r.total_bill), 0) / SUM(r.counted)
+                        ELSE 0 END                AS rate
+            FROM call_records r
+            JOIN campaigns c ON c.id = r.campaign_id
+            WHERE r.record_type = 'campaign' {$where}
+            GROUP BY c.id, c.code, r.source
+            ORDER BY rate DESC, total_bill DESC, c.code
+        ";
+        $stmt = $pdo->prepare($campSql);
+        $stmt->execute($params);
+        $campaigns = $this->numerify($stmt->fetchAll(), ['answered', 'missed', 'counted', 'total_bill', 'rate']);
+
+        // Actual date span covered by the returned data.
+        [$spanWhere, $spanParams] = $this->dateWhere('WHERE');
+        $spanStmt = $pdo->prepare(
+            "SELECT to_char(MIN(record_date), 'YYYY-MM-DD') AS \"from\",
+                    to_char(MAX(record_date), 'YYYY-MM-DD') AS \"to\"
+             FROM call_records {$spanWhere}"
+        );
+        $spanStmt->execute($spanParams);
+        $span = $spanStmt->fetch() ?: ['from' => null, 'to' => null];
+
+        Http::json([
+            'from'            => $span['from'] ?? null,
+            'to'              => $span['to'] ?? null,
+            'buyers'          => $buyers,
+            'campaigns'       => $campaigns,
+            'buyer_totals'    => $this->buyerTotals($buyers),
+            'campaign_totals' => $this->campaignTotals($campaigns),
+            'revenue'         => array_sum(array_column($buyers, 'total_bill')),
+            'cost'            => array_sum(array_column($campaigns, 'total_bill')),
+            'profit'          => array_sum(array_column($buyers, 'total_bill'))
+                                 - array_sum(array_column($campaigns, 'total_bill')),
+        ]);
+    }
+
     // --- helpers ----------------------------------------------------------------
+
+    /** Grand-total footer for the revenue table (one buyer per row). */
+    private function buyerTotals(array $rows): array
+    {
+        $counted = array_sum(array_column($rows, 'counted'));
+        $bill    = array_sum(array_column($rows, 'total_bill'));
+        return [
+            'destinations' => count($rows),
+            'answered'     => array_sum(array_column($rows, 'answered')),
+            'missed'       => array_sum(array_column($rows, 'missed')),
+            'counted'      => $counted,
+            'total_bill'   => $bill,
+            'rate'         => $counted > 0 ? $bill / $counted : 0.0,
+        ];
+    }
+
+    /** Grand-total footer for the cost table (camp count + distinct destinations). */
+    private function campaignTotals(array $rows): array
+    {
+        $counted = array_sum(array_column($rows, 'counted'));
+        $bill    = array_sum(array_column($rows, 'total_bill'));
+        return [
+            'camps'        => count(array_unique(array_column($rows, 'camp'))),
+            'destinations' => count(array_unique(array_column($rows, 'destination'))),
+            'answered'     => array_sum(array_column($rows, 'answered')),
+            'missed'       => array_sum(array_column($rows, 'missed')),
+            'counted'      => $counted,
+            'total_bill'   => $bill,
+            'rate'         => $counted > 0 ? $bill / $counted : 0.0,
+        ];
+    }
 
     private function aggregate(PDO $pdo, ?string $from, ?string $to): array
     {

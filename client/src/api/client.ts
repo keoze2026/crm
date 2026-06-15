@@ -2,6 +2,7 @@ import type {
   Buyer,
   CallRecord,
   Campaign,
+  CompleteReport,
   Paginated,
   RecordFilters,
   Summary,
@@ -58,6 +59,8 @@ export const api = {
     request<TopCampaign[]>(`/analytics/top-campaigns${qs(params)}`),
   topSources: (params: DateRange & { limit?: number }) =>
     request<TopSource[]>(`/analytics/top-sources${qs(params)}`),
+  completeReport: (range?: DateRange) =>
+    request<CompleteReport>(`/analytics/complete-report${qs(range ?? {})}`),
 
   // Buyers
   buyers: (search?: string) => request<Buyer[]>(`/buyers${qs({ search })}`),

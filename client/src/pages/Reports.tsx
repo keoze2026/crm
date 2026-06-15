@@ -1,12 +1,14 @@
 import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import autoTable, { type CellDef, type RowInput, type Styles } from 'jspdf-autotable'
 import { useState } from 'react'
 import { api } from '../api/client'
 import { DateRangeControl, DownloadButton, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
 import { Button, Card, CardHeader, EmptyState, Spinner } from '../components/ui'
-import { daysAgo, formatPeriod, money, money2, num, today } from '../lib/format'
+import { daysAgo, fileDateRange, formatDmy, formatPeriod, money, money2, num, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
+import { saveCsv, saveXlsx, type XlsxSheet } from '../lib/xlsx'
+import type { CompleteReport } from '../types'
 
 // ─── PDF generation ──────────────────────────────────────────────────────────
 
@@ -22,33 +24,25 @@ function buildPdf(
   const pageW = doc.internal.pageSize.getWidth()
 
   // Header
-  doc.setFontSize(18)
-  doc.setTextColor(30, 64, 175)
-  doc.setFont('helvetica', 'bold')
-  doc.text('CallFlow CRM', 40, 44)
-
   doc.setFontSize(13)
   doc.setTextColor(15, 23, 42)
-  doc.text(title, 40, 64)
+  doc.setFont('helvetica', 'bold')
+  doc.text(title, 40, 46)
 
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(100, 116, 139)
-  doc.text(subtitle, 40, 80)
-  doc.text(`Generated ${new Date().toLocaleString()}`, pageW - 40, 80, { align: 'right' })
+  doc.text(subtitle, 40, 62)
+  doc.text(`Generated ${new Date().toLocaleString()}`, pageW - 40, 62, { align: 'right' })
 
   autoTable(doc, {
-    startY: 96,
+    startY: 78,
+    theme: 'grid',
     head: [columns],
     body: rows.map((r) => r.map(String)),
-    styles: { fontSize: 9, cellPadding: 5 },
-    headStyles: {
-      fillColor: [30, 64, 175],
-      textColor: 255,
-      fontStyle: 'bold',
-      halign: 'left',
-    },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
+    styles: { fontSize: 9, cellPadding: 5, lineColor: [255, 255, 255], lineWidth: 1, textColor: [15, 23, 42], valign: 'middle' },
+    headStyles: { fillColor: [26, 54, 84], textColor: 255, fontStyle: 'bold', halign: 'left', lineColor: [26, 54, 84], lineWidth: 1 },
+    bodyStyles: { fillColor: [212, 233, 242] },
     columnStyles: Object.fromEntries(
       columns.slice(1).map((_, i) => [i + 1, { halign: 'right' }])
     ),
@@ -56,6 +50,197 @@ function buildPdf(
   })
 
   return doc
+}
+
+// ─── Complete report PDF (styled to match the company layout) ──────────────────
+
+const NAVY: [number, number, number] = [26, 54, 84]
+const CYAN: [number, number, number] = [212, 233, 242]
+const CYAN_DATE: [number, number, number] = [191, 222, 235]
+const INK: [number, number, number] = [15, 23, 42]
+const WHITE: [number, number, number] = [255, 255, 255]
+
+/** Human-readable date label: single day, range, or em-dash when unset. */
+function rangeText(from: string | null, to: string | null): string {
+  if (!from && !to) return '—'
+  if (from && to && from !== to) return `${formatDmy(from)}  –  ${formatDmy(to)}`
+  return formatDmy(from ?? to)
+}
+
+/** Renders the two stacked tables + profit badge exactly like the company report. */
+function buildCompleteReportPdf(data: CompleteReport): jsPDF {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
+  const pageW = doc.internal.pageSize.getWidth()
+  const pageH = doc.internal.pageSize.getHeight()
+  const M = 36
+
+  const dateLabel = rangeText(data.from, data.to)
+
+  // Title block
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(15)
+  doc.setTextColor(...NAVY)
+  doc.text('Complete Report', M, 46)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(100, 116, 139)
+  doc.text(`Period: ${dateLabel}`, M, 62)
+  doc.text(`Generated ${new Date().toLocaleString()}`, pageW - M, 62, { align: 'right' })
+
+  const baseStyles: Partial<Styles> = {
+    fontSize: 8,
+    cellPadding: 4,
+    lineColor: WHITE,
+    lineWidth: 1,
+    textColor: INK,
+    valign: 'middle',
+  }
+  const navyBand: Partial<Styles> = {
+    fillColor: NAVY,
+    textColor: WHITE,
+    fontStyle: 'bold',
+    halign: 'left',
+    lineColor: NAVY,
+    lineWidth: 1,
+  }
+  const dateColStyles: Partial<Styles> = {
+    fillColor: CYAN_DATE,
+    halign: 'center',
+    fontStyle: 'bold',
+    valign: 'middle',
+    cellWidth: 62,
+  }
+  const dateCell = (rowSpan: number): CellDef => ({
+    content: dateLabel,
+    rowSpan,
+    styles: { fillColor: CYAN_DATE, halign: 'center', fontStyle: 'bold', valign: 'middle' },
+  })
+
+  // ── Table 1 — revenue side (one row per buyer / destination) ──
+  const bt = data.buyer_totals
+  const buyerBody: RowInput[] = data.buyers.map((b, i) => {
+    const cells: (string | CellDef)[] = [
+      b.code,
+      num(b.answered),
+      num(b.missed),
+      num(b.counted),
+      money2(b.rate),
+      money2(b.total_bill),
+    ]
+    if (i === 0) cells.unshift(dateCell(data.buyers.length))
+    return cells
+  })
+  if (buyerBody.length === 0) {
+    buyerBody.push([dateCell(1), '—', '—', '—', '—', '—'])
+  }
+
+  autoTable(doc, {
+    startY: 78,
+    theme: 'grid',
+    head: [['DATE', 'DESTINATION', 'ANSWERED', 'MISSED', 'COUNTED', 'RATE', 'TOTAL BILL']],
+    body: buyerBody,
+    foot: [[
+      'TOTAL', String(bt.destinations), num(bt.answered), num(bt.missed),
+      num(bt.counted), money(bt.rate), money(bt.total_bill),
+    ]],
+    styles: baseStyles,
+    headStyles: { ...navyBand, halign: 'center' },
+    footStyles: navyBand,
+    bodyStyles: { fillColor: CYAN },
+    columnStyles: { 0: dateColStyles },
+    margin: { left: M, right: M },
+  })
+
+  // ── Profit badge ──
+  let y = lastY(doc) + 18
+  const boxW = 160
+  const boxH = 34
+  if (y + boxH + 70 > pageH - M) {
+    doc.addPage()
+    y = M + 10
+  }
+  doc.setFillColor(...NAVY)
+  doc.roundedRect((pageW - boxW) / 2, y, boxW, boxH, 6, 6, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(17)
+  doc.setTextColor(...WHITE)
+  doc.text(money(data.profit), pageW / 2, y + boxH / 2, { align: 'center', baseline: 'middle' })
+
+  // ── Table 2 — cost side (one row per campaign + destination) ──
+  const ct = data.campaign_totals
+  const campBody: RowInput[] = data.campaigns.map((c, i) => {
+    const cells: (string | CellDef)[] = [
+      c.camp,
+      c.destination,
+      num(c.answered),
+      num(c.missed),
+      num(c.counted),
+      money2(c.rate),
+      money2(c.total_bill),
+    ]
+    if (i === 0) cells.unshift(dateCell(data.campaigns.length))
+    return cells
+  })
+  if (campBody.length === 0) {
+    campBody.push([dateCell(1), '—', '—', '—', '—', '—', '—'])
+  }
+
+  autoTable(doc, {
+    startY: y + boxH + 18,
+    theme: 'grid',
+    head: [['DATE', 'CAMP', 'DESTINATION', 'ANSWERED', 'MISSED', 'COUNTED', 'RATE', 'TOTAL BILL']],
+    body: campBody,
+    foot: [[
+      'TOTAL', String(ct.camps), String(ct.destinations), num(ct.answered),
+      num(ct.missed), num(ct.counted), money(ct.rate), money(ct.total_bill),
+    ]],
+    styles: baseStyles,
+    headStyles: { ...navyBand, halign: 'center' },
+    footStyles: navyBand,
+    columnStyles: { 0: dateColStyles },
+    margin: { left: M, right: M },
+  })
+
+  return doc
+}
+
+/** jspdf-autotable records the last table's end position on the doc. */
+function lastY(doc: jsPDF): number {
+  return (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY
+}
+
+/** The same complete report as an .xlsx workbook (Summary + Revenue + Cost sheets). */
+function completeReportSheets(data: CompleteReport): XlsxSheet[] {
+  const label = rangeText(data.from, data.to)
+  const bt = data.buyer_totals
+  const ct = data.campaign_totals
+  return [
+    {
+      name: 'Summary',
+      head: ['Metric', 'Value'],
+      formats: ['text', 'currency'],
+      rows: [
+        ['Period', label],
+        ['Revenue', data.revenue],
+        ['Cost', data.cost],
+        ['Profit', data.profit],
+      ],
+    },
+    {
+      name: 'Revenue (Destinations)',
+      head: ['DATE', 'DESTINATION', 'ANSWERED', 'MISSED', 'COUNTED', 'RATE', 'TOTAL BILL'],
+      formats: ['text', 'text', 'integer', 'integer', 'integer', 'currency', 'currency'],
+      rows: data.buyers.map((b) => [label, b.code, b.answered, b.missed, b.counted, b.rate, b.total_bill]),
+      foot: ['TOTAL', bt.destinations, bt.answered, bt.missed, bt.counted, bt.rate, bt.total_bill],
+    },
+    {
+      name: 'Cost (Campaigns)',
+      head: ['DATE', 'CAMP', 'DESTINATION', 'ANSWERED', 'MISSED', 'COUNTED', 'RATE', 'TOTAL BILL'],
+      formats: ['text', 'text', 'text', 'integer', 'integer', 'integer', 'currency', 'currency'],
+      rows: data.campaigns.map((c) => [label, c.camp, c.destination, c.answered, c.missed, c.counted, c.rate, c.total_bill]),
+      foot: ['TOTAL', ct.camps, ct.destinations, ct.answered, ct.missed, ct.counted, ct.rate, ct.total_bill],
+    },
+  ]
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -82,63 +267,87 @@ export default function Reports() {
     }
   }
 
+  // All downloads share one naming scheme: AHT_<Report>_<date or range>.<ext>
+  const fileTag = fileDateRange(range.from, range.to)
+  const recordsName = `AHT_Call_Records_${fileTag}`
+  const buyerName = `AHT_Buyer_Performance_${fileTag}`
+  const monthlyName = `AHT_Monthly_Breakdown_${fileTag}`
+
+  const fetchRecords = () =>
+    api.records({ from: range.from, to: range.to, per_page: 5000, page: 1 }).then((r) => r.data)
+
+  const RECORDS_HEAD = ['Date', 'Type', 'Buyer', 'Campaign', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill']
+  const BUYER_HEAD = ['Buyer', 'Name', 'Answered', 'Missed', 'Counted', 'Revenue']
+  const MONTHLY_HEAD = ['Month', 'Revenue', 'Running Fee', 'Profit', 'Counted', 'Answered', 'Missed']
+  const monthlyRows = (): AnyRow[] =>
+    (monthly.data ?? []).map((m) => [formatPeriod(m.period), m.revenue, m.cost, m.margin, m.counted, m.answered, m.missed])
+
   const downloadRecordsPdf = withPdfLoading('records', async () => {
-    const result = await api.records({ from: range.from, to: range.to, per_page: 5000, page: 1 })
-    const rows: AnyRow[] = result.data.map((r) => [
-      r.record_date,
-      r.record_type,
-      r.buyer_code ?? '',
-      r.campaign_code ?? '',
-      r.answered,
-      r.missed,
-      r.counted,
-      `$${r.rate.toFixed(2)}`,
-      `$${r.total_bill.toFixed(2)}`,
+    const records = await fetchRecords()
+    const rows: AnyRow[] = records.map((r) => [
+      r.record_date, r.record_type, r.buyer_code ?? '', r.campaign_code ?? '',
+      r.answered, r.missed, r.counted, `$${r.rate.toFixed(2)}`, `$${r.total_bill.toFixed(2)}`,
     ])
-    buildPdf(
-      'Call Records Export',
-      rangeLabel,
-      ['Date', 'Type', 'Buyer', 'Campaign', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill'],
-      rows,
-    ).save('call-records.pdf')
+    buildPdf('Call Records Export', rangeLabel, RECORDS_HEAD, rows).save(`${recordsName}.pdf`)
+  })
+
+  const downloadRecordsXlsx = withPdfLoading('records-xlsx', async () => {
+    const records = await fetchRecords()
+    saveXlsx(`${recordsName}.xlsx`, [{
+      name: 'Call Records',
+      head: RECORDS_HEAD,
+      formats: ['text', 'text', 'text', 'text', 'integer', 'integer', 'integer', 'currency', 'currency'],
+      rows: records.map((r) => [
+        r.record_date, r.record_type, r.buyer_code ?? '', r.campaign_code ?? '',
+        r.answered, r.missed, r.counted, r.rate, r.total_bill,
+      ]),
+    }])
   })
 
   const downloadBuyerPdf = withPdfLoading('buyers', async () => {
     const buyers = await api.topBuyers({ ...range, limit: 50 })
-    const rows: AnyRow[] = buyers.map((b) => [
-      b.code,
-      b.name ?? '',
-      b.answered,
-      b.missed,
-      b.counted,
-      `$${b.revenue.toFixed(2)}`,
-    ])
-    buildPdf(
-      'Buyer Performance Report',
-      rangeLabel,
-      ['Buyer', 'Name', 'Answered', 'Missed', 'Counted', 'Revenue'],
-      rows,
-    ).save('buyer-performance.pdf')
+    const rows: AnyRow[] = buyers.map((b) => [b.code, b.name ?? '', b.answered, b.missed, b.counted, `$${b.revenue.toFixed(2)}`])
+    buildPdf('Buyer Performance Report', rangeLabel, BUYER_HEAD, rows).save(`${buyerName}.pdf`)
+  })
+
+  const downloadBuyerXlsx = withPdfLoading('buyers-xlsx', async () => {
+    const buyers = await api.topBuyers({ ...range, limit: 50 })
+    saveXlsx(`${buyerName}.xlsx`, [{
+      name: 'Buyer Performance',
+      head: BUYER_HEAD,
+      formats: ['text', 'text', 'integer', 'integer', 'integer', 'currency'],
+      rows: buyers.map((b) => [b.code, b.name ?? '', b.answered, b.missed, b.counted, b.revenue]),
+    }])
+  })
+
+  const downloadCompletePdf = withPdfLoading('complete', async () => {
+    const data = await api.completeReport(range)
+    buildCompleteReportPdf(data).save(`AHT_Report_${fileDateRange(data.from, data.to)}.pdf`)
+  })
+
+  const downloadCompleteXlsx = withPdfLoading('complete-xlsx', async () => {
+    const data = await api.completeReport(range)
+    saveXlsx(`AHT_Report_${fileDateRange(data.from, data.to)}.xlsx`, completeReportSheets(data))
   })
 
   const downloadMonthlyPdf = withPdfLoading('monthly', async () => {
-    const months = monthly.data ?? []
-    const rows: AnyRow[] = months.map((m) => [
-      formatPeriod(m.period),
-      `$${m.revenue.toFixed(2)}`,
-      `$${m.cost.toFixed(2)}`,
-      `$${m.margin.toFixed(2)}`,
-      m.counted,
-      m.answered,
-      m.missed,
+    const rows: AnyRow[] = (monthly.data ?? []).map((m) => [
+      formatPeriod(m.period), `$${m.revenue.toFixed(2)}`, `$${m.cost.toFixed(2)}`, `$${m.margin.toFixed(2)}`,
+      m.counted, m.answered, m.missed,
     ])
-    buildPdf(
-      'Monthly Breakdown',
-      rangeLabel,
-      ['Month', 'Revenue', 'Running Fee', 'Profit', 'Counted', 'Answered', 'Missed'],
-      rows,
-    ).save('monthly-breakdown.pdf')
+    buildPdf('Monthly Breakdown', rangeLabel, MONTHLY_HEAD, rows).save(`${monthlyName}.pdf`)
   })
+
+  const downloadMonthlyXlsx = withPdfLoading('monthly-xlsx', async () => {
+    saveXlsx(`${monthlyName}.xlsx`, [{
+      name: 'Monthly Breakdown',
+      head: MONTHLY_HEAD,
+      formats: ['text', 'currency', 'currency', 'currency', 'integer', 'integer', 'integer'],
+      rows: monthlyRows(),
+    }])
+  })
+
+  const downloadMonthlyCsv = () => saveCsv(`${monthlyName}.csv`, MONTHLY_HEAD, monthlyRows())
 
   return (
     <div>
@@ -146,12 +355,51 @@ export default function Reports() {
         <DateRangeControl value={range} onChange={setRange} />
       </PageHeader>
 
+      {/* Complete report — the full-system formatted export */}
+      <Card className="mb-6 flex flex-col items-start gap-4 border-white/20 bg-linear-to-br from-slate-800 to-blue-900 p-5 text-white shadow-xl shadow-blue-900/25 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <path d="M14 2v6h6" />
+              <path d="M16 13H8M16 17H8M10 9H8" />
+            </svg>
+          </span>
+          <div>
+            <h3 className="text-lg font-bold">Complete report</h3>
+            <p className="mt-0.5 max-w-xl text-sm text-blue-100">
+              The selected date range in one formatted PDF — revenue per destination, profit,
+              and cost per campaign &amp; destination, with grand totals.
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Button variant="secondary" onClick={downloadCompleteXlsx} disabled={!!pdfLoading['complete-xlsx']}>
+            {pdfLoading['complete-xlsx'] ? <Spinner className="h-4 w-4" /> : <ExcelIcon />}
+            Excel
+          </Button>
+          <Button variant="secondary" onClick={downloadCompletePdf} disabled={!!pdfLoading['complete']}>
+            {pdfLoading['complete'] ? (
+              <Spinner className="h-4 w-4" />
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+              </svg>
+            )}
+            PDF
+          </Button>
+        </div>
+      </Card>
+
       {/* Download cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <DownloadCard
           title="Call records export"
           desc="Every call record in the selected range — dates, buyers, campaigns and billing."
           csvHref={api.recordsExportUrl({ from: range.from, to: range.to })}
+          csvName={`${recordsName}.csv`}
+          onXlsx={downloadRecordsXlsx}
+          xlsxLoading={!!pdfLoading['records-xlsx']}
           onPdf={downloadRecordsPdf}
           pdfLoading={!!pdfLoading['records']}
         />
@@ -159,6 +407,9 @@ export default function Reports() {
           title="Buyer performance"
           desc="Per-buyer totals: answered, missed, counted and revenue, ranked by revenue."
           csvHref={api.reportUrl(range)}
+          csvName={`${buyerName}.csv`}
+          onXlsx={downloadBuyerXlsx}
+          xlsxLoading={!!pdfLoading['buyers-xlsx']}
           onPdf={downloadBuyerPdf}
           pdfLoading={!!pdfLoading['buyers']}
         />
@@ -178,7 +429,8 @@ export default function Reports() {
           subtitle="Revenue, running fee and profit by month"
           action={
             <div className="flex gap-2">
-              <DownloadButton href={api.reportUrl(range)}>CSV</DownloadButton>
+              <CsvButton onClick={downloadMonthlyCsv} />
+              <XlsxButton onClick={downloadMonthlyXlsx} loading={!!pdfLoading['monthly-xlsx']} />
               <PdfButton onClick={downloadMonthlyPdf} loading={!!pdfLoading['monthly']} />
             </div>
           }
@@ -207,7 +459,8 @@ export default function Reports() {
             subtitle="By revenue"
             action={
               <div className="flex gap-2">
-                <DownloadButton href={api.reportUrl(range)}>CSV</DownloadButton>
+                <DownloadButton href={api.reportUrl(range)} filename={`${buyerName}.csv`}>CSV</DownloadButton>
+                <XlsxButton onClick={downloadBuyerXlsx} loading={!!pdfLoading['buyers-xlsx']} />
                 <PdfButton onClick={downloadBuyerPdf} loading={!!pdfLoading['buyers']} />
               </div>
             }
@@ -273,16 +526,51 @@ function PdfButton({ onClick, loading }: { onClick: () => void; loading: boolean
   )
 }
 
+function ExcelIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+    </svg>
+  )
+}
+
+function XlsxButton({ onClick, loading }: { onClick: () => void; loading: boolean }) {
+  return (
+    <Button variant="secondary" onClick={onClick} disabled={loading}>
+      {loading ? <Spinner className="h-3.5 w-3.5" /> : <ExcelIcon />}
+      Excel
+    </Button>
+  )
+}
+
+function CsvButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Button variant="secondary" onClick={onClick}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+      </svg>
+      CSV
+    </Button>
+  )
+}
+
 function DownloadCard({
   title,
   desc,
   csvHref,
+  csvName,
+  onXlsx,
+  xlsxLoading,
   onPdf,
   pdfLoading,
 }: {
   title: string
   desc: string
   csvHref: string
+  csvName: string
+  onXlsx: () => void
+  xlsxLoading: boolean
   onPdf: () => void
   pdfLoading: boolean
 }) {
@@ -298,8 +586,9 @@ function DownloadCard({
         <h3 className="font-semibold text-slate-900">{title}</h3>
       </div>
       <p className="mt-2 flex-1 text-sm text-slate-500">{desc}</p>
-      <div className="mt-4 flex gap-2">
-        <DownloadButton href={csvHref}>CSV</DownloadButton>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <DownloadButton href={csvHref} filename={csvName}>CSV</DownloadButton>
+        <XlsxButton onClick={onXlsx} loading={xlsxLoading} />
         <PdfButton onClick={onPdf} loading={pdfLoading} />
       </div>
     </Card>
