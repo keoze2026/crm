@@ -1,26 +1,22 @@
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
+// PDF/CSV export disabled — report downloads removed.
+// import { jsPDF } from 'jspdf'
+// import autoTable from 'jspdf-autotable'
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { api } from '../api/client'
-import { formatDate, formatDmy, money2, num, today } from '../lib/format'
+import { formatDate, money2, num, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { CallRecord, Destination, RecordFilters, RecordType } from '../types'
-import { DateRangeFilter, DownloadButton } from './DateRange'
+import { DateRangeFilter } from './DateRange'
 import { Button, Card, EmptyState, Input, Modal, Select, Spinner, cx } from './ui'
 
 interface Entity { id: number; code: string }
 
-const PdfIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
-  </svg>
-)
 const PlusIcon  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
 const EditIcon  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
 const TrashIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
 
-// ─── PDF ─────────────────────────────────────────────────────────────────────
-
+// ─── PDF (disabled — report downloads removed) ─────────────────────────────────
+/*
 interface PdfTotals { count: number; answered: number; missed: number; counted: number; total_bill: number; destCount?: number }
 
 function buildPdf(
@@ -141,13 +137,17 @@ function buildPdf(
 
   return doc
 }
+*/
 
 // ─── Section ──────────────────────────────────────────────────────────────────
 
 export default function RecordsSection({
-  type, title, subtitle, compact = false, onChange, onTotalsChange, onDateChange, profit,
+  type, title, subtitle, compact = false, onChange, onTotalsChange, onDateChange,
+  from, to, hideDateFilter = false,
 }: {
   type: RecordType; title: string; subtitle: string; compact?: boolean; onChange?: () => void; onTotalsChange?: (total_bill: number | null) => void; onDateChange?: (from: string, to: string) => void; profit?: number | null
+  /** When provided, the parent controls the date range (e.g. a single page-level filter). */
+  from?: string; to?: string; hideDateFilter?: boolean
 }) {
   const isBuyer    = type === 'buyer'
   const entityLabel = isBuyer ? 'Destination' : 'Campaign'
@@ -158,7 +158,7 @@ export default function RecordsSection({
   })
   const [modalOpen,  setModalOpen]  = useState(false)
   const [editing,    setEditing]    = useState<CallRecord | null>(null)
-  const [pdfLoading, setPdfLoading] = useState(false)
+  // const [pdfLoading, setPdfLoading] = useState(false)  // PDF export disabled
 
   const entities = useAsync<Entity[]>(async () => {
     const list = isBuyer ? await api.buyers() : await api.campaigns()
@@ -192,6 +192,14 @@ export default function RecordsSection({
   useEffect(() => { onTotalsChange?.(totals?.total_bill ?? null) }, [totals])
   useEffect(() => { onDateChange?.(filters.from ?? '', filters.to ?? '') }, [filters.from, filters.to])
 
+  // When the parent controls the date range, mirror it into the filters.
+  useEffect(() => {
+    if (from === undefined && to === undefined) return
+    setFilters((f) =>
+      f.from === (from ?? '') && f.to === (to ?? '') ? f : { ...f, from: from ?? '', to: to ?? '', page: 1 },
+    )
+  }, [from, to])
+
   const set = (patch: Partial<RecordFilters>) => setFilters((f) => ({ ...f, page: 1, ...patch }))
   const isFiltered = !!(filters.from || filters.to)
   const isSingleDay = !!(filters.from && filters.to && filters.from === filters.to)
@@ -205,6 +213,7 @@ export default function RecordsSection({
     await api.deleteRecord(r.id); records.reload(); onChange?.()
   }
 
+  /* PDF/CSV export disabled — report downloads removed.
   const filterLabel = useMemo(() => {
     const parts: string[] = []
     if (filters.from || filters.to) parts.push(`${filters.from || '…'} → ${filters.to || '…'}`)
@@ -334,16 +343,19 @@ export default function RecordsSection({
       doc.save('records-export.pdf')
     } finally { setPdfLoading(false) }
   }
+  */
 
   const meta = records.data?.meta
   const rows = records.data?.data ?? []
 
   const actions = (
     <>
+      {/* Report downloads removed.
       <DownloadButton href={api.recordsExportUrl(filters)}>CSV</DownloadButton>
       <Button variant="secondary" onClick={handlePdf} disabled={pdfLoading}>
         {pdfLoading ? <Spinner className="h-3.5 w-3.5" /> : <PdfIcon />} PDF
       </Button>
+      */}
       <Button onClick={openNew}><PlusIcon /> Add record</Button>
     </>
   )
@@ -371,12 +383,14 @@ export default function RecordsSection({
       {/* Filters */}
       <Card className="mb-4 p-4">
         <div className="flex flex-wrap items-end gap-3">
-          <DateRangeFilter
-            from={filters.from ?? ''}
-            to={filters.to ?? ''}
-            onFromChange={(iso) => set({ from: iso })}
-            onToChange={(iso) => set({ to: iso })}
-          />
+          {!hideDateFilter && (
+            <DateRangeFilter
+              from={filters.from ?? ''}
+              to={filters.to ?? ''}
+              onFromChange={(iso) => set({ from: iso })}
+              onToChange={(iso) => set({ to: iso })}
+            />
+          )}
           <Select
             label={entityLabel}
             value={isBuyer ? filters.buyer_id : filters.campaign_id}

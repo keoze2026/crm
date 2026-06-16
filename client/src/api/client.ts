@@ -73,7 +73,8 @@ export const api = {
     request<{ deleted: boolean }>(`/buyers/${id}`, { method: 'DELETE' }),
 
   // Campaigns
-  campaigns: (search?: string) => request<Campaign[]>(`/campaigns${qs({ search })}`),
+  campaigns: (search?: string, range?: DateRange) =>
+    request<Campaign[]>(`/campaigns${qs({ search, ...range })}`),
   createCampaign: (data: Partial<Campaign>) =>
     request<Campaign>('/campaigns', { method: 'POST', body: JSON.stringify(data) }),
   updateCampaign: (id: number, data: Partial<Campaign>) =>

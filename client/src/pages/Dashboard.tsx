@@ -1,5 +1,6 @@
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
+// PDF export disabled — report downloads removed.
+// import { jsPDF } from 'jspdf'
+// import autoTable from 'jspdf-autotable'
 import { useState } from 'react'
 import {
   Area,
@@ -17,9 +18,9 @@ import {
   YAxis,
 } from 'recharts'
 import { api } from '../api/client'
-import { DateRangeControl, DownloadButton, type Range } from '../components/DateRange'
+import { DateRangeControl, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
-import { Button, Card, CardHeader, cx, Spinner } from '../components/ui'
+import { Card, CardHeader, cx, Spinner } from '../components/ui'
 import { daysAgo, formatPeriod, money, num, pct, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 
@@ -39,8 +40,8 @@ const COLORS = {
   missed: '#f43f5e',
 }
 
-// ─── PDF generation ──────────────────────────────────────────────────────────
-
+// ─── PDF generation (disabled — report downloads removed) ──────────────────────
+/*
 function pdfHeader(doc: jsPDF, title: string, subtitle: string) {
   const pageW = doc.internal.pageSize.getWidth()
   doc.setFontSize(13)
@@ -160,13 +161,14 @@ async function generateDashboardPdf(data: DashboardData) {
 
   doc.save('dashboard-summary.pdf')
 }
+*/
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const [range, setRange] = useState<Range>({ from: daysAgo(6), to: today() })
   const [granularity, setGranularity] = useState<Granularity>('day')
-  const [pdfLoading, setPdfLoading] = useState(false)
+  // const [pdfLoading, setPdfLoading] = useState(false)  // PDF export disabled
 
   const summary    = useAsync(() => api.summary(range),                             [range.from, range.to])
   const trends     = useAsync(() => api.trends({ ...range, granularity }),          [range.from, range.to, granularity])
@@ -175,6 +177,7 @@ export default function Dashboard() {
 
   const s = summary.data
 
+  /* PDF export disabled — report downloads removed.
   const handlePdf = async () => {
     if (!summary.data || !trends.data || !topBuyers.data || !topSources.data) return
     setPdfLoading(true)
@@ -193,11 +196,13 @@ export default function Dashboard() {
   }
 
   const dataReady = !!(summary.data && trends.data && topBuyers.data && topSources.data)
+  */
 
   return (
     <div>
       <PageHeader title="Dashboard" subtitle="Performance overview of calls, revenue and margin">
         <DateRangeControl value={range} onChange={setRange} />
+        {/* Report downloads removed.
         <DownloadButton href={api.reportUrl(range)}>CSV</DownloadButton>
         <Button
           variant="secondary"
@@ -215,6 +220,7 @@ export default function Dashboard() {
           )}
           PDF
         </Button>
+        */}
       </PageHeader>
 
       {/* KPI cards */}

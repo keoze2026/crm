@@ -19,7 +19,9 @@ const NAV: NavItem[] = [
   { to: '/records', label: 'Call Records', icon: icon(<><path d="M3 5h18M3 12h18M3 19h18" /></>) },
   { to: '/buyers', label: 'Buyers', icon: icon(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>) },
   { to: '/campaigns', label: 'Campaigns', icon: icon(<><path d="m3 11 18-5v12L3 14v-3z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></>) },
-  { to: '/reports', label: 'Reports', icon: icon(<><path d="M3 3v18h18" /><path d="m7 14 3-3 3 3 5-5" /></>) },
+  // Reports (download hub) disabled — Complete Report is the only report page now.
+  // { to: '/reports', label: 'Reports', icon: icon(<><path d="M3 3v18h18" /><path d="m7 14 3-3 3 3 5-5" /></>) },
+  { to: '/complete-report', label: 'Complete Report', icon: icon(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M16 13H8M16 17H8M10 9H8" /></>) },
 ]
 
 function BrandMark() {

@@ -12,6 +12,17 @@ final class CampaignController
     public function index(): void
     {
         $search = Http::query('search');
+        $from   = Http::query('from');
+        $to     = Http::query('to');
+
+        // Date filter goes in the LEFT JOIN's ON clause (not WHERE) so campaigns
+        // with no records in the range still appear, just with zeroed totals.
+        $joinConds = ['r.campaign_id = c.id'];
+        $params = [];
+        if ($from) { $joinConds[] = 'r.record_date >= :from'; $params[':from'] = $from; }
+        if ($to)   { $joinConds[] = 'r.record_date <= :to';   $params[':to']   = $to; }
+        $joinOn = implode(' AND ', $joinConds);
+
         $sql = "
             SELECT c.id, c.code, c.name, c.status, c.notes, c.created_at,
                    COALESCE(SUM(r.total_bill), 0)            AS cost,
@@ -22,9 +33,8 @@ final class CampaignController
                    COUNT(DISTINCT r.source)                  AS sources,
                    MAX(r.record_date)                        AS last_activity
             FROM campaigns c
-            LEFT JOIN call_records r ON r.campaign_id = c.id
+            LEFT JOIN call_records r ON {$joinOn}
         ";
-        $params = [];
         if ($search) {
             $sql .= " WHERE c.code ILIKE :s OR c.name ILIKE :s";
             $params[':s'] = "%{$search}%";

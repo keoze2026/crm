@@ -8,6 +8,7 @@ import { Button, Card, CardHeader, EmptyState, Spinner } from '../components/ui'
 import { daysAgo, fileDateRange, formatDmy, formatPeriod, money, money2, num, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import { saveCsv, saveXlsx, type XlsxSheet } from '../lib/xlsx'
+import { Link } from 'react-router-dom'
 import type { CompleteReport } from '../types'
 
 // ─── PDF generation ──────────────────────────────────────────────────────────
@@ -56,7 +57,7 @@ function buildPdf(
 
 const NAVY: [number, number, number] = [26, 54, 84]
 const CYAN: [number, number, number] = [212, 233, 242]
-const CYAN_DATE: [number, number, number] = [191, 222, 235]
+// const CYAN_DATE: [number, number, number] = [191, 222, 235]  // reports page disabled
 const INK: [number, number, number] = [15, 23, 42]
 const WHITE: [number, number, number] = [255, 255, 255]
 
@@ -385,6 +386,15 @@ export default function Reports() {
               The selected date range in one formatted PDF — revenue per destination, profit,
               and cost per campaign &amp; destination, with grand totals.
             </p>
+            <Link
+              to="/complete-report"
+              className="mt-1.5 inline-flex items-center gap-1 text-sm font-medium text-blue-200 hover:text-white"
+            >
+              View on screen
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </Link>
           </div>
         </div>
         <div className="flex shrink-0 gap-2">

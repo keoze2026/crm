@@ -7,7 +7,8 @@ import Dashboard from './pages/Dashboard'
 import Records from './pages/Records'
 import Buyers from './pages/Buyers'
 import Campaigns from './pages/Campaigns'
-import Reports from './pages/Reports'
+// import Reports from './pages/Reports'  // reports page disabled — see CompleteReport
+import CompleteReportPage from './pages/CompleteReport'
 
 const router = createBrowserRouter([
   {
@@ -18,7 +19,8 @@ const router = createBrowserRouter([
       { path: 'records', element: <Records /> },
       { path: 'buyers', element: <Buyers /> },
       { path: 'campaigns', element: <Campaigns /> },
-      { path: 'reports', element: <Reports /> },
+      // { path: 'reports', element: <Reports /> },  // reports page disabled
+      { path: 'complete-report', element: <CompleteReportPage /> },
     ],
   },
 ])

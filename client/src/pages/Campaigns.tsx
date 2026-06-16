@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api/client'
 import { PageHeader } from '../components/Layout'
+import { DateRangeFilter } from '../components/DateRange'
 import RecordsSection from '../components/RecordsSection'
 import {
   Badge,
@@ -12,7 +13,7 @@ import {
   Select,
   Spinner,
 } from '../components/ui'
-import { formatDate, money, money2, num } from '../lib/format'
+import { formatDate, money, num } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { Campaign } from '../types'
 
@@ -21,12 +22,12 @@ export default function Campaigns() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Campaign | null>(null)
 
+  // Single page-level date filter — applies to every section below.
   const [from, setFrom] = useState('')
   const [to,   setTo]   = useState('')
   const summary  = useAsync(() => api.summary({ from, to }), [from, to])
-  const profit   = summary.data?.margin ?? null
 
-  const campaigns = useAsync(() => api.campaigns(search), [search])
+  const campaigns = useAsync(() => api.campaigns(search, { from, to }), [search, from, to])
 
   const openNew = () => { setEditing(null); setModalOpen(true) }
   const openEdit = (c: Campaign) => { setEditing(c); setModalOpen(true) }
@@ -43,6 +44,7 @@ export default function Campaigns() {
   return (
     <div>
       <PageHeader title="Campaigns" subtitle="Media-buying campaigns that source calls (cost side)">
+        <DateRangeFilter from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
         <div className="w-full sm:w-auto">
           <Input placeholder="Search campaigns…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full sm:w-48" />
         </div>
@@ -109,8 +111,10 @@ export default function Campaigns() {
         title="Revenue records"
         subtitle="Revenue — buyer call records"
         compact
+        from={from}
+        to={to}
+        hideDateFilter
         onChange={() => campaigns.reload()}
-        onDateChange={(f, t) => { setFrom(f); setTo(t) }}
         profit={summary.data ? Math.round(summary.data.margin) : null}
       />
 
@@ -130,6 +134,9 @@ export default function Campaigns() {
         title="Cost records"
         subtitle="Cost — campaign call records"
         compact
+        from={from}
+        to={to}
+        hideDateFilter
         onChange={() => campaigns.reload()}
       />
 
