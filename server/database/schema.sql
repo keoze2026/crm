@@ -14,6 +14,15 @@ CREATE TABLE IF NOT EXISTS users (
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Standalone destination directory (managed via DestinationController). Like
+-- users, kept out of the reseed DROP block so the list survives a schema reload.
+CREATE TABLE IF NOT EXISTS destinations (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name        TEXT        NOT NULL UNIQUE,
+    status      TEXT        NOT NULL DEFAULT 'active', -- active | inactive
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 DROP TABLE IF EXISTS call_records CASCADE;
 DROP TABLE IF EXISTS buyers CASCADE;
 DROP TABLE IF EXISTS campaigns CASCADE;
