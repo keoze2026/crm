@@ -12,7 +12,7 @@ import {
   Select,
   Spinner,
 } from '../components/ui'
-import { formatDate, money, num } from '../lib/format'
+import { formatDate, money, money2, num } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { Campaign } from '../types'
 
@@ -20,6 +20,11 @@ export default function Campaigns() {
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Campaign | null>(null)
+
+  const [from, setFrom] = useState('')
+  const [to,   setTo]   = useState('')
+  const summary  = useAsync(() => api.summary({ from, to }), [from, to])
+  const profit   = summary.data?.margin ?? null
 
   const campaigns = useAsync(() => api.campaigns(search), [search])
 
@@ -98,7 +103,28 @@ export default function Campaigns() {
 
       {campaigns.error && <p className="mt-4 text-sm text-red-600">{campaigns.error}</p>}
 
-      {/* Cost records — campaign (cost) entries, mirroring the Call Records table */}
+      {/* Revenue records — buyer side */}
+      <RecordsSection
+        type="buyer"
+        title="Revenue records"
+        subtitle="Revenue — buyer call records"
+        compact
+        onChange={() => campaigns.reload()}
+        onDateChange={(f, t) => { setFrom(f); setTo(t) }}
+        profit={summary.data ? Math.round(summary.data.margin) : null}
+      />
+
+      {/* Profit badge — shows once summary loads */}
+      {summary.data && (
+        <div className="flex justify-center py-2">
+          <div className="rounded-xl bg-slate-900 px-8 py-3 text-center shadow-lg">
+            <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Profit</div>
+            <div className="text-2xl font-bold text-white">{money(Math.round(summary.data.margin))}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Cost records — campaign (cost) entries */}
       <RecordsSection
         type="campaign"
         title="Cost records"

@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { api } from '../api/client'
 import { formatDate, formatDmy, money2, num, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
@@ -29,9 +29,10 @@ function buildPdf(
   columns: string[],
   rows: (string | number)[][],
   numericFrom: number,
-  opts?: { singleDay?: string; totals?: PdfTotals; entityLabel?: string },
+  opts?: { singleDay?: string; dateFrom?: string; dateTo?: string; totals?: PdfTotals; entityLabel?: string; profit?: number | null },
 ): jsPDF {
-  const { singleDay, totals, entityLabel = 'Destination' } = opts ?? {}
+  const { singleDay, dateFrom, dateTo, totals, entityLabel = 'Destination', profit: profitVal } = opts ?? {}
+  const isRange = !singleDay && !!(dateFrom || dateTo)
   const NAVY: [number, number, number] = [26, 54, 84]
   const CYAN: [number, number, number] = [212, 233, 242]
   const CYAN_DATE: [number, number, number] = [191, 222, 235]
@@ -60,7 +61,26 @@ function buildPdf(
     const midRow = Math.floor(rows.length / 2)
     body = rows.map((r, i) => [(i === midRow ? singleDay : ''), ...r.map(String)])
     colStyles = {
-      0: { fillColor: CYAN_DATE, halign: 'center', fontStyle: 'bold', valign: 'middle', cellWidth: 62 },
+      0: { fillColor: WHITE, halign: 'center', fontStyle: 'bold', valign: 'middle', cellWidth: 68 },
+      ...Object.fromEntries(columns.flatMap((_, i) => (i >= numericFrom ? [[i + 1, { halign: 'right' as const }]] : []))),
+    }
+    if (totals) {
+      const totalRow = totals.destCount !== undefined
+        ? ['TOTAL', String(totals.count), String(totals.destCount), num(totals.answered), num(totals.missed), num(totals.counted), '—', `$${totals.total_bill.toFixed(2)}`]
+        : ['TOTAL', String(totals.count), num(totals.answered), num(totals.missed), num(totals.counted), '—', `$${totals.total_bill.toFixed(2)}`]
+      body.push(totalRow)
+    }
+  } else if (isRange) {
+    // Range filter: prepend DATE column, show start on first row, end on last row
+    head = ['DATE', ...columns]
+    const startLabel = dateFrom ?? ''
+    const endLabel   = dateTo && dateTo !== dateFrom ? dateTo : ''
+    body = rows.map((r, i) => [
+      i === 0 ? startLabel : i === rows.length - 1 && endLabel ? endLabel : '',
+      ...r.map(String),
+    ])
+    colStyles = {
+      0: { fillColor: WHITE, halign: 'center', fontStyle: 'bold', valign: 'middle', cellWidth: 68 },
       ...Object.fromEntries(columns.flatMap((_, i) => (i >= numericFrom ? [[i + 1, { halign: 'right' as const }]] : []))),
     }
     if (totals) {
@@ -93,21 +113,41 @@ function buildPdf(
         data.cell.styles.fillColor = NAVY
         data.cell.styles.textColor = WHITE
         data.cell.styles.fontStyle = 'bold'
-        if (data.column.index >= (singleDay ? 2 : 1)) {
+        if (data.column.index >= (singleDay || isRange ? 2 : 1)) {
           data.cell.styles.halign = 'right'
         }
       }
+      // Keep DATE column white even on CYAN body rows
+      if (data.section === 'body' && data.column.index === 0 && (singleDay || isRange) && data.row.index !== totalRowIndex) {
+        data.cell.styles.fillColor = WHITE
+      }
     },
   })
+  // Profit badge (buyer PDF only)
+  if (profitVal != null) {
+    const lastY = (doc as any).lastAutoTable?.finalY ?? 78
+    const NAVY2: [number,number,number] = [26,54,84]
+    const WHITE2: [number,number,number] = [255,255,255]
+    const bW = 160; const bH = 28
+    const bX = (doc.internal.pageSize.getWidth() - bW) / 2
+    const bY = lastY + 14
+    doc.setFillColor(...NAVY2)
+    doc.roundedRect(bX, bY, bW, bH, 5, 5, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(13)
+    doc.setTextColor(...WHITE2)
+    doc.text(`PROFIT  $${Math.round(profitVal).toLocaleString('en-US')}`, bX + bW / 2, bY + bH / 2, { align: 'center', baseline: 'middle' })
+  }
+
   return doc
 }
 
 // ─── Section ──────────────────────────────────────────────────────────────────
 
 export default function RecordsSection({
-  type, title, subtitle, compact = false, onChange,
+  type, title, subtitle, compact = false, onChange, onTotalsChange, onDateChange, profit,
 }: {
-  type: RecordType; title: string; subtitle: string; compact?: boolean; onChange?: () => void
+  type: RecordType; title: string; subtitle: string; compact?: boolean; onChange?: () => void; onTotalsChange?: (total_bill: number | null) => void; onDateChange?: (from: string, to: string) => void; profit?: number | null
 }) {
   const isBuyer    = type === 'buyer'
   const entityLabel = isBuyer ? 'Destination' : 'Campaign'
@@ -140,13 +180,17 @@ export default function RecordsSection({
     if (data.length === 0) return null
     const uniqueEntities = new Set(data.map((r) => isBuyer ? r.buyer_id : r.campaign_id)).size
     return {
-      answered:   data.reduce((s, r) => s + r.answered,   0),
-      missed:     data.reduce((s, r) => s + r.missed,     0),
-      counted:    data.reduce((s, r) => s + r.counted,    0),
-      total_bill: data.reduce((s, r) => s + r.total_bill, 0),
+      answered:   data.reduce((s, r) => s + Number(r.answered),   0),
+      missed:     data.reduce((s, r) => s + Number(r.missed),     0),
+      counted:    data.reduce((s, r) => s + Number(r.counted),    0),
+      total_bill: data.reduce((s, r) => s + Number(r.total_bill), 0),
       count:      uniqueEntities,
     }
   }, [allRecords.data, isBuyer])
+
+  // Notify parent whenever totals change (for profit badge)
+  useEffect(() => { onTotalsChange?.(totals?.total_bill ?? null) }, [totals])
+  useEffect(() => { onDateChange?.(filters.from ?? '', filters.to ?? '') }, [filters.from, filters.to])
 
   const set = (patch: Partial<RecordFilters>) => setFilters((f) => ({ ...f, page: 1, ...patch }))
   const isFiltered = !!(filters.from || filters.to)
@@ -171,40 +215,123 @@ export default function RecordsSection({
   const handlePdf = async () => {
     setPdfLoading(true)
     try {
-      const result = await api.records({ ...filters, page: 1, per_page: 5000 })
       const isSingleDayPdf = !!(filters.from && filters.to && filters.from === filters.to)
-      // For single day: omit the date column from rows (it becomes the rowSpan cell)
-      const destCount = isBuyer ? 0 : new Set(result.data.map(r => r.source).filter(Boolean)).size
-      const rows = result.data.map((r) => {
-        const base: (string | number)[] = isBuyer
-          ? [r.buyer_code ?? '—', r.answered, r.missed, r.counted, `$${r.rate.toFixed(2)}`, `$${r.total_bill.toFixed(2)}`]
-          : [r.campaign_code ?? '—', r.source ?? '—', r.answered, r.missed, r.counted, `$${r.rate.toFixed(2)}`, `$${r.total_bill.toFixed(2)}`]
-        if (!isSingleDayPdf) base.unshift(formatDate(r.record_date))
-        return base
+
+      // Helper to build rows for a record set
+      const buildRows = (data: typeof result.data, buyer: boolean) =>
+        data.map((r) => {
+          const base: (string | number)[] = buyer
+            ? [r.buyer_code ?? '—', r.answered, r.missed, r.counted, `$${r.rate.toFixed(2)}`, `$${r.total_bill.toFixed(2)}`]
+            : [r.campaign_code ?? '—', r.source ?? '—', r.answered, r.missed, r.counted, `$${r.rate.toFixed(2)}`, `$${r.total_bill.toFixed(2)}`]
+          if (!isSingleDayPdf) base.unshift(formatDate(r.record_date))
+          return base
+        })
+
+      // Fetch buyer records
+      const result = await api.records({ ...filters, type: 'buyer', page: 1, per_page: 5000 })
+      const buyerRows = buildRows(result.data, true)
+      const buyerTotalBill = result.data.reduce((s, r) => s + Number(r.total_bill), 0)
+      const buyerCount = new Set(result.data.map(r => r.buyer_id)).size
+      const buyerTotals: PdfTotals = { count: buyerCount, answered: result.data.reduce((s,r)=>s+r.answered,0), missed: result.data.reduce((s,r)=>s+r.missed,0), counted: result.data.reduce((s,r)=>s+r.counted,0), total_bill: buyerTotalBill }
+
+      // Fetch campaign records
+      const campResult = await api.records({ ...filters, type: 'campaign', page: 1, per_page: 5000 })
+      const campRows = buildRows(campResult.data, false)
+      const campTotalBill = campResult.data.reduce((s, r) => s + Number(r.total_bill), 0)
+      const campCount = new Set(campResult.data.map(r => r.campaign_id)).size
+      const campDestCount = new Set(campResult.data.map(r => r.source).filter(Boolean)).size
+      const campTotals: PdfTotals = { count: campCount, answered: campResult.data.reduce((s,r)=>s+r.answered,0), missed: campResult.data.reduce((s,r)=>s+r.missed,0), counted: campResult.data.reduce((s,r)=>s+r.counted,0), total_bill: campTotalBill, destCount: campDestCount }
+
+      const profitVal = profit != null ? profit : (buyerTotalBill - campTotalBill)
+
+      const buyerCols = isSingleDayPdf
+        ? ['Destination', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill']
+        : ['Date', 'Destination', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill']
+      const campCols = ['Date', 'Campaign', 'Destination', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill']
+
+      const commonOpts = {
+        singleDay: isSingleDayPdf ? formatDmy(filters.from ?? null) : undefined,
+        dateFrom:  !isSingleDayPdf && filters.from ? formatDmy(filters.from) : undefined,
+        dateTo:    !isSingleDayPdf && filters.to   ? formatDmy(filters.to)   : undefined,
+      }
+
+      // Build combined doc — buyer table first
+      const doc = buildPdf('Revenue Records Export', filterLabel, buyerCols, buyerRows,
+        isSingleDayPdf ? 1 : 2, { ...commonOpts, totals: buyerTotals, entityLabel: 'Destination' })
+
+      // Profit badge BETWEEN the two tables
+      const profitY = (doc as any).lastAutoTable?.finalY ?? 78
+      const pageW2 = doc.internal.pageSize.getWidth()
+      const bW = 180; const bH = 30
+      const bX = (pageW2 - bW) / 2
+      const bY = profitY + 14
+      doc.setFillColor(26, 54, 84)
+      doc.roundedRect(bX, bY, bW, bH, 5, 5, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(14)
+      doc.setTextColor(255, 255, 255)
+      doc.text(`PROFIT  $${Math.round(profitVal).toLocaleString('en-US')}`, bX + bW / 2, bY + bH / 2, { align: 'center', baseline: 'middle' })
+
+      // Campaign table on same doc
+      const startY = bY + bH + 14
+      const NAVY: [number,number,number] = [26,54,84]
+      const CYAN: [number,number,number] = [212,233,242]
+      const WHITE: [number,number,number] = [255,255,255]
+      const INK: [number,number,number] = [15,23,42]
+
+      // Camp body — always build fresh from raw data (no double-date issue)
+      const campMidRow = Math.floor(campResult.data.length / 2)
+      const campBody = campResult.data.map((r, i) => {
+        // Date cell value
+        let dateVal = ''
+        if (isSingleDayPdf) dateVal = i === campMidRow ? (commonOpts.singleDay ?? '') : ''
+        else dateVal = i === 0 ? (commonOpts.dateFrom ?? '') : i === campResult.data.length - 1 ? (commonOpts.dateTo ?? '') : ''
+        return [
+          dateVal,
+          r.campaign_code ?? '—',
+          r.source ?? '—',
+          num(r.answered),
+          num(r.missed),
+          num(r.counted),
+          `$${r.rate.toFixed(2)}`,
+          `$${Math.round(Number(r.total_bill)).toLocaleString('en-US')}`,
+        ]
       })
-      const pdfTotals = totals ? {
-        count: totals.count,
-        answered: totals.answered,
-        missed: totals.missed,
-        counted: totals.counted,
-        total_bill: totals.total_bill,
-        destCount: isBuyer ? undefined : destCount,
-      } : undefined
-      const columns = isSingleDayPdf
-        ? (isBuyer ? [entityLabel, 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill'] : [entityLabel, 'Destination', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill'])
-        : (isBuyer ? ['Date', entityLabel, 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill'] : ['Date', entityLabel, 'Destination', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill'])
-      buildPdf(
-        isBuyer ? 'Revenue Records Export' : 'Cost Records Export',
-        filterLabel,
-        columns,
-        rows,
-        isSingleDayPdf ? (isBuyer ? 1 : 2) : (isBuyer ? 2 : 3),
-        {
-          singleDay: isSingleDayPdf ? formatDmy(filters.from ?? null) : undefined,
-          totals: pdfTotals,
-          entityLabel,
+      campBody.push(['TOTAL', String(campTotals.count), String(campDestCount), num(campTotals.answered), num(campTotals.missed), num(campTotals.counted), '—', `$${Math.round(campTotalBill).toLocaleString('en-US')}`])
+      const campTotalIdx = campBody.length - 1
+
+      const autoTable = (await import('jspdf-autotable')).default
+      autoTable(doc, {
+        startY: startY + 20,
+        theme: 'grid',
+        head: [campCols],
+        body: campBody,
+        styles: { fontSize: 8, cellPadding: 4, lineColor: WHITE, lineWidth: 1, textColor: INK, valign: 'middle' },
+        headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', halign: 'center', lineColor: NAVY, lineWidth: 1 },
+        bodyStyles: { fillColor: CYAN },
+        columnStyles: {
+          0: { fillColor: WHITE, halign: 'center', fontStyle: 'bold', valign: 'middle', cellWidth: 68 },
+          3: { halign: 'right' as const },
+          4: { halign: 'right' as const },
+          5: { halign: 'right' as const },
+          6: { halign: 'right' as const },
+          7: { halign: 'right' as const },
         },
-      ).save(isBuyer ? 'revenue-records.pdf' : 'cost-records.pdf')
+        margin: { left: 40, right: 40 },
+        didParseCell: (data: any) => {
+          if (data.section === 'body' && data.row.index === campTotalIdx) {
+            data.cell.styles.fillColor = NAVY
+            data.cell.styles.textColor = WHITE
+            data.cell.styles.fontStyle = 'bold'
+            if (data.column.index >= 3) data.cell.styles.halign = 'right'
+          }
+          if (data.section === 'body' && data.column.index === 0 && data.row.index !== campTotalIdx) {
+            data.cell.styles.fillColor = WHITE
+          }
+        },
+      })
+
+      doc.save('records-export.pdf')
     } finally { setPdfLoading(false) }
   }
 
@@ -286,7 +413,7 @@ export default function RecordsSection({
                   <ThNum onClick={() => set({ sort: 'counted',    dir: nextDir(filters, 'counted')    })} active={filters.sort === 'counted'}    dir={filters.dir}>Counted</ThNum>
                   <th className="px-4 py-3 text-right font-medium">Rate</th>
                   <ThNum onClick={() => set({ sort: 'total_bill', dir: nextDir(filters, 'total_bill') })} active={filters.sort === 'total_bill'} dir={filters.dir}>Total</ThNum>
-                  <th className="px-4 py-3" />
+                  {!isFiltered && <th className="px-4 py-3" />}
                 </tr>
               </thead>
               <tbody>
@@ -295,7 +422,11 @@ export default function RecordsSection({
                     {!isFiltered && <td className="px-4 py-3 tabular-nums text-slate-400">{(meta ? (meta.page - 1) * meta.per_page : 0) + i + 1}</td>}
                     {isSingleDay
                       ? i === 0 && <td className="whitespace-nowrap px-4 py-3 text-center align-middle text-slate-600 font-medium" rowSpan={rows.length}>{formatDate(r.record_date)}</td>
-                      : <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatDate(r.record_date)}</td>
+                      : isFiltered
+                        ? <td className="whitespace-nowrap px-4 py-3 text-slate-600 font-medium">
+                            {i === 0 ? formatDate(r.record_date) : i === rows.length - 1 ? formatDate(r.record_date) : ''}
+                          </td>
+                        : <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatDate(r.record_date)}</td>
                     }
                     <td className="px-4 py-3 font-medium text-slate-800">{(isBuyer ? r.buyer_code : r.campaign_code) ?? '—'}</td>
                     {!isBuyer && <td className="px-4 py-3 text-slate-600">{r.source ?? '—'}</td>}
@@ -304,12 +435,14 @@ export default function RecordsSection({
                     <td className="px-4 py-3 text-right tabular-nums text-slate-700">{num(r.counted)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-slate-500">{money2(r.rate)}</td>
                     <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">{money2(r.total_bill)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-1">
-                        <button onClick={() => openEdit(r)} className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600" title="Edit"><EditIcon /></button>
-                        <button onClick={() => onDelete(r)} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete"><TrashIcon /></button>
-                      </div>
-                    </td>
+                    {!isFiltered && (
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-1">
+                          <button onClick={() => openEdit(r)} className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600" title="Edit"><EditIcon /></button>
+                          <button onClick={() => onDelete(r)} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete"><TrashIcon /></button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

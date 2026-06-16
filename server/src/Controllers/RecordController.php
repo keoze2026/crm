@@ -37,7 +37,7 @@ final class RecordController
         $dir = strtolower((string) Http::query('dir', 'desc')) === 'asc' ? 'ASC' : 'DESC';
 
         $page = max(1, (int) Http::query('page', '1'));
-        $perPage = min(200, max(1, (int) Http::query('per_page', '35')));
+        $perPage = min(9999, max(1, (int) Http::query('per_page', '35')));
         $offset = ($page - 1) * $perPage;
 
         $pdo = Database::connection();
@@ -210,7 +210,7 @@ final class RecordController
             $r['missed']     = (int) $r['missed'];
             $r['counted']    = (int) $r['counted'];
             $r['rate']       = (float) $r['rate'];
-            $r['total_bill'] = (float) $r['total_bill'];
+            $r['total_bill'] = round((float) $r['total_bill']);
             $r['buyer_id']   = $r['buyer_id'] !== null ? (int) $r['buyer_id'] : null;
             $r['campaign_id'] = $r['campaign_id'] !== null ? (int) $r['campaign_id'] : null;
         }

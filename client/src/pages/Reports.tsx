@@ -112,9 +112,11 @@ function buildCompleteReportPdf(data: CompleteReport): jsPDF {
   }
   // ── Table 1 — revenue side (one row per buyer / destination) ──
   const bt = data.buyer_totals
-  const buyerMidRow = Math.floor(data.buyers.length / 2)
+  const buyerLastRow = data.buyers.length - 1
+  const buyerStartLabel = data.from ? formatDmy(data.from) : dateLabel
+  const buyerEndLabel   = data.to && data.to !== data.from ? formatDmy(data.to) : ''
   const buyerBody: RowInput[] = data.buyers.map((b, i) => [
-    i === buyerMidRow ? dateLabel : '',
+    i === 0 ? buyerStartLabel : i === buyerLastRow && buyerEndLabel ? buyerEndLabel : '',
     b.code,
     num(b.answered),
     num(b.missed),
@@ -170,9 +172,11 @@ function buildCompleteReportPdf(data: CompleteReport): jsPDF {
 
   // ── Table 2 — cost side (one row per campaign + destination) ──
   const ct = data.campaign_totals
-  const campMidRow = Math.floor(data.campaigns.length / 2)
+  const campLastRow = data.campaigns.length - 1
+  const campStartLabel = data.from ? formatDmy(data.from) : dateLabel
+  const campEndLabel   = data.to && data.to !== data.from ? formatDmy(data.to) : ''
   const campBody: RowInput[] = data.campaigns.map((c, i) => [
-    i === campMidRow ? dateLabel : '',
+    i === 0 ? campStartLabel : i === campLastRow && campEndLabel ? campEndLabel : '',
     c.camp,
     c.destination,
     num(c.answered),
