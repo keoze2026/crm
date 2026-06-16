@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Controllers\AnalyticsController;
 use App\Controllers\BuyerController;
 use App\Controllers\CampaignController;
+use App\Controllers\DestinationController;
 use App\Controllers\RecordController;
 use App\Database;
 use App\Http;
@@ -63,6 +64,13 @@ $router->get('/campaigns',         fn () => $campaigns->index());
 $router->post('/campaigns',        fn () => $campaigns->store());
 $router->put('/campaigns/{id}',    fn ($p) => $campaigns->update($p));
 $router->delete('/campaigns/{id}', fn ($p) => $campaigns->destroy($p));
+
+// Destinations
+$destinations = new DestinationController();
+$router->get('/destinations',         fn () => $destinations->index());
+$router->post('/destinations',        fn () => $destinations->store());
+$router->put('/destinations/{id}',    fn ($p) => $destinations->update($p));
+$router->delete('/destinations/{id}', fn ($p) => $destinations->destroy($p));
 
 // Call records
 $records = new RecordController();

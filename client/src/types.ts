@@ -103,6 +103,13 @@ export interface CompleteReport {
   profit: number
 }
 
+export interface Destination {
+  id: number
+  name: string
+  status: string
+  created_at: string
+}
+
 export interface Buyer {
   id: number
   code: string

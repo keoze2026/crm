@@ -37,7 +37,7 @@ final class RecordController
         $dir = strtolower((string) Http::query('dir', 'desc')) === 'asc' ? 'ASC' : 'DESC';
 
         $page = max(1, (int) Http::query('page', '1'));
-        $perPage = min(200, max(1, (int) Http::query('per_page', '25')));
+        $perPage = min(200, max(1, (int) Http::query('per_page', '35')));
         $offset = ($page - 1) * $perPage;
 
         $pdo = Database::connection();

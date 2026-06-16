@@ -145,6 +145,14 @@ export function DateRangeControl({ value, onChange }: { value: Range; onChange: 
       setDraft({ from: iso, to: '' })
       setSelecting('to')
     } else {
+      // Clicking the same day twice → apply as a single-day range immediately
+      if (iso === draft.from) {
+        onChange({ from: iso, to: iso })
+        setOpen(false)
+        setPresetOpen(false)
+        setSelecting('from')
+        return
+      }
       if (draft.from && iso < draft.from) setDraft({ from: iso, to: draft.from })
       else setDraft((d) => ({ ...d, to: iso }))
       setSelecting('from')
@@ -177,7 +185,9 @@ export function DateRangeControl({ value, onChange }: { value: Range; onChange: 
   })
 
   const triggerLabel = value.from
-    ? `${value.from} ~ ${value.to || value.from}`
+    ? value.from === value.to
+      ? value.from
+      : `${value.from} ~ ${value.to || value.from}`
     : 'Select date range'
 
   const dropdown = (
@@ -227,8 +237,17 @@ export function DateRangeControl({ value, onChange }: { value: Range; onChange: 
           onNext={() => { if (month === 11) { setMonth(0);  setYear(y => y + 1) } else setMonth(m => m + 1) }}
         />
 
+        {/* Hint */}
+        <p className="mt-2 text-center text-[11px] text-slate-400">
+          {selecting === 'from'
+            ? 'Click a day to start. Click the same day twice for a single day.'
+            : draft.from
+              ? <>Click end date — or <button className="text-blue-500 hover:underline" onClick={() => { onChange({ from: draft.from, to: draft.from }); setOpen(false); setPresetOpen(false); setSelecting('from') }}>use {draft.from} only</button></>
+              : 'Click a day to start.'}
+        </p>
+
         {/* Footer */}
-        <div className="mt-4 flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+        <div className="mt-3 flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
           <Button variant="secondary" onClick={handleCancel}>Cancel</Button>
           <Button onClick={handleApply} disabled={!draft.from}>Apply</Button>
         </div>

@@ -2,9 +2,9 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { api } from '../api/client'
-import { formatDate, money2, num, today } from '../lib/format'
+import { formatDate, formatDmy, money2, num, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
-import type { CallRecord, RecordFilters, RecordType } from '../types'
+import type { CallRecord, Destination, RecordFilters, RecordType } from '../types'
 import { DateRangeFilter, DownloadButton } from './DateRange'
 import { Button, Card, EmptyState, Input, Modal, Select, Spinner, cx } from './ui'
 
@@ -21,21 +21,83 @@ const TrashIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="no
 
 // ─── PDF ─────────────────────────────────────────────────────────────────────
 
-function buildPdf(title: string, subtitle: string, columns: string[], rows: (string | number)[][], numericFrom: number): jsPDF {
+interface PdfTotals { count: number; answered: number; missed: number; counted: number; total_bill: number; destCount?: number }
+
+function buildPdf(
+  title: string,
+  subtitle: string,
+  columns: string[],
+  rows: (string | number)[][],
+  numericFrom: number,
+  opts?: { singleDay?: string; totals?: PdfTotals; entityLabel?: string },
+): jsPDF {
+  const { singleDay, totals, entityLabel = 'Destination' } = opts ?? {}
+  const NAVY: [number, number, number] = [26, 54, 84]
+  const CYAN: [number, number, number] = [212, 233, 242]
+  const CYAN_DATE: [number, number, number] = [191, 222, 235]
+  const WHITE: [number, number, number] = [255, 255, 255]
+  const INK: [number, number, number] = [15, 23, 42]
+
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()
-  doc.setFontSize(13); doc.setTextColor(15, 23, 42); doc.setFont('helvetica', 'bold')
+  doc.setFontSize(13); doc.setTextColor(...NAVY); doc.setFont('helvetica', 'bold')
   doc.text(title, 40, 46)
   doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139)
   doc.text(subtitle, 40, 62)
   doc.text(`Generated ${new Date().toLocaleString()}`, pageW - 40, 62, { align: 'right' })
+
+  // If single day: prepend DATE column and merge rows with rowSpan
+  let head = columns
+  let body: import('jspdf-autotable').RowInput[]
+  let colStyles: Record<number, Partial<import('jspdf-autotable').Styles>> = Object.fromEntries(
+    columns.flatMap((_, i) => (i >= numericFrom ? [[i, { halign: 'right' as const }]] : []))
+  )
+  let foot: string[] | undefined
+
+  if (singleDay) {
+    head = ['DATE', ...columns]
+    // Print date on the middle row so it appears centered in the column visually
+    const midRow = Math.floor(rows.length / 2)
+    body = rows.map((r, i) => [(i === midRow ? singleDay : ''), ...r.map(String)])
+    colStyles = {
+      0: { fillColor: CYAN_DATE, halign: 'center', fontStyle: 'bold', valign: 'middle', cellWidth: 62 },
+      ...Object.fromEntries(columns.flatMap((_, i) => (i >= numericFrom ? [[i + 1, { halign: 'right' as const }]] : []))),
+    }
+    if (totals) {
+      const totalRow = totals.destCount !== undefined
+        ? ['TOTAL', String(totals.count), String(totals.destCount), num(totals.answered), num(totals.missed), num(totals.counted), '—', `$${totals.total_bill.toFixed(2)}`]
+        : ['TOTAL', String(totals.count), num(totals.answered), num(totals.missed), num(totals.counted), '—', `$${totals.total_bill.toFixed(2)}`]
+      body.push(totalRow)
+    }
+  } else {
+    body = rows.map((r) => r.map(String))
+    if (totals) {
+      const totalRow = totals.destCount !== undefined
+        ? ['TOTAL', String(totals.count), String(totals.destCount), num(totals.answered), num(totals.missed), num(totals.counted), '—', `$${totals.total_bill.toFixed(2)}`]
+        : ['TOTAL', String(totals.count), num(totals.answered), num(totals.missed), num(totals.counted), '—', `$${totals.total_bill.toFixed(2)}`]
+      body.push(totalRow)
+    }
+  }
+
+  const totalRowIndex = totals ? body.length - 1 : -1
+
   autoTable(doc, {
-    startY: 78, theme: 'grid', head: [columns], body: rows.map((r) => r.map(String)),
-    styles: { fontSize: 8, cellPadding: 4, lineColor: [255, 255, 255], lineWidth: 1, textColor: [15, 23, 42], valign: 'middle' },
-    headStyles: { fillColor: [26, 54, 84], textColor: 255, fontStyle: 'bold', halign: 'left', lineColor: [26, 54, 84], lineWidth: 1 },
-    bodyStyles: { fillColor: [212, 233, 242] },
-    columnStyles: Object.fromEntries(columns.flatMap((_, i) => (i >= numericFrom ? [[i, { halign: 'right' as const }]] : []))),
+    startY: 78, theme: 'grid', head: [head], body,
+    styles: { fontSize: 8, cellPadding: 4, lineColor: WHITE, lineWidth: 1, textColor: INK, valign: 'middle' },
+    headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', halign: 'center', lineColor: NAVY, lineWidth: 1 },
+    bodyStyles: { fillColor: CYAN },
+    columnStyles: colStyles,
     margin: { left: 40, right: 40 },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.row.index === totalRowIndex) {
+        data.cell.styles.fillColor = NAVY
+        data.cell.styles.textColor = WHITE
+        data.cell.styles.fontStyle = 'bold'
+        if (data.column.index >= (singleDay ? 2 : 1)) {
+          data.cell.styles.halign = 'right'
+        }
+      }
+    },
   })
   return doc
 }
@@ -48,11 +110,11 @@ export default function RecordsSection({
   type: RecordType; title: string; subtitle: string; compact?: boolean; onChange?: () => void
 }) {
   const isBuyer    = type === 'buyer'
-  const entityLabel = isBuyer ? 'Buyer' : 'Campaign'
+  const entityLabel = isBuyer ? 'Destination' : 'Campaign'
 
   const [filters, setFilters] = useState<RecordFilters>({
     type, from: '', to: '', search: '', buyer_id: '', campaign_id: '',
-    sort: 'total_bill', dir: 'desc', page: 1, per_page: 25,
+    sort: 'total_bill', dir: 'desc', page: 1, per_page: 35,
   })
   const [modalOpen,  setModalOpen]  = useState(false)
   const [editing,    setEditing]    = useState<CallRecord | null>(null)
@@ -64,7 +126,31 @@ export default function RecordsSection({
   }, [type])
   const records = useAsync(() => api.records(filters), [JSON.stringify(filters)])
 
+  // Fetch destinations list for campaign records
+  const destinations = useAsync(() => api.destinations(), [])
+
+  // Fetch all records matching the current filters (no pagination) for totals row
+  const allRecords = useAsync(
+    () => api.records({ ...filters, page: 1, per_page: 9999 }),
+    [JSON.stringify(filters)],
+  )
+
+  const totals = useMemo(() => {
+    const data = allRecords.data?.data ?? []
+    if (data.length === 0) return null
+    const uniqueEntities = new Set(data.map((r) => isBuyer ? r.buyer_id : r.campaign_id)).size
+    return {
+      answered:   data.reduce((s, r) => s + r.answered,   0),
+      missed:     data.reduce((s, r) => s + r.missed,     0),
+      counted:    data.reduce((s, r) => s + r.counted,    0),
+      total_bill: data.reduce((s, r) => s + r.total_bill, 0),
+      count:      uniqueEntities,
+    }
+  }, [allRecords.data, isBuyer])
+
   const set = (patch: Partial<RecordFilters>) => setFilters((f) => ({ ...f, page: 1, ...patch }))
+  const isFiltered = !!(filters.from || filters.to)
+  const isSingleDay = !!(filters.from && filters.to && filters.from === filters.to)
 
   const openNew  = () => { setEditing(null); setModalOpen(true) }
   const openEdit = (r: CallRecord) => { setEditing(r); setModalOpen(true) }
@@ -86,17 +172,38 @@ export default function RecordsSection({
     setPdfLoading(true)
     try {
       const result = await api.records({ ...filters, page: 1, per_page: 5000 })
-      const rows = result.data.map((r) => [
-        formatDate(r.record_date),
-        (isBuyer ? r.buyer_code : r.campaign_code) ?? '—',
-        r.answered, r.missed, r.counted,
-        `$${r.rate.toFixed(2)}`, `$${r.total_bill.toFixed(2)}`,
-      ])
+      const isSingleDayPdf = !!(filters.from && filters.to && filters.from === filters.to)
+      // For single day: omit the date column from rows (it becomes the rowSpan cell)
+      const destCount = isBuyer ? 0 : new Set(result.data.map(r => r.source).filter(Boolean)).size
+      const rows = result.data.map((r) => {
+        const base: (string | number)[] = isBuyer
+          ? [r.buyer_code ?? '—', r.answered, r.missed, r.counted, `$${r.rate.toFixed(2)}`, `$${r.total_bill.toFixed(2)}`]
+          : [r.campaign_code ?? '—', r.source ?? '—', r.answered, r.missed, r.counted, `$${r.rate.toFixed(2)}`, `$${r.total_bill.toFixed(2)}`]
+        if (!isSingleDayPdf) base.unshift(formatDate(r.record_date))
+        return base
+      })
+      const pdfTotals = totals ? {
+        count: totals.count,
+        answered: totals.answered,
+        missed: totals.missed,
+        counted: totals.counted,
+        total_bill: totals.total_bill,
+        destCount: isBuyer ? undefined : destCount,
+      } : undefined
+      const columns = isSingleDayPdf
+        ? (isBuyer ? [entityLabel, 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill'] : [entityLabel, 'Destination', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill'])
+        : (isBuyer ? ['Date', entityLabel, 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill'] : ['Date', entityLabel, 'Destination', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill'])
       buildPdf(
         isBuyer ? 'Revenue Records Export' : 'Cost Records Export',
         filterLabel,
-        ['Date', entityLabel, 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill'],
-        rows, 2,
+        columns,
+        rows,
+        isSingleDayPdf ? (isBuyer ? 1 : 2) : (isBuyer ? 2 : 3),
+        {
+          singleDay: isSingleDayPdf ? formatDmy(filters.from ?? null) : undefined,
+          totals: pdfTotals,
+          entityLabel,
+        },
       ).save(isBuyer ? 'revenue-records.pdf' : 'cost-records.pdf')
     } finally { setPdfLoading(false) }
   }
@@ -152,7 +259,7 @@ export default function RecordsSection({
                 : { campaign_id: e.target.value ? Number(e.target.value) : '' })
             }
           >
-            <option value="">All {isBuyer ? 'buyers' : 'campaigns'}</option>
+            <option value="">All {isBuyer ? 'destinations' : 'campaigns'}</option>
             {entities.data?.map((x) => <option key={x.id} value={x.id}>{x.code}</option>)}
           </Select>
           <Input label="Search" placeholder={`${entityLabel} code…`} value={filters.search} onChange={(e) => set({ search: e.target.value })} />
@@ -170,9 +277,10 @@ export default function RecordsSection({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
-                  <th className="px-4 py-3 font-medium">#</th>
+                  {!isFiltered && <th className="px-4 py-3 font-medium">#</th>}
                   <Th onClick={() => set({ sort: 'record_date', dir: nextDir(filters, 'record_date') })} active={filters.sort === 'record_date'} dir={filters.dir}>Date</Th>
                   <th className="px-4 py-3 font-medium">{entityLabel}</th>
+                  {!isBuyer && <th className="px-4 py-3 font-medium">Destination</th>}
                   <ThNum onClick={() => set({ sort: 'answered',   dir: nextDir(filters, 'answered')   })} active={filters.sort === 'answered'}   dir={filters.dir}>Answered</ThNum>
                   <ThNum onClick={() => set({ sort: 'missed',     dir: nextDir(filters, 'missed')     })} active={filters.sort === 'missed'}     dir={filters.dir}>Missed</ThNum>
                   <ThNum onClick={() => set({ sort: 'counted',    dir: nextDir(filters, 'counted')    })} active={filters.sort === 'counted'}    dir={filters.dir}>Counted</ThNum>
@@ -184,9 +292,13 @@ export default function RecordsSection({
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/60">
-                    <td className="px-4 py-3 tabular-nums text-slate-400">{(meta ? (meta.page - 1) * meta.per_page : 0) + i + 1}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatDate(r.record_date)}</td>
+                    {!isFiltered && <td className="px-4 py-3 tabular-nums text-slate-400">{(meta ? (meta.page - 1) * meta.per_page : 0) + i + 1}</td>}
+                    {isSingleDay
+                      ? i === 0 && <td className="whitespace-nowrap px-4 py-3 text-center align-middle text-slate-600 font-medium" rowSpan={rows.length}>{formatDate(r.record_date)}</td>
+                      : <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatDate(r.record_date)}</td>
+                    }
                     <td className="px-4 py-3 font-medium text-slate-800">{(isBuyer ? r.buyer_code : r.campaign_code) ?? '—'}</td>
+                    {!isBuyer && <td className="px-4 py-3 text-slate-600">{r.source ?? '—'}</td>}
                     <td className="px-4 py-3 text-right tabular-nums text-slate-700">{num(r.answered)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-slate-500">{num(r.missed)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-slate-700">{num(r.counted)}</td>
@@ -201,6 +313,23 @@ export default function RecordsSection({
                   </tr>
                 ))}
               </tbody>
+              {totals && (
+                <tfoot>
+                  <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold text-slate-900">
+                    <td className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500" colSpan={isFiltered ? 1 : 2}>
+                      TOTAL
+                    </td>
+                    <td className="px-4 py-3 tabular-nums">{num(totals.count)}</td>
+                    {!isBuyer && <td className="px-4 py-3 tabular-nums">{num(new Set(allRecords.data?.data?.map(r => r.source).filter(Boolean) ?? []).size)}</td>}
+                    <td className="px-4 py-3 text-right tabular-nums">{num(totals.answered)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{num(totals.missed)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{num(totals.counted)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-slate-400">—</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-blue-700">{money2(totals.total_bill)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         )}
@@ -220,7 +349,7 @@ export default function RecordsSection({
       {records.error && <p className="mt-4 text-sm text-red-600">{records.error}</p>}
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit record' : `Add ${isBuyer ? 'revenue' : 'cost'} record`}>
-        <RecordForm type={type} editing={editing} entities={entities.data ?? []} onSaved={onSaved} onCancel={() => setModalOpen(false)} />
+        <RecordForm type={type} editing={editing} entities={entities.data ?? []} destinations={destinations.data ?? []} onSaved={onSaved} onCancel={() => setModalOpen(false)} />
       </Modal>
     </section>
   )
@@ -246,25 +375,28 @@ function ThNum({ children, onClick, active, dir }: { children: ReactNode; onClic
 
 // ─── Record form ──────────────────────────────────────────────────────────────
 
-function RecordForm({ type, editing, entities, onSaved, onCancel }: {
-  type: RecordType; editing: CallRecord | null; entities: Entity[]; onSaved: () => void; onCancel: () => void
+function RecordForm({ type, editing, entities, destinations, onSaved, onCancel }: {
+  type: RecordType; editing: CallRecord | null; entities: Entity[]; destinations: Destination[]; onSaved: () => void; onCancel: () => void
 }) {
-  const isBuyer    = type === 'buyer'
+  const isBuyer     = type === 'buyer'
   const entityLabel = isBuyer ? 'Destination' : 'Campaign'
-  const isEdit     = !!editing
+  const isEdit      = !!editing
 
-  const [date,     setDate]     = useState(editing?.record_date ?? today())
-  const [entityId, setEntityId] = useState<string>(editing ? String((isBuyer ? editing.buyer_id : editing.campaign_id) ?? '') : '')
-  const [newCode,  setNewCode]  = useState('')
-  const [answered, setAnswered] = useState(String(editing?.answered ?? ''))
-  const [missed,   setMissed]   = useState(String(editing?.missed   ?? ''))
-  const [counted,  setCounted]  = useState(String(editing?.counted  ?? ''))
-  const [rate,     setRate]     = useState(String(editing?.rate     ?? ''))
-  const [saving,   setSaving]   = useState(false)
-  const [error,    setError]    = useState<string | null>(null)
+  const [date,        setDate]        = useState(editing?.record_date ?? today())
+  const [entityId,    setEntityId]    = useState<string>(editing ? String((isBuyer ? editing.buyer_id : editing.campaign_id) ?? '') : '')
+  const [newCode,     setNewCode]     = useState('')
+  const [source,      setSource]      = useState(editing?.source ?? '')
+  const [newDest,     setNewDest]     = useState('')
+  const [answered,    setAnswered]    = useState(String(editing?.answered ?? ''))
+  const [missed,      setMissed]      = useState(String(editing?.missed   ?? ''))
+  const [counted,     setCounted]     = useState(String(editing?.counted  ?? ''))
+  const [rate,        setRate]        = useState(String(editing?.rate     ?? ''))
+  const [saving,      setSaving]      = useState(false)
+  const [error,       setError]       = useState<string | null>(null)
 
-  const total       = useMemo(() => (Number(counted) || 0) * (Number(rate) || 0), [counted, rate])
-  const creatingNew = !isEdit && entityId === '__new__'
+  const total          = useMemo(() => (Number(counted) || 0) * (Number(rate) || 0), [counted, rate])
+  const creatingNew    = !isEdit && entityId === '__new__'
+  const creatingNewDest = !isBuyer && source === '__new__'
 
   const handleAnswered = (v: string) => { setAnswered(v); setCounted(String((Number(v) || 0) + (Number(missed) || 0))) }
   const handleMissed   = (v: string) => { setMissed(v);   setCounted(String((Number(answered) || 0) + (Number(v) || 0))) }
@@ -274,11 +406,23 @@ function RecordForm({ type, editing, entities, onSaved, onCancel }: {
     try {
       const base = { record_date: date, answered: Number(answered)||0, missed: Number(missed)||0, counted: Number(counted)||0, rate: Number(rate)||0 }
       if (isEdit) {
-        await api.updateRecord(editing!.id, { ...base })
+        const updatePayload: Record<string, unknown> = { ...base }
+        if (!isBuyer) updatePayload.source = source === '__new__' ? newDest : source
+        await api.updateRecord(editing!.id, updatePayload)
       } else {
         const payload: Record<string, unknown> = { ...base, record_type: type }
         if (entityId === '__new__') payload[isBuyer ? 'buyer_code' : 'campaign_code'] = newCode
         else payload[isBuyer ? 'buyer_id' : 'campaign_id'] = Number(entityId)
+        if (!isBuyer) {
+          const destName = source === '__new__' ? newDest : source
+          if (destName) {
+            // Auto-create destination if it doesn't exist yet
+            if (source === '__new__' && newDest) {
+              try { await api.createDestination({ name: newDest }) } catch { /* already exists */ }
+            }
+            payload.source = destName
+          }
+        }
         await api.createRecord(payload)
       }
       onSaved()
@@ -300,6 +444,22 @@ function RecordForm({ type, editing, entities, onSaved, onCancel }: {
         )}
         {creatingNew && <Input label="New code" placeholder={isBuyer ? 'e.g. RTG 99' : 'e.g. C-12'} value={newCode} onChange={(e) => setNewCode(e.target.value)} required />}
       </div>
+      {!isBuyer && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {isEdit ? (
+            <Input label="Destination" value={editing!.source ?? ''} onChange={(e) => setSource(e.target.value)} placeholder="e.g. AdsTerra" />
+          ) : (
+            <Select label="Destination" value={source} onChange={(e) => setSource(e.target.value)}>
+              <option value="">Select destination…</option>
+              {destinations.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+              <option value="__new__">+ New destination…</option>
+            </Select>
+          )}
+          {creatingNewDest && (
+            <Input label="New destination name" placeholder="e.g. AdsTerra" value={newDest} onChange={(e) => setNewDest(e.target.value)} required />
+          )}
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Input label="Answered" type="number" min="0" value={answered} onChange={(e) => handleAnswered(e.target.value)} />
         <Input label="Missed"   type="number" min="0" value={missed}   onChange={(e) => handleMissed(e.target.value)} />

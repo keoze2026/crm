@@ -1,5 +1,6 @@
 import type {
   Buyer,
+  Destination,
   CallRecord,
   Campaign,
   CompleteReport,
@@ -79,6 +80,15 @@ export const api = {
     request<Campaign>(`/campaigns/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCampaign: (id: number) =>
     request<{ deleted: boolean }>(`/campaigns/${id}`, { method: 'DELETE' }),
+
+  // Destinations
+  destinations: (search?: string) => request<Destination[]>(`/destinations${qs({ search })}`),
+  createDestination: (data: Partial<Destination>) =>
+    request<Destination>('/destinations', { method: 'POST', body: JSON.stringify(data) }),
+  updateDestination: (id: number, data: Partial<Destination>) =>
+    request<Destination>(`/destinations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteDestination: (id: number) =>
+    request<{ deleted: boolean }>(`/destinations/${id}`, { method: 'DELETE' }),
 
   // Records
   records: (filters: RecordFilters) =>
