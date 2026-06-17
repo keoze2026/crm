@@ -450,7 +450,7 @@ export default function RecordsSection({
                 <col className="w-[13%]" />{/* Counted */}
                 <col className="w-[13%]" />{/* Rate */}
                 <col className="w-[18%]" />{/* Total */}
-                {!isFiltered && <col className="w-[8%]" />}
+                <col className="w-[8%]" />{/* Actions */}
               </colgroup>
               <thead>
                 <tr className="bg-blue-600 text-center text-xs font-semibold uppercase tracking-wide text-blue-50">
@@ -463,7 +463,7 @@ export default function RecordsSection({
                   <ThNum onClick={() => set({ sort: 'counted',    dir: nextDir(filters, 'counted')    })} active={filters.sort === 'counted'}    dir={filters.dir}>Counted</ThNum>
                   <th className="px-4 py-3 text-center font-medium">Rate</th>
                   <ThNum onClick={() => set({ sort: 'total_bill', dir: nextDir(filters, 'total_bill') })} active={filters.sort === 'total_bill'} dir={filters.dir}>Total</ThNum>
-                  {!isFiltered && <th className="px-4 py-3" />}
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody>
@@ -483,14 +483,12 @@ export default function RecordsSection({
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(r.counted)}</Box></td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-16">{money2(r.rate)}</Box></td>
                     <td className="py-3 pl-10 pr-2 text-center font-semibold tabular-nums text-slate-900"><Box w="w-28">{money2(r.total_bill)}</Box></td>
-                    {!isFiltered && (
-                      <td className="px-4 py-3">
-                        <div className="flex justify-center gap-1">
-                          <button onClick={() => openEdit(r)} className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600" title="Edit"><EditIcon /></button>
-                          <button onClick={() => onDelete(r)} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete"><TrashIcon /></button>
-                        </div>
-                      </td>
-                    )}
+                    <td className="px-4 py-3">
+                      <div className="flex justify-center gap-1">
+                        <button onClick={() => openEdit(r)} className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600" title="Edit"><EditIcon /></button>
+                        <button onClick={() => onDelete(r)} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete"><TrashIcon /></button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
