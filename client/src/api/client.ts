@@ -13,8 +13,6 @@ import type {
   TrendPoint,
 } from '../types'
 
-import { mockRequest, MOCK_MISS } from './mock' // MOCK: remove with mock.ts
-
 const BASE = '/api'
 
 function qs(params: object): string {
@@ -27,7 +25,6 @@ function qs(params: object): string {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  if (!options?.method || options.method === 'GET') { const m = mockRequest<T>(path); if (m !== MOCK_MISS) return m } // MOCK: remove with mock.ts
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
