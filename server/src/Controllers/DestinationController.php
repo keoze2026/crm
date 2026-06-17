@@ -13,6 +13,7 @@ final class DestinationController
     {
         $search = Http::query('search');
         $sql = 'SELECT id, name, status, created_at FROM destinations';
+        
         $params = [];
         if ($search) {
             $sql .= ' WHERE name ILIKE :s';
