@@ -1,10 +1,11 @@
 /* ───────────────────────────────────────────────────────────────────────────
  * TEMPORARY MOCK DATA — remove when the local backend is available.
  *
- * Lets the Call Records table render without the PHP/Postgres backend (502s).
+ * Lets the Leads Record table and Complete Report render without the
+ * PHP/Postgres backend (502s).
  * To remove: delete this file and the two `// MOCK` lines in ./client.ts.
  * ─────────────────────────────────────────────────────────────────────────── */
-import type { CallRecord, Paginated, RecordFilters } from '../types'
+import type { CallRecord, CompleteReport, Paginated, RecordFilters } from '../types'
 
 // Destinations (buyer side) — codes mirror the real data in the screenshots.
 const DESTINATIONS = [
@@ -89,6 +90,72 @@ function filterRecords(f: RecordFilters): Paginated<CallRecord> {
   return { data: data.slice(start, start + per_page), meta: { page, per_page, total, pages } }
 }
 
+// Campaign (cost side) codes for the complete report.
+const CAMPAIGNS = ['C-01', 'C-02', 'C-03', 'C-04', 'C-05', 'C-06']
+
+/** Build the complete report for a date range from the buyer records + generated cost rows. */
+function buildCompleteReport(from?: string, to?: string): CompleteReport {
+  // Revenue side: aggregate buyer records in range by destination.
+  let recs = ALL_RECORDS
+  if (from) recs = recs.filter((r) => r.record_date >= from)
+  if (to) recs = recs.filter((r) => r.record_date <= to)
+
+  const byCode = new Map<string, { answered: number; missed: number; counted: number; total_bill: number }>()
+  for (const r of recs) {
+    const k = r.buyer_code ?? '—'
+    const a = byCode.get(k) ?? { answered: 0, missed: 0, counted: 0, total_bill: 0 }
+    a.answered += r.answered; a.missed += r.missed; a.counted += r.counted; a.total_bill += r.total_bill
+    byCode.set(k, a)
+  }
+  const buyerRows = [...byCode.entries()]
+    .map(([code, a]) => ({ code, ...a, rate: a.counted ? a.total_bill / a.counted : 0 }))
+    .sort((x, y) => y.total_bill - x.total_bill)
+
+  const buyers_ = buyerRows.map((b) => ({
+    code: b.code, answered: b.answered, missed: b.missed, counted: b.counted,
+    rate: Math.round(b.rate * 100) / 100, total_bill: Math.round(b.total_bill * 100) / 100,
+  }))
+  const revenue = buyers_.reduce((s, b) => s + b.total_bill, 0)
+
+  // Cost side: generate campaign rows (media buys) — lower rates than revenue.
+  const rnd = seeded(from ? Number(from.replace(/-/g, '')) : 20260617)
+  const campaigns = []
+  for (let i = 0; i < 9; i++) {
+    const camp = CAMPAIGNS[i % CAMPAIGNS.length]
+    const destination = DESTINATIONS[Math.floor(rnd() * DESTINATIONS.length)]
+    const answered = 380 + Math.floor(rnd() * 280)
+    const missed = Math.floor(rnd() * 50)
+    const counted = answered + Math.floor(rnd() * (missed + 1))
+    const rate = Math.round((8 + rnd() * 27) * 100) / 100
+    campaigns.push({ camp, destination, answered, missed, counted, rate, total_bill: Math.round(counted * rate * 100) / 100 })
+  }
+  const cost = campaigns.reduce((s, c) => s + c.total_bill, 0)
+
+  const sum = <K extends 'answered' | 'missed' | 'counted' | 'total_bill'>(arr: { [P in K]: number }[], k: K) =>
+    arr.reduce((s, x) => s + x[k], 0)
+
+  return {
+    from: from ?? null,
+    to: to ?? null,
+    buyers: buyers_,
+    campaigns,
+    buyer_totals: {
+      destinations: buyers_.length,
+      answered: sum(buyers_, 'answered'), missed: sum(buyers_, 'missed'), counted: sum(buyers_, 'counted'),
+      rate: 0, total_bill: Math.round(revenue * 100) / 100,
+    },
+    campaign_totals: {
+      camps: new Set(campaigns.map((c) => c.camp)).size,
+      destinations: new Set(campaigns.map((c) => c.destination)).size,
+      answered: sum(campaigns, 'answered'), missed: sum(campaigns, 'missed'), counted: sum(campaigns, 'counted'),
+      rate: 0, total_bill: Math.round(cost * 100) / 100,
+    },
+    revenue: Math.round(revenue * 100) / 100,
+    cost: Math.round(cost * 100) / 100,
+    profit: Math.round((revenue - cost) * 100) / 100,
+  }
+}
+
 /** Returns mock JSON for a given API path, or the sentinel MOCK_MISS to fall through. */
 export const MOCK_MISS = Symbol('mock-miss')
 
@@ -100,6 +167,7 @@ export function mockRequest<T>(path: string): T | typeof MOCK_MISS {
   if (route === '/buyers') return buyers as unknown as T
   if (route === '/destinations') return [] as unknown as T
   if (route === '/campaigns') return [] as unknown as T
+  if (route === '/analytics/complete-report') return buildCompleteReport(params.from, params.to) as unknown as T
 
   return MOCK_MISS
 }

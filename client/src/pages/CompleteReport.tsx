@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { api } from '../api/client'
 import { DateRangeControl, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
@@ -7,16 +7,10 @@ import { daysAgo, formatDmy, money, money2, num, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { CompleteReport } from '../types'
 
-// Palette mirrors the downloadable PDF (navy bands, cyan revenue body, white date column).
-const NAVY = 'rgb(26, 54, 84)'
-const CYAN = 'rgb(212, 233, 242)'
-const INK = 'rgb(15, 23, 42)'
-const BORDER = '1px solid white'
-
 /** Human-readable date label: single day, range, or em-dash when unset. */
 function rangeText(from: string | null, to: string | null): string {
   if (!from && !to) return '—'
-  if (from && to && from !== to) return `${formatDmy(from)}  –  ${formatDmy(to)}`
+  if (from && to && from !== to) return `${formatDmy(from)} – ${formatDmy(to)}`
   return formatDmy(from ?? to)
 }
 
@@ -29,7 +23,7 @@ export default function CompleteReportPage() {
 
   return (
     <div>
-      <PageHeader title="Complete Report" subtitle="Filter by date — the report below updates to match">
+      <PageHeader title="Complete Report" subtitle="Revenue and cost, combined into profit — filter by date">
         <DateRangeControl value={range} onChange={setRange} />
       </PageHeader>
 
@@ -48,146 +42,191 @@ export default function CompleteReportPage() {
   )
 }
 
-// ─── Rendered report (same layout as the PDF export) ────────────────────────────
+// ─── Rendered report ────────────────────────────────────────────────────────────
 
 function ReportView({ data }: { data: CompleteReport }) {
   const dateLabel = rangeText(data.from, data.to)
-  const startLabel = data.from ? formatDmy(data.from) : dateLabel
-  const endLabel = data.to && data.to !== data.from ? formatDmy(data.to) : ''
   const bt = data.buyer_totals
   const ct = data.campaign_totals
 
+  // Placeholder per-row replacement count (after Missed, before the final Counted).
+  const REPLACEMENT = 1
+
+  // Revenue side — one row per destination (buyer)
+  const buyerCols: Col[] = [
+    { label: 'DESTINATION', w: '18%', box: 'w-16', kind: 'text' },
+    { label: 'ANSWERED',    w: '12%', box: 'w-12', kind: 'num'  },
+    { label: 'MISSED',      w: '11%', box: 'w-10', kind: 'num'  },
+    { label: 'REPLACEMENT', w: '13%', box: 'w-12', kind: 'num'  },
+    { label: 'COUNTED',     w: '12%', box: 'w-12', kind: 'num'  },
+    { label: 'RATE',        w: '12%', box: 'w-16', kind: 'num'  },
+    { label: 'TOTAL BILL',  w: '14%', box: 'w-28', kind: 'total'},
+  ]
   const buyerRows = data.buyers.map((b) => [
-    b.code, num(b.answered), num(b.missed), num(b.counted), money2(b.rate), money2(b.total_bill),
+    b.code, num(b.answered), num(b.missed), num(REPLACEMENT), num(b.counted), money2(b.rate), money2(b.total_bill),
   ])
   const buyerTotals = [
-    'TOTAL', String(bt.destinations), num(bt.answered), num(bt.missed), num(bt.counted), '—', money2(bt.total_bill),
+    String(bt.destinations), num(bt.answered), num(bt.missed), num(REPLACEMENT * data.buyers.length), num(bt.counted), '—', money2(bt.total_bill),
   ]
 
+  // Cost side — one row per campaign + destination
+  const campCols: Col[] = [
+    { label: 'CAMP',        w: '11%', box: 'w-16', kind: 'text' },
+    { label: 'DESTINATION', w: '13%', box: 'w-20', kind: 'text' },
+    { label: 'ANSWERED',    w: '11%', box: 'w-12', kind: 'num'  },
+    { label: 'MISSED',      w: '9%',  box: 'w-10', kind: 'num'  },
+    { label: 'REPLACEMENT', w: '12%', box: 'w-12', kind: 'num'  },
+    { label: 'COUNTED',     w: '11%', box: 'w-12', kind: 'num'  },
+    { label: 'RATE',        w: '11%', box: 'w-16', kind: 'num'  },
+    { label: 'TOTAL BILL',  w: '13%', box: 'w-28', kind: 'total'},
+  ]
   const campRows = data.campaigns.map((c) => [
-    c.camp, c.destination, num(c.answered), num(c.missed), num(c.counted), money2(c.rate), money2(c.total_bill),
+    c.camp, c.destination, num(c.answered), num(c.missed), num(REPLACEMENT), num(c.counted), money2(c.rate), money2(c.total_bill),
   ])
   const campTotals = [
-    'TOTAL', String(ct.camps), String(ct.destinations), num(ct.answered), num(ct.missed), num(ct.counted), '—', money2(ct.total_bill),
+    String(ct.camps), String(ct.destinations), num(ct.answered), num(ct.missed), num(REPLACEMENT * data.campaigns.length), num(ct.counted), '—', money2(ct.total_bill),
   ]
 
   return (
-    <div className="mx-auto max-w-4xl">
-      {/* Title block — matches the PDF header */}
-      <div className="mb-4">
-        <h2 className="text-lg font-bold" style={{ color: NAVY }}>Complete Report</h2>
-        <div className="mt-0.5 flex flex-wrap justify-between gap-x-4 text-xs text-slate-500">
-          <span>Period: {dateLabel}</span>
-          <span>Generated {new Date().toLocaleString()}</span>
-        </div>
+    <div className="mx-auto max-w-4xl space-y-8">
+      {/* Period line */}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 text-xs text-slate-500">
+        <span>Period: <span className="font-medium text-slate-700">{dateLabel}</span></span>
+        <span>{data.buyers.length} destinations · {data.campaigns.length} campaign rows</span>
       </div>
 
-      {/* Revenue side — one row per destination (buyer) */}
-      <div className="overflow-x-auto">
-        <ReportTable
-          columns={['DATE', 'DESTINATION', 'ANSWERED', 'MISSED', 'COUNTED', 'RATE', 'TOTAL BILL']}
-          rows={buyerRows}
-          totals={buyerTotals}
-          startLabel={startLabel}
-          endLabel={endLabel}
-          bodyBg={CYAN}
-        />
-      </div>
+      {/* Revenue (buyer) */}
+      <section>
+        <SectionHeading title="Revenue" note="buyer destinations" />
+        <SectionTable dateLabel={dateLabel} dateW="12%" cols={buyerCols} rows={buyerRows} totals={buyerTotals} />
+      </section>
 
-      {/* Profit badge */}
-      <div className="my-5 flex justify-center">
-        <div style={{ backgroundColor: NAVY }} className="rounded-lg px-10 py-2.5 text-2xl font-bold text-white shadow-md">
-          {money(data.profit)}
-        </div>
-      </div>
+      {/* Cost (campaign) */}
+      <section>
+        <SectionHeading title="Cost" note="campaign destinations" />
+        <SectionTable dateLabel={dateLabel} dateW="14%" cols={campCols} rows={campRows} totals={campTotals} />
+      </section>
 
-      {/* Cost side — one row per campaign + destination */}
-      <div className="overflow-x-auto">
-        <ReportTable
-          columns={['DATE', 'CAMP', 'DESTINATION', 'ANSWERED', 'MISSED', 'COUNTED', 'RATE', 'TOTAL BILL']}
-          rows={campRows}
-          totals={campTotals}
-          startLabel={startLabel}
-          endLabel={endLabel}
-          bodyBg="white"
-        />
-      </div>
+      {/* Combined — Revenue − Cost = Profit */}
+      <section>
+        <SectionHeading title="Complete" note="revenue − cost = profit" />
+        <FormulaBand revenue={data.revenue} cost={data.cost} profit={data.profit} />
+      </section>
     </div>
   )
 }
 
-/** One report table: navy header, body, and an integrated navy TOTAL row. */
-function ReportTable({
-  columns,
-  rows,
-  totals,
-  startLabel,
-  endLabel,
-  bodyBg,
-}: {
-  columns: string[]
-  rows: string[][]
-  totals: string[]
-  startLabel: string
-  endLabel: string
-  bodyBg: string
-}) {
-  const last = rows.length - 1
+// ─── Building blocks ─────────────────────────────────────────────────────────────
+
+interface Col { label: string; w: string; box: string; kind: 'text' | 'num' | 'total' }
+
+function SectionHeading({ title, note }: { title: string; note: string }) {
   return (
-    <table className="w-full text-[11px]" style={{ borderCollapse: 'collapse' }}>
-      <thead>
-        <tr>
-          {columns.map((c) => (
-            <th
-              key={c}
-              style={{ backgroundColor: NAVY, color: 'white', border: BORDER }}
-              className="px-2 py-1.5 text-center font-bold uppercase tracking-wide"
-            >
-              {c}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.length === 0 ? (
-          <tr>
-            <td style={{ backgroundColor: 'white', color: INK, border: BORDER }} className="px-2 py-1.5 text-center font-semibold">
-              {startLabel}
-            </td>
-            {columns.slice(1).map((_, i) => (
-              <td key={i} style={{ backgroundColor: bodyBg, color: INK, border: BORDER }} className="px-2 py-1.5">—</td>
+    <div className="mb-3 flex items-center gap-2">
+      <span className="h-5 w-1.5 rounded-full bg-blue-600" />
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+        {title} <span className="font-normal normal-case text-slate-400">— {note}</span>
+      </h3>
+    </div>
+  )
+}
+
+// Fixed-width, left-aligned box centered in a `text-center` cell — values share one
+// clean vertical line (same pattern as the Leads Record table).
+function Box({ children, w }: { children: ReactNode; w: string }) {
+  return <span className={cx('inline-block text-left tabular-nums', w)}>{children}</span>
+}
+
+const KIND_CLASS: Record<Col['kind'], string> = {
+  text:  'font-medium text-slate-800',
+  num:   'tabular-nums text-slate-600',
+  total: 'font-semibold tabular-nums text-slate-900',
+}
+
+/** One styled report table — blue header, tinted merged Date column, zebra body, blue TOTAL band. */
+function SectionTable({ dateLabel, dateW, cols, rows, totals }: {
+  dateLabel: string; dateW: string; cols: Col[]; rows: string[][]; totals: string[]
+}) {
+  const span = Math.max(rows.length, 1)
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-blue-100 shadow-sm">
+      <table className="w-full table-fixed text-sm">
+        <colgroup>
+          <col style={{ width: dateW }} />
+          {cols.map((c) => <col key={c.label} style={{ width: c.w }} />)}
+        </colgroup>
+
+        <thead>
+          <tr className="bg-blue-600 text-center text-xs font-semibold uppercase tracking-wide text-blue-50">
+            <th className="px-4 py-3">DATE</th>
+            {cols.map((c) => <th key={c.label} className="px-4 py-3">{c.label}</th>)}
+          </tr>
+        </thead>
+
+        <tbody>
+          {rows.length === 0 ? (
+            <tr className="border-b border-slate-100/70">
+              <td className="bg-blue-50/70 px-4 py-3 text-center align-middle font-semibold leading-tight text-blue-900">{dateLabel}</td>
+              {cols.map((c) => <td key={c.label} className="py-3 pl-10 pr-2 text-center text-slate-400"><Box w={c.box}>—</Box></td>)}
+            </tr>
+          ) : (
+            rows.map((cells, ri) => (
+              <tr key={ri} className="border-b border-slate-100/70 odd:bg-white/60 even:bg-blue-50/40 hover:bg-blue-100/50">
+                {ri === 0 && (
+                  <td rowSpan={span} className="bg-blue-50/70 px-4 py-3 text-center align-middle font-semibold leading-tight text-blue-900">
+                    {dateLabel}
+                  </td>
+                )}
+                {cells.map((cell, ci) => (
+                  <td key={ci} className={cx('py-3 pl-10 pr-2 text-center', KIND_CLASS[cols[ci].kind])}>
+                    <Box w={cols[ci].box}>{cell}</Box>
+                  </td>
+                ))}
+              </tr>
+            ))
+          )}
+        </tbody>
+
+        <tfoot>
+          <tr className="border-t-2 border-blue-200 bg-blue-50 font-semibold text-slate-900">
+            <td className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-blue-700">TOTAL</td>
+            {totals.map((cell, ci) => (
+              <td key={ci} className={cx('py-3 pl-10 pr-2 text-center tabular-nums', cols[ci].kind === 'total' && 'text-blue-700')}>
+                <Box w={cols[ci].box}>{cell}</Box>
+              </td>
             ))}
           </tr>
-        ) : (
-          rows.map((cells, ri) => (
-            <tr key={ri}>
-              <td
-                style={{ backgroundColor: 'white', color: INK, border: BORDER }}
-                className="whitespace-nowrap px-2 py-1.5 text-center font-semibold"
-              >
-                {ri === 0 ? startLabel : ri === last && endLabel ? endLabel : ''}
-              </td>
-              {cells.map((cell, ci) => (
-                <td key={ci} style={{ backgroundColor: bodyBg, color: INK, border: BORDER }} className="px-2 py-1.5">
-                  {cell}
-                </td>
-              ))}
-            </tr>
-          ))
-        )}
-        {/* TOTAL row */}
-        <tr>
-          {totals.map((cell, i) => (
-            <td
-              key={i}
-              style={{ backgroundColor: NAVY, color: 'white', border: BORDER }}
-              className={cx('px-2 py-1.5 font-bold', i >= 2 ? 'text-right' : 'text-left')}
-            >
-              {cell}
-            </td>
-          ))}
-        </tr>
-      </tbody>
-    </table>
+        </tfoot>
+      </table>
+    </div>
   )
+}
+
+/** Combined profit: Revenue − Cost = Profit, laid out as an equation. */
+function FormulaBand({ revenue, cost, profit }: { revenue: number; cost: number; profit: number }) {
+  return (
+    <div className="flex flex-col items-stretch gap-3 rounded-2xl border border-blue-100 bg-blue-50/40 p-5 sm:flex-row sm:items-center sm:justify-center">
+      <Tile label="Revenue" value={money(revenue)} />
+      <Operator>−</Operator>
+      <Tile label="Cost" value={money(cost)} />
+      <Operator>=</Operator>
+      <Tile label="Profit" value={money(profit)} highlight={profit >= 0 ? 'blue' : 'red'} />
+    </div>
+  )
+}
+
+function Tile({ label, value, highlight }: { label: string; value: string; highlight?: 'blue' | 'red' }) {
+  const filled = highlight === 'blue' ? 'bg-blue-600 text-white border-blue-600'
+    : highlight === 'red' ? 'bg-red-600 text-white border-red-600'
+    : 'bg-white text-slate-900 border-blue-100'
+  return (
+    <div className={cx('flex-1 rounded-xl border px-6 py-4 text-center shadow-sm', filled)}>
+      <p className={cx('text-[11px] font-semibold uppercase tracking-wide', highlight ? 'text-white/80' : 'text-slate-400')}>{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums">{value}</p>
+    </div>
+  )
+}
+
+function Operator({ children }: { children: ReactNode }) {
+  return <span className="self-center text-2xl font-bold text-slate-400">{children}</span>
 }

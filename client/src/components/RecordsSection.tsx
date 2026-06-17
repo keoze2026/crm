@@ -203,6 +203,10 @@ export default function RecordsSection({
   const set = (patch: Partial<RecordFilters>) => setFilters((f) => ({ ...f, page: 1, ...patch }))
   const isFiltered = !!(filters.from || filters.to)
   const isSingleDay = !!(filters.from && filters.to && filters.from === filters.to)
+  // Single-day view: drop the redundant Date column (the date is in the filter)
+  // and show serial numbers instead. Otherwise keep the existing Date column.
+  const showSerial = !isFiltered || isSingleDay
+  const showDate   = !isSingleDay
 
   const openNew  = () => { setEditing(null); setModalOpen(true) }
   const openEdit = (r: CallRecord) => { setEditing(r); setModalOpen(true) }
@@ -360,6 +364,16 @@ export default function RecordsSection({
     </>
   )
 
+  // Date range lives in the page header (top-right), not the filters card.
+  const dateControl = !hideDateFilter ? (
+    <DateRangeFilter
+      from={filters.from ?? ''}
+      to={filters.to ?? ''}
+      onFromChange={(iso) => set({ from: iso })}
+      onToChange={(iso) => set({ to: iso })}
+    />
+  ) : null
+
   return (
     <section>
       {compact ? (
@@ -382,44 +396,66 @@ export default function RecordsSection({
 
       {/* Filters */}
       <Card className="mb-4 p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          {!hideDateFilter && (
-            <DateRangeFilter
-              from={filters.from ?? ''}
-              to={filters.to ?? ''}
-              onFromChange={(iso) => set({ from: iso })}
-              onToChange={(iso) => set({ to: iso })}
-            />
-          )}
-          <Select
-            label={entityLabel}
-            value={isBuyer ? filters.buyer_id : filters.campaign_id}
-            onChange={(e) =>
-              set(isBuyer
-                ? { buyer_id: e.target.value ? Number(e.target.value) : '' }
-                : { campaign_id: e.target.value ? Number(e.target.value) : '' })
-            }
-          >
-            <option value="">All {isBuyer ? 'destinations' : 'campaigns'}</option>
-            {entities.data?.map((x) => <option key={x.id} value={x.id}>{x.code}</option>)}
-          </Select>
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <Input label="Search" placeholder={`${entityLabel} code…`} value={filters.search} onChange={(e) => set({ search: e.target.value })} />
+          <div className="flex flex-wrap items-end gap-3">
+            {dateControl && (
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-slate-700">Date</span>
+                {dateControl}
+              </label>
+            )}
+            <Select
+              label={entityLabel}
+              value={isBuyer ? filters.buyer_id : filters.campaign_id}
+              onChange={(e) =>
+                set(isBuyer
+                  ? { buyer_id: e.target.value ? Number(e.target.value) : '' }
+                  : { campaign_id: e.target.value ? Number(e.target.value) : '' })
+              }
+            >
+              <option value="">All {isBuyer ? 'destinations' : 'campaigns'}</option>
+              {entities.data?.map((x) => <option key={x.id} value={x.id}>{x.code}</option>)}
+            </Select>
+          </div>
         </div>
       </Card>
 
       {/* Table */}
       <Card>
-        {records.loading ? (
+        {!isFiltered ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+              </svg>
+            </div>
+            <p className="text-base font-semibold text-slate-700">Select a date to view records</p>
+            <p className="max-w-sm text-sm text-slate-400">Pick a day or date range with the <span className="font-medium text-slate-500">Date</span> picker above to load call records.</p>
+          </div>
+        ) : records.loading ? (
           <div className="flex justify-center py-16"><Spinner className="h-6 w-6" /></div>
         ) : rows.length === 0 ? (
           <EmptyState message="No records match these filters." />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-t-2xl">
+            <table className="w-full table-fixed text-sm">
+              <colgroup>
+                {showSerial && <col className="w-[6%]" />}{/* # */}
+                {showDate && <col className="w-[12%]" />}{/* Date */}
+                <col className="w-[15%]" />{/* Destination / Campaign */}
+                {!isBuyer && <col className="w-[13%]" />}{/* Source */}
+                <col className="w-[13%]" />{/* Answered */}
+                <col className="w-[11%]" />{/* Missed */}
+                <col className="w-[13%]" />{/* Counted */}
+                <col className="w-[13%]" />{/* Rate */}
+                <col className="w-[18%]" />{/* Total */}
+                {!isFiltered && <col className="w-[8%]" />}
+              </colgroup>
               <thead>
-                <tr className="border-b border-slate-100 text-center text-xs uppercase tracking-wide text-slate-400">
-                  {!isFiltered && <th className="px-4 py-3 font-medium">#</th>}
-                  <Th onClick={() => set({ sort: 'record_date', dir: nextDir(filters, 'record_date') })} active={filters.sort === 'record_date'} dir={filters.dir}>Date</Th>
+                <tr className="bg-blue-600 text-center text-xs font-semibold uppercase tracking-wide text-blue-50">
+                  {showSerial && <th className="px-4 py-3 font-medium">#</th>}
+                  {showDate && <Th onClick={() => set({ sort: 'record_date', dir: nextDir(filters, 'record_date') })} active={filters.sort === 'record_date'} dir={filters.dir}>Date</Th>}
                   <th className="px-4 py-3 font-medium">{entityLabel}</th>
                   {!isBuyer && <th className="px-4 py-3 font-medium">Destination</th>}
                   <ThNum onClick={() => set({ sort: 'answered',   dir: nextDir(filters, 'answered')   })} active={filters.sort === 'answered'}   dir={filters.dir}>Answered</ThNum>
@@ -432,23 +468,21 @@ export default function RecordsSection({
               </thead>
               <tbody>
                 {rows.map((r, i) => (
-                  <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/60">
-                    {!isFiltered && <td className="px-4 py-3 text-center tabular-nums text-slate-400">{(meta ? (meta.page - 1) * meta.per_page : 0) + i + 1}</td>}
-                    {isSingleDay
-                      ? i === 0 && <td className="whitespace-nowrap px-4 py-3 text-center align-middle text-slate-600 font-medium" rowSpan={rows.length}>{formatDate(r.record_date)}</td>
-                      : isFiltered
-                        ? <td className="whitespace-nowrap px-4 py-3 text-center text-slate-600 font-medium">
-                            {i === 0 ? formatDate(r.record_date) : i === rows.length - 1 ? formatDate(r.record_date) : ''}
-                          </td>
-                        : <td className="whitespace-nowrap px-4 py-3 text-center text-slate-600">{formatDate(r.record_date)}</td>
-                    }
-                    <td className="px-4 py-3 text-center font-medium text-slate-800">{(isBuyer ? r.buyer_code : r.campaign_code) ?? '—'}</td>
-                    {!isBuyer && <td className="px-4 py-3 text-center text-slate-600">{r.source ?? '—'}</td>}
-                    <td className="px-4 py-3 text-center tabular-nums text-slate-700">{num(r.answered)}</td>
-                    <td className="px-4 py-3 text-center tabular-nums text-slate-500">{num(r.missed)}</td>
-                    <td className="px-4 py-3 text-center tabular-nums text-slate-700">{num(r.counted)}</td>
-                    <td className="px-4 py-3 text-center tabular-nums text-slate-500">{money2(r.rate)}</td>
-                    <td className="px-4 py-3 text-center font-semibold tabular-nums text-slate-900">{money2(r.total_bill)}</td>
+                  <tr key={r.id} className="border-b border-slate-100/70 odd:bg-white/40 even:bg-blue-50/40 hover:bg-blue-100/50">
+                    {showSerial && <td className="px-4 py-3 text-center tabular-nums text-slate-400">{(meta ? (meta.page - 1) * meta.per_page : 0) + i + 1}</td>}
+                    {showDate && (isFiltered
+                      ? <td className="whitespace-nowrap px-4 py-3 text-center text-slate-600 font-medium">
+                          {i === 0 ? formatDate(r.record_date) : i === rows.length - 1 ? formatDate(r.record_date) : ''}
+                        </td>
+                      : <td className="whitespace-nowrap px-4 py-3 text-center text-slate-600">{formatDate(r.record_date)}</td>
+                    )}
+                    <td className="py-3 pl-10 pr-2 text-center font-medium text-slate-800"><Box w="w-16" align="left">{(isBuyer ? r.buyer_code : r.campaign_code) ?? '—'}</Box></td>
+                    {!isBuyer && <td className="py-3 pl-10 pr-2 text-center text-slate-600"><Box w="w-20" align="left">{r.source ?? '—'}</Box></td>}
+                    <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(r.answered)}</Box></td>
+                    <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-10">{num(r.missed)}</Box></td>
+                    <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(r.counted)}</Box></td>
+                    <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-16">{money2(r.rate)}</Box></td>
+                    <td className="py-3 pl-10 pr-2 text-center font-semibold tabular-nums text-slate-900"><Box w="w-28">{money2(r.total_bill)}</Box></td>
                     {!isFiltered && (
                       <td className="px-4 py-3">
                         <div className="flex justify-center gap-1">
@@ -462,17 +496,17 @@ export default function RecordsSection({
               </tbody>
               {totals && (
                 <tfoot>
-                  <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold text-slate-900">
-                    <td className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-slate-500" colSpan={isFiltered ? 1 : 2}>
+                  <tr className="border-t-2 border-blue-200 bg-blue-50 font-semibold text-slate-900">
+                    <td className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-blue-700" colSpan={showSerial && showDate ? 2 : 1}>
                       TOTAL
                     </td>
-                    <td className="px-4 py-3 text-center tabular-nums">{num(totals.count)}</td>
-                    {!isBuyer && <td className="px-4 py-3 text-center tabular-nums">{num(new Set(allRecords.data?.data?.map(r => r.source).filter(Boolean) ?? []).size)}</td>}
-                    <td className="px-4 py-3 text-center tabular-nums">{num(totals.answered)}</td>
-                    <td className="px-4 py-3 text-center tabular-nums">{num(totals.missed)}</td>
-                    <td className="px-4 py-3 text-center tabular-nums">{num(totals.counted)}</td>
-                    <td className="px-4 py-3 text-center tabular-nums text-slate-400">—</td>
-                    <td className="px-4 py-3 text-center tabular-nums text-blue-700">{money2(totals.total_bill)}</td>
+                    <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-16" align="left">{num(totals.count)}</Box></td>
+                    {!isBuyer && <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-20" align="left">{num(new Set(allRecords.data?.data?.map(r => r.source).filter(Boolean) ?? []).size)}</Box></td>}
+                    <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-12">{num(totals.answered)}</Box></td>
+                    <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-10">{num(totals.missed)}</Box></td>
+                    <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-12">{num(totals.counted)}</Box></td>
+                    <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-400"><Box w="w-16">—</Box></td>
+                    <td className="py-3 pl-10 pr-2 text-center tabular-nums text-blue-700"><Box w="w-28">{money2(totals.total_bill)}</Box></td>
                     <td />
                   </tr>
                 </tfoot>
@@ -481,7 +515,7 @@ export default function RecordsSection({
           </div>
         )}
 
-        {meta && meta.total > 0 && (
+        {isFiltered && meta && meta.total > 0 && (
           <div className="flex flex-col items-center justify-between gap-2 border-t border-slate-100 px-4 py-3 text-sm text-slate-500 sm:flex-row">
             <span>Showing {(meta.page - 1) * meta.per_page + 1}–{Math.min(meta.page * meta.per_page, meta.total)} of {num(meta.total)}</span>
             <div className="flex items-center gap-1">
@@ -505,17 +539,23 @@ export default function RecordsSection({
 function nextDir(filters: RecordFilters, col: string): 'asc' | 'desc' {
   return filters.sort === col && filters.dir === 'desc' ? 'asc' : 'desc'
 }
+
+// Fixed-width, left-aligned box centered inside the cell, so every value in a
+// column shares the same left edge — one clean vertical line, no drift.
+function Box({ children, w, align = 'left' }: { children: ReactNode; w: string; align?: 'left' | 'right' }) {
+  return <span className={cx('inline-block tabular-nums', w, align === 'left' ? 'text-left' : 'text-right')}>{children}</span>
+}
 function Th({ children, onClick, active, dir }: { children: ReactNode; onClick: () => void; active?: boolean; dir?: string }) {
   return (
     <th className="cursor-pointer select-none px-4 py-3 font-medium" onClick={onClick}>
-      <span className={cx(active && 'text-blue-600')}>{children}{active ? (dir === 'asc' ? ' ↑' : ' ↓') : ''}</span>
+      <span className={cx(active && 'text-white underline underline-offset-4')}>{children}{active ? (dir === 'asc' ? ' ↑' : ' ↓') : ''}</span>
     </th>
   )
 }
 function ThNum({ children, onClick, active, dir }: { children: ReactNode; onClick: () => void; active?: boolean; dir?: string }) {
   return (
     <th className="cursor-pointer select-none px-4 py-3 text-center font-medium" onClick={onClick}>
-      <span className={cx(active && 'text-blue-600')}>{children}{active ? (dir === 'asc' ? ' ↑' : ' ↓') : ''}</span>
+      <span className={cx(active && 'text-white underline underline-offset-4')}>{children}{active ? (dir === 'asc' ? ' ↑' : ' ↓') : ''}</span>
     </th>
   )
 }

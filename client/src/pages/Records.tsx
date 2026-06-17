@@ -4,7 +4,7 @@ export default function Records() {
   return (
     <RecordsSection
       type="buyer"
-      title="Call Records"
+      title="Leads Record"
       subtitle="Revenue — buyer call records"
     />
   )
