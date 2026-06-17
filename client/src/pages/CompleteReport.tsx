@@ -88,7 +88,7 @@ function ReportView({ data }: { data: CompleteReport }) {
   ]
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8">
+    <div className="mx-auto space-y-8">
       {/* Period line */}
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 text-xs text-slate-500">
         <span>Period: <span className="font-medium text-slate-700">{dateLabel}</span></span>
