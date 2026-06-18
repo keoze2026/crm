@@ -3,7 +3,7 @@ import { api } from '../api/client'
 import { DateRangeControl, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
 import { Card, cx, EmptyState, Spinner } from '../components/ui'
-import { daysAgo, formatDmy, money, money2, num, today } from '../lib/format'
+import { daysAgo, formatDmy, money2, num, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { CompleteReport } from '../types'
 
@@ -54,13 +54,13 @@ function ReportView({ data }: { data: CompleteReport }) {
 
   // Revenue side — one row per destination (buyer)
   const buyerCols: Col[] = [
-    { label: 'DESTINATION', w: '18%', box: 'w-16', kind: 'text' },
-    { label: 'ANSWERED',    w: '12%', box: 'w-12', kind: 'num'  },
-    { label: 'MISSED',      w: '11%', box: 'w-10', kind: 'num'  },
-    { label: 'REPLACEMENT', w: '13%', box: 'w-12', kind: 'num'  },
-    { label: 'COUNTED',     w: '12%', box: 'w-12', kind: 'num'  },
-    { label: 'RATE',        w: '12%', box: 'w-16', kind: 'num'  },
-    { label: 'TOTAL BILL',  w: '14%', box: 'w-28', kind: 'total'},
+    { label: 'DESTINATION', w: '16%', box: 'w-16', kind: 'text' },
+    { label: 'ANSWERED',    w: '14%', box: 'w-12', kind: 'num'  },
+    { label: 'MISSED',      w: '12%', box: 'w-10', kind: 'num'  },
+    { label: 'REPLACEMENT', w: '14%', box: 'w-12', kind: 'num'  },
+    { label: 'COUNTED',     w: '14%', box: 'w-12', kind: 'num'  },
+    { label: 'RATE',        w: '14%', box: 'w-16', kind: 'num'  },
+    { label: 'TOTAL BILL',  w: '16%', box: 'w-28', kind: 'total'},
   ]
   const buyerRows = data.buyers.map((b) => [
     b.code, num(b.answered), num(b.missed), num(REPLACEMENT), num(b.counted), money2(b.rate), money2(b.total_bill),
@@ -73,12 +73,12 @@ function ReportView({ data }: { data: CompleteReport }) {
   const campCols: Col[] = [
     { label: 'CAMP',        w: '11%', box: 'w-16', kind: 'text' },
     { label: 'DESTINATION', w: '13%', box: 'w-20', kind: 'text' },
-    { label: 'ANSWERED',    w: '11%', box: 'w-12', kind: 'num'  },
-    { label: 'MISSED',      w: '9%',  box: 'w-10', kind: 'num'  },
-    { label: 'REPLACEMENT', w: '12%', box: 'w-12', kind: 'num'  },
-    { label: 'COUNTED',     w: '11%', box: 'w-12', kind: 'num'  },
-    { label: 'RATE',        w: '11%', box: 'w-16', kind: 'num'  },
-    { label: 'TOTAL BILL',  w: '13%', box: 'w-28', kind: 'total'},
+    { label: 'ANSWERED',    w: '12%', box: 'w-12', kind: 'num'  },
+    { label: 'MISSED',      w: '10%', box: 'w-10', kind: 'num'  },
+    { label: 'REPLACEMENT', w: '13%', box: 'w-12', kind: 'num'  },
+    { label: 'COUNTED',     w: '12%', box: 'w-12', kind: 'num'  },
+    { label: 'RATE',        w: '12%', box: 'w-16', kind: 'num'  },
+    { label: 'TOTAL BILL',  w: '17%', box: 'w-28', kind: 'total'},
   ]
   const campRows = data.campaigns.map((c) => [
     c.camp, c.destination, num(c.answered), num(c.missed), num(REPLACEMENT), num(c.counted), money2(c.rate), money2(c.total_bill),
@@ -98,13 +98,13 @@ function ReportView({ data }: { data: CompleteReport }) {
       {/* Revenue (buyer) */}
       <section>
         <SectionHeading title="Revenue" note="buyer destinations" />
-        <SectionTable dateLabel={dateLabel} dateW="12%" cols={buyerCols} rows={buyerRows} totals={buyerTotals} />
+        <SectionTable cols={buyerCols} rows={buyerRows} totals={buyerTotals} />
       </section>
 
       {/* Cost (campaign) */}
       <section>
         <SectionHeading title="Cost" note="campaign destinations" />
-        <SectionTable dateLabel={dateLabel} dateW="14%" cols={campCols} rows={campRows} totals={campTotals} />
+        <SectionTable cols={campCols} rows={campRows} totals={campTotals} />
       </section>
 
       {/* Combined — Revenue − Cost = Profit */}
@@ -143,22 +143,17 @@ const KIND_CLASS: Record<Col['kind'], string> = {
   total: 'font-semibold tabular-nums text-slate-900',
 }
 
-/** One styled report table — blue header, tinted merged Date column, zebra body, blue TOTAL band. */
-function SectionTable({ dateLabel, dateW, cols, rows, totals }: {
-  dateLabel: string; dateW: string; cols: Col[]; rows: string[][]; totals: string[]
-}) {
-  const span = Math.max(rows.length, 1)
+/** One styled report table — blue header, zebra body, blue TOTAL band. */
+function SectionTable({ cols, rows, totals }: { cols: Col[]; rows: string[][]; totals: string[] }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-blue-100 shadow-sm">
       <table className="w-full table-fixed text-sm">
         <colgroup>
-          <col style={{ width: dateW }} />
           {cols.map((c) => <col key={c.label} style={{ width: c.w }} />)}
         </colgroup>
 
         <thead>
           <tr className="bg-blue-600 text-center text-xs font-semibold uppercase tracking-wide text-blue-50">
-            <th className="px-4 py-3">DATE</th>
             {cols.map((c) => <th key={c.label} className="px-4 py-3">{c.label}</th>)}
           </tr>
         </thead>
@@ -166,17 +161,11 @@ function SectionTable({ dateLabel, dateW, cols, rows, totals }: {
         <tbody>
           {rows.length === 0 ? (
             <tr className="border-b border-slate-100/70">
-              <td className="bg-blue-50/70 px-4 py-3 text-center align-middle font-semibold leading-tight text-blue-900">{dateLabel}</td>
               {cols.map((c) => <td key={c.label} className="py-3 pl-10 pr-2 text-center text-slate-400"><Box w={c.box}>—</Box></td>)}
             </tr>
           ) : (
             rows.map((cells, ri) => (
               <tr key={ri} className="border-b border-slate-100/70 odd:bg-white/60 even:bg-blue-50/40 hover:bg-blue-100/50">
-                {ri === 0 && (
-                  <td rowSpan={span} className="bg-blue-50/70 px-4 py-3 text-center align-middle font-semibold leading-tight text-blue-900">
-                    {dateLabel}
-                  </td>
-                )}
                 {cells.map((cell, ci) => (
                   <td key={ci} className={cx('py-3 pl-10 pr-2 text-center', KIND_CLASS[cols[ci].kind])}>
                     <Box w={cols[ci].box}>{cell}</Box>
@@ -189,12 +178,16 @@ function SectionTable({ dateLabel, dateW, cols, rows, totals }: {
 
         <tfoot>
           <tr className="border-t-2 border-blue-200 bg-blue-50 font-semibold text-slate-900">
-            <td className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-blue-700">TOTAL</td>
-            {totals.map((cell, ci) => (
-              <td key={ci} className={cx('py-3 pl-10 pr-2 text-center tabular-nums', cols[ci].kind === 'total' && 'text-blue-700')}>
-                <Box w={cols[ci].box}>{cell}</Box>
-              </td>
-            ))}
+            {/* "TOTAL" replaces the leading count column; remaining columns show their totals. */}
+            <td className="py-3 pl-10 pr-2 text-center text-xs font-bold uppercase tracking-wide text-blue-700">TOTAL</td>
+            {totals.slice(1).map((cell, idx) => {
+              const ci = idx + 1
+              return (
+                <td key={ci} className={cx('py-3 pl-10 pr-2 text-center tabular-nums', cols[ci].kind === 'total' && 'text-blue-700')}>
+                  <Box w={cols[ci].box}>{cell}</Box>
+                </td>
+              )
+            })}
           </tr>
         </tfoot>
       </table>
@@ -206,11 +199,11 @@ function SectionTable({ dateLabel, dateW, cols, rows, totals }: {
 function FormulaBand({ revenue, cost, profit }: { revenue: number; cost: number; profit: number }) {
   return (
     <div className="flex flex-col items-stretch gap-3 rounded-2xl border border-blue-100 bg-blue-50/40 p-5 sm:flex-row sm:items-center sm:justify-center">
-      <Tile label="Revenue" value={money(revenue)} />
+      <Tile label="Revenue" value={money2(revenue)} />
       <Operator>−</Operator>
-      <Tile label="Cost" value={money(cost)} />
+      <Tile label="Cost" value={money2(cost)} />
       <Operator>=</Operator>
-      <Tile label="Profit" value={money(profit)} highlight={profit >= 0 ? 'blue' : 'red'} />
+      <Tile label="Profit" value={money2(profit)} highlight={profit >= 0 ? 'blue' : 'red'} />
     </div>
   )
 }
