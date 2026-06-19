@@ -52,6 +52,10 @@ function ReportView({ data }: { data: CompleteReport }) {
   // Placeholder per-row replacement count (after Missed, before the final Counted).
   const REPLACEMENT = 1
 
+  // Sort both tables by Total Bill, highest → lowest.
+  const sortedBuyers = [...data.buyers].sort((a, b) => b.total_bill - a.total_bill)
+  const sortedCampaigns = [...data.campaigns].sort((a, b) => b.total_bill - a.total_bill)
+
   // Revenue side — one row per destination (buyer)
   const buyerCols: Col[] = [
     { label: 'DESTINATION', w: '16%', box: 'w-16', kind: 'text' },
@@ -62,7 +66,7 @@ function ReportView({ data }: { data: CompleteReport }) {
     { label: 'RATE',        w: '14%', box: 'w-16', kind: 'num'  },
     { label: 'TOTAL BILL',  w: '16%', box: 'w-28', kind: 'total'},
   ]
-  const buyerRows = data.buyers.map((b) => [
+  const buyerRows = sortedBuyers.map((b) => [
     b.code, num(b.answered), num(b.missed), num(REPLACEMENT), num(b.counted), money2(b.rate), money2(b.total_bill),
   ])
   const buyerTotals = [
@@ -80,7 +84,7 @@ function ReportView({ data }: { data: CompleteReport }) {
     { label: 'RATE',        w: '12%', box: 'w-16', kind: 'num'  },
     { label: 'TOTAL BILL',  w: '17%', box: 'w-28', kind: 'total'},
   ]
-  const campRows = data.campaigns.map((c) => [
+  const campRows = sortedCampaigns.map((c) => [
     c.camp, c.destination, num(c.answered), num(c.missed), num(REPLACEMENT), num(c.counted), money2(c.rate), money2(c.total_bill),
   ])
   const campTotals = [
