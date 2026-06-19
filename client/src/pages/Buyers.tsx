@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api/client'
+import { BillingReport } from '../components/BillingReport'
 import { PageHeader } from '../components/Layout'
 import {
   Badge,
@@ -96,6 +97,9 @@ export default function Buyers() {
       )}
 
       {buyers.error && <p className="mt-4 text-sm text-red-600">{buyers.error}</p>}
+
+      {/* Buyer billing table — same as Complete Report's revenue side */}
+      <BillingReport type="buyer" />
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? `Edit ${editing.code}` : 'Add buyer'}>
         <BuyerForm editing={editing} onSaved={onSaved} onCancel={() => setModalOpen(false)} />

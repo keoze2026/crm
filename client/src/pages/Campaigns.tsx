@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api/client'
+import { BillingReport } from '../components/BillingReport'
 import { PageHeader } from '../components/Layout'
 import { DateRangeFilter } from '../components/DateRange'
 import RecordsSection from '../components/RecordsSection'
@@ -104,6 +105,9 @@ export default function Campaigns() {
       )}
 
       {campaigns.error && <p className="mt-4 text-sm text-red-600">{campaigns.error}</p>}
+
+      {/* Campaign billing table — same as Complete Report's cost side */}
+      <BillingReport type="campaign" />
 
       {/* Revenue records — buyer side */}
       <RecordsSection
