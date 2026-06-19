@@ -98,13 +98,13 @@ function ReportView({ data }: { data: CompleteReport }) {
       {/* Revenue (buyer) */}
       <section>
         <SectionHeading title="Revenue" note="buyer destinations" />
-        <SectionTable cols={buyerCols} rows={buyerRows} totals={buyerTotals} />
+        <SectionTable dateLabel={dateLabel} cols={buyerCols} rows={buyerRows} totals={buyerTotals} />
       </section>
 
       {/* Cost (campaign) */}
       <section>
         <SectionHeading title="Cost" note="campaign destinations" />
-        <SectionTable cols={campCols} rows={campRows} totals={campTotals} />
+        <SectionTable dateLabel={dateLabel} cols={campCols} rows={campRows} totals={campTotals} />
       </section>
 
       {/* Combined — Revenue − Cost = Profit */}
@@ -123,7 +123,7 @@ interface Col { label: string; w: string; box: string; kind: 'text' | 'num' | 't
 function SectionHeading({ title, note }: { title: string; note: string }) {
   return (
     <div className="mb-3 flex items-center gap-2">
-      <span className="h-5 w-1.5 rounded-full bg-blue-600" />
+      <span className="h-5 w-1.5 rounded-full bg-[#1a3654]" />
       <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
         {title} <span className="font-normal normal-case text-slate-400">— {note}</span>
       </h3>
@@ -137,37 +137,47 @@ function Box({ children, w }: { children: ReactNode; w: string }) {
   return <span className={cx('inline-block text-left tabular-nums', w)}>{children}</span>
 }
 
+// Body text colours mirror the report theme: ink text on cyan cells, bold total.
 const KIND_CLASS: Record<Col['kind'], string> = {
-  text:  'font-medium text-slate-800',
-  num:   'tabular-nums text-slate-600',
-  total: 'font-semibold tabular-nums text-slate-900',
+  text:  'text-[#0f172a]',
+  num:   'tabular-nums text-[#0f172a]',
+  total: 'font-bold tabular-nums text-[#0f172a]',
 }
 
-/** One styled report table — blue header, zebra body, blue TOTAL band. */
-function SectionTable({ cols, rows, totals }: { cols: Col[]; rows: string[][]; totals: string[] }) {
+/** One styled report table — navy header, cyan body with white grid, navy TOTAL band. */
+function SectionTable({ dateLabel, cols, rows, totals }: { dateLabel: string; cols: Col[]; rows: string[][]; totals: string[] }) {
+  const span = Math.max(rows.length, 1)
   return (
-    <div className="overflow-x-auto rounded-2xl border border-blue-100 shadow-sm">
-      <table className="w-full table-fixed text-sm">
+    <div className="overflow-x-auto">
+      <table className="w-full table-fixed border-collapse text-sm">
         <colgroup>
+          <col style={{ width: '11%' }} />{/* Date */}
           {cols.map((c) => <col key={c.label} style={{ width: c.w }} />)}
         </colgroup>
 
         <thead>
-          <tr className="bg-blue-600 text-center text-xs font-semibold uppercase tracking-wide text-blue-50">
-            {cols.map((c) => <th key={c.label} className="px-4 py-3">{c.label}</th>)}
+          <tr className="bg-[#1a3654] text-center text-xs font-bold uppercase tracking-wide text-white">
+            <th className="border border-white px-4 py-2.5">DATE</th>
+            {cols.map((c) => <th key={c.label} className="border border-white px-4 py-2.5">{c.label}</th>)}
           </tr>
         </thead>
 
         <tbody>
           {rows.length === 0 ? (
-            <tr className="border-b border-slate-100/70">
-              {cols.map((c) => <td key={c.label} className="py-3 pl-10 pr-2 text-center text-slate-400"><Box w={c.box}>—</Box></td>)}
+            <tr>
+              <td className="border border-white bg-[#bfdeeb] px-2 py-2 text-center align-middle font-bold leading-tight text-[#1a3654]">{dateLabel}</td>
+              {cols.map((c) => <td key={c.label} className="border border-white bg-[#d4e9f2] py-2 pl-10 pr-2 text-center text-slate-400"><Box w={c.box}>—</Box></td>)}
             </tr>
           ) : (
             rows.map((cells, ri) => (
-              <tr key={ri} className="border-b border-slate-100/70 odd:bg-white/60 even:bg-blue-50/40 hover:bg-blue-100/50">
+              <tr key={ri}>
+                {ri === 0 && (
+                  <td rowSpan={span} className="border border-white bg-[#bfdeeb] px-2 py-2 text-center align-middle font-bold leading-tight text-[#1a3654]">
+                    {dateLabel}
+                  </td>
+                )}
                 {cells.map((cell, ci) => (
-                  <td key={ci} className={cx('py-3 pl-10 pr-2 text-center', KIND_CLASS[cols[ci].kind])}>
+                  <td key={ci} className={cx('border border-white bg-[#d4e9f2] py-2 pl-10 pr-2 text-center', KIND_CLASS[cols[ci].kind])}>
                     <Box w={cols[ci].box}>{cell}</Box>
                   </td>
                 ))}
@@ -177,17 +187,14 @@ function SectionTable({ cols, rows, totals }: { cols: Col[]; rows: string[][]; t
         </tbody>
 
         <tfoot>
-          <tr className="border-t-2 border-blue-200 bg-blue-50 font-semibold text-slate-900">
-            {/* "TOTAL" replaces the leading count column; remaining columns show their totals. */}
-            <td className="py-3 pl-10 pr-2 text-center text-xs font-bold uppercase tracking-wide text-blue-700">TOTAL</td>
-            {totals.slice(1).map((cell, idx) => {
-              const ci = idx + 1
-              return (
-                <td key={ci} className={cx('py-3 pl-10 pr-2 text-center tabular-nums', cols[ci].kind === 'total' && 'text-blue-700')}>
-                  <Box w={cols[ci].box}>{cell}</Box>
-                </td>
-              )
-            })}
+          <tr className="bg-[#1a3654] text-white">
+            {/* "TOTAL" sits under the DATE column; each data column shows its total. */}
+            <td className="border border-white px-4 py-2.5 text-center text-xs font-bold uppercase tracking-wide">TOTAL</td>
+            {totals.map((cell, ci) => (
+              <td key={ci} className="border border-white py-2.5 pl-10 pr-2 text-center font-bold tabular-nums">
+                <Box w={cols[ci].box}>{cell}</Box>
+              </td>
+            ))}
           </tr>
         </tfoot>
       </table>
@@ -198,20 +205,20 @@ function SectionTable({ cols, rows, totals }: { cols: Col[]; rows: string[][]; t
 /** Combined profit: Revenue − Cost = Profit, laid out as an equation. */
 function FormulaBand({ revenue, cost, profit }: { revenue: number; cost: number; profit: number }) {
   return (
-    <div className="flex flex-col items-stretch gap-3 rounded-2xl border border-blue-100 bg-blue-50/40 p-5 sm:flex-row sm:items-center sm:justify-center">
+    <div className="flex flex-col items-stretch gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-center">
       <Tile label="Revenue" value={money2(revenue)} />
       <Operator>−</Operator>
       <Tile label="Cost" value={money2(cost)} />
       <Operator>=</Operator>
-      <Tile label="Profit" value={money2(profit)} highlight={profit >= 0 ? 'blue' : 'red'} />
+      <Tile label="Profit" value={money2(profit)} highlight={profit >= 0 ? 'navy' : 'red'} />
     </div>
   )
 }
 
-function Tile({ label, value, highlight }: { label: string; value: string; highlight?: 'blue' | 'red' }) {
-  const filled = highlight === 'blue' ? 'bg-blue-600 text-white border-blue-600'
+function Tile({ label, value, highlight }: { label: string; value: string; highlight?: 'navy' | 'red' }) {
+  const filled = highlight === 'navy' ? 'bg-[#1a3654] text-white border-[#1a3654]'
     : highlight === 'red' ? 'bg-red-600 text-white border-red-600'
-    : 'bg-white text-slate-900 border-blue-100'
+    : 'bg-white text-[#0f172a] border-slate-200'
   return (
     <div className={cx('flex-1 rounded-xl border px-6 py-4 text-center shadow-sm', filled)}>
       <p className={cx('text-[11px] font-semibold uppercase tracking-wide', highlight ? 'text-white/80' : 'text-slate-400')}>{label}</p>
