@@ -174,3 +174,73 @@ export interface RecordFilters {
   page?: number
   per_page?: number
 }
+
+// ── Attendance ────────────────────────────────────────────────────────────────
+
+export interface AttendanceStaff {
+  user_id: string
+  username: string | null
+  staff_name: string | null
+  first_seen: string
+  last_seen: string
+}
+
+export interface AttendanceDay {
+  user_id: string
+  staff_name: string | null
+  username: string | null
+  work_date: string
+  login_at: string | null
+  login_stated: string | null
+  logout_at: string | null
+  logout_stated: string | null
+  present: boolean
+  still_in: boolean
+  completed: boolean
+  hours: number | null
+  net_hours: number | null
+  break_min: number
+  break_count: number
+  break_detail: string
+  over_break_min: number
+}
+
+export interface AttendanceRoster {
+  timezone: string
+  breakAllowanceMin: number
+  date: string
+  rows: AttendanceDay[]
+}
+
+export interface AttendanceBreakRecord {
+  taken_at: string
+  duration_min: number
+  urgent: boolean
+  raw: string | null
+}
+
+export interface AttendanceBreaks {
+  userId: string
+  date: string
+  allowanceMin: number
+  totalMin: number
+  overMin: number
+  breaks: AttendanceBreakRecord[]
+}
+
+export interface AttendanceException {
+  user_id: string
+  staff_name: string | null
+  work_date: string
+  login_at?: string
+  local_login?: string
+  break_min?: number
+  over_min?: number
+}
+
+export interface AttendanceExceptions {
+  type: string
+  from: string
+  to: string
+  rows: AttendanceException[]
+}

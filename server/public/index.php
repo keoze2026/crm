@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Controllers\AnalyticsController;
+use App\Controllers\AttendanceController;
 use App\Controllers\BuyerController;
 use App\Controllers\CampaignController;
 use App\Controllers\DestinationController;
@@ -43,12 +44,12 @@ $router->get('/health', fn () => Http::json([
 
 // Analytics
 $analytics = new AnalyticsController();
-$router->get('/analytics/summary',       fn () => $analytics->summary());
-$router->get('/analytics/trends',        fn () => $analytics->trends());
-$router->get('/analytics/top-buyers',    fn () => $analytics->topBuyers());
-$router->get('/analytics/top-campaigns', fn () => $analytics->topCampaigns());
-$router->get('/analytics/top-sources',   fn () => $analytics->topSources());
-$router->get('/analytics/report',        fn () => $analytics->report());
+$router->get('/analytics/summary',         fn () => $analytics->summary());
+$router->get('/analytics/trends',          fn () => $analytics->trends());
+$router->get('/analytics/top-buyers',      fn () => $analytics->topBuyers());
+$router->get('/analytics/top-campaigns',   fn () => $analytics->topCampaigns());
+$router->get('/analytics/top-sources',     fn () => $analytics->topSources());
+$router->get('/analytics/report',          fn () => $analytics->report());
 $router->get('/analytics/complete-report', fn () => $analytics->completeReport());
 
 // Buyers
@@ -79,6 +80,16 @@ $router->get('/records',          fn () => $records->index());
 $router->post('/records',         fn () => $records->store());
 $router->put('/records/{id}',     fn ($p) => $records->update($p));
 $router->delete('/records/{id}',  fn ($p) => $records->destroy($p));
+
+// Attendance
+$attendance = new AttendanceController();
+$router->get('/attendance/staff',      fn () => $attendance->staff());
+$router->get('/attendance/roster',     fn () => $attendance->roster());
+$router->get('/attendance/live',       fn () => $attendance->live());
+$router->get('/attendance/days',       fn () => $attendance->days());
+$router->get('/attendance/summary',    fn () => $attendance->summary());
+$router->get('/attendance/breaks',     fn () => $attendance->breaks());
+$router->get('/attendance/exceptions', fn () => $attendance->exceptions());
 
 try {
     $router->dispatch($method, $path);

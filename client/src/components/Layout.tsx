@@ -22,6 +22,7 @@ const NAV: NavItem[] = [
   // Reports (download hub) disabled — Complete Report is the only report page now.
   // { to: '/reports', label: 'Reports', icon: icon(<><path d="M3 3v18h18" /><path d="m7 14 3-3 3 3 5-5" /></>) },
   { to: '/complete-report', label: 'Complete Report', icon: icon(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M16 13H8M16 17H8M10 9H8" /></>) },
+  { to: '/attendance', label: 'Attendance', icon: icon(<><circle cx="12" cy="7" r="4" /><path d="M5.5 21a8.38 8.38 0 0 1 13 0" /><path d="M16 11l1.5 4.5L20 14l1 5" /></>) },
 ]
 
 function BrandMark() {
