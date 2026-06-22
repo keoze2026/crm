@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { api } from '../api/client'
-import { BillingReport } from '../components/BillingReport'
 import { PageHeader } from '../components/Layout'
 import { DateRangeFilter } from '../components/DateRange'
 import RecordsSection from '../components/RecordsSection'
@@ -26,7 +25,6 @@ export default function Campaigns() {
   // Single page-level date filter — applies to every section below.
   const [from, setFrom] = useState('')
   const [to,   setTo]   = useState('')
-  const summary  = useAsync(() => api.summary({ from, to }), [from, to])
 
   const campaigns = useAsync(() => api.campaigns(search, { from, to }), [search, from, to])
 
@@ -106,37 +104,11 @@ export default function Campaigns() {
 
       {campaigns.error && <p className="mt-4 text-sm text-red-600">{campaigns.error}</p>}
 
-      {/* Campaign billing table — same as Complete Report's cost side */}
-      <BillingReport type="campaign" />
-
-      {/* Revenue records — buyer side */}
-      <RecordsSection
-        type="buyer"
-        title="Revenue records"
-        subtitle="Revenue — buyer call records"
-        compact
-        from={from}
-        to={to}
-        hideDateFilter
-        onChange={() => campaigns.reload()}
-        profit={summary.data ? Math.round(summary.data.margin) : null}
-      />
-
-      {/* Profit badge — shows once summary loads */}
-      {summary.data && (
-        <div className="flex justify-center py-2">
-          <div className="rounded-xl bg-slate-900 px-8 py-3 text-center shadow-lg">
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Profit</div>
-            <div className="text-2xl font-bold text-white">{money(Math.round(summary.data.margin))}</div>
-          </div>
-        </div>
-      )}
-
-      {/* Cost records — campaign (cost) entries */}
+      {/* Cost records — campaign (cost) entries only (no buyer / profit) */}
       <RecordsSection
         type="campaign"
-        title="Cost records"
-        subtitle="Cost — campaign call records"
+        title="Cost billing"
+        subtitle="Campaign call records — billing sheet"
         compact
         from={from}
         to={to}
