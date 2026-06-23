@@ -99,7 +99,7 @@ export default function Buyers() {
       {buyers.error && <p className="mt-4 text-sm text-red-600">{buyers.error}</p>}
 
       {/* Buyer billing sheet — buyer call records only (no campaign / profit) */}
-      <RecordsSection type="buyer" title="Revenue billing" subtitle="Buyer call records — billing sheet" compact />
+      <RecordsSection type="buyer" title="Revenue billing" subtitle="Buyer call records — billing sheet" compact theme="navy" />
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? `Edit ${editing.code}` : 'Add buyer'}>
         <BuyerForm editing={editing} onSaved={onSaved} onCancel={() => setModalOpen(false)} />

@@ -110,9 +110,7 @@ export default function Campaigns() {
         title="Cost billing"
         subtitle="Campaign call records — billing sheet"
         compact
-        from={from}
-        to={to}
-        hideDateFilter
+        theme="navy"
         onChange={() => campaigns.reload()}
       />
 
