@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api/client'
 import { PageHeader } from '../components/Layout'
+import { Protected } from '../components/PasswordGate'
 import { DateRangeFilter } from '../components/DateRange'
 import RecordsSection from '../components/RecordsSection'
 import {
@@ -18,6 +19,14 @@ import { useAsync } from '../lib/useAsync'
 import type { Campaign } from '../types'
 
 export default function Campaigns() {
+  return (
+    <Protected pageTitle="Campaigns" password="campaigns-2026" storageKey="lock-campaigns">
+      <CampaignsPage />
+    </Protected>
+  )
+}
+
+function CampaignsPage() {
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Campaign | null>(null)
