@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api/client'
+import { DateRangeControl, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
 import { Protected } from '../components/PasswordGate'
 import RecordsSection from '../components/RecordsSection'
@@ -27,10 +28,11 @@ export default function Buyers() {
 
 function BuyersPage() {
   const [search, setSearch] = useState('')
+  const [range, setRange] = useState<Range>({ from: '', to: '' })
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Buyer | null>(null)
 
-  const buyers = useAsync(() => api.buyers(search), [search])
+  const buyers = useAsync(() => api.buyers(search, range), [search, range.from, range.to])
 
   const openNew = () => { setEditing(null); setModalOpen(true) }
   const openEdit = (b: Buyer) => { setEditing(b); setModalOpen(true) }
@@ -47,8 +49,9 @@ function BuyersPage() {
   return (
     <div>
       <PageHeader title="Buyers" subtitle="Customers who purchase forwarded calls (revenue side)">
+        <DateRangeControl value={range} onChange={setRange} />
         <div className="w-full sm:w-auto">
-          <Input placeholder="Search buyers…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full sm:w-48" />
+          <Input placeholder="Search by name…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full sm:w-48" />
         </div>
         <Button onClick={openNew}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
@@ -63,7 +66,8 @@ function BuyersPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {list.map((b) => {
-            const answerRate = b.answered + b.missed > 0 ? Math.round((b.answered / (b.answered + b.missed)) * 100) : 0
+            const totalVolume = b.answered + b.missed
+            const replacement = Math.max(0, totalVolume - b.counted)
             return (
               <Card key={b.id} className="p-5">
                 <div className="flex items-start justify-between">
@@ -84,21 +88,21 @@ function BuyersPage() {
                   </div>
                 </div>
 
+                <dl className="mt-4 grid grid-cols-2 gap-y-2 text-sm">
+                  <dt className="text-slate-500">Total volume</dt>
+                  <dd className="text-right font-medium text-slate-700">{num(totalVolume)}</dd>
+                  <dt className="text-slate-500">Replacement</dt>
+                  <dd className="text-right font-medium text-slate-700">{num(replacement)}</dd>
+                  <dt className="text-slate-500">Final count</dt>
+                  <dd className="text-right font-medium text-slate-700">{num(b.counted)}</dd>
+                  <dt className="text-slate-500">Last active</dt>
+                  <dd className="text-right font-medium text-slate-700">{formatDate(b.last_activity)}</dd>
+                </dl>
+
                 <div className="mt-4 rounded-xl bg-blue-50/70 px-3 py-2">
                   <div className="text-xs text-blue-700">Total revenue</div>
                   <div className="text-xl font-bold text-blue-700">{money(b.revenue)}</div>
                 </div>
-
-                <dl className="mt-3 grid grid-cols-2 gap-y-2 text-sm">
-                  <dt className="text-slate-500">Counted</dt>
-                  <dd className="text-right font-medium text-slate-700">{num(b.counted)}</dd>
-                  <dt className="text-slate-500">Answer rate</dt>
-                  <dd className="text-right font-medium text-slate-700">{answerRate}%</dd>
-                  <dt className="text-slate-500">Records</dt>
-                  <dd className="text-right font-medium text-slate-700">{num(b.records)}</dd>
-                  <dt className="text-slate-500">Last activity</dt>
-                  <dd className="text-right font-medium text-slate-700">{formatDate(b.last_activity)}</dd>
-                </dl>
               </Card>
             )
           })}
