@@ -90,15 +90,13 @@ final class RecordController
             $source = $body['source'] ?? null;
         }
 
-        // The rate is a definite property of the buyer/campaign — every record bills
-        // at the entity's rate. A brand-new entity's first record seeds that rate.
+        // Rate is a definite property of the destination: a buyer row bills at the
+        // buyer's rate; a campaign row bills at its source/destination's rate. A
+        // brand-new buyer/destination's first record seeds that rate.
         $provided = isset($body['rate']) ? (float) $body['rate'] : null;
-        $rate = $this->entityRate(
-            $pdo,
-            $type === 'buyer' ? 'buyers' : 'campaigns',
-            (int) ($buyerId ?? $campaignId),
-            $provided
-        );
+        $rate = $type === 'buyer'
+            ? $this->entityRate($pdo, 'buyers', (int) $buyerId, $provided)
+            : $this->sourceRate($pdo, $source, $provided);
 
         $stmt = $pdo->prepare(
             'INSERT INTO call_records
@@ -121,9 +119,8 @@ final class RecordController
         $pdo = Database::connection();
         $id = (int) $params['id'];
 
-        // Note: rate is intentionally not editable per record — it always mirrors
-        // the parent buyer/campaign definite rate (changed on the Buyers/Campaigns
-        // page), so total_bill stays exactly rate * counted.
+        // Buyer rows bill at the buyer's definite rate (the form sends it locked);
+        // campaign rows bill at their source's rate, which is editable per record.
         $stmt = $pdo->prepare(
             'UPDATE call_records SET
                 record_date = COALESCE(:d, record_date),
@@ -131,6 +128,7 @@ final class RecordController
                 answered    = COALESCE(:a, answered),
                 missed      = COALESCE(:m, missed),
                 counted     = COALESCE(:c, counted),
+                rate        = COALESCE(:r, rate),
                 updated_at  = now()
              WHERE id = :id'
         );
@@ -141,6 +139,7 @@ final class RecordController
             ':a'   => isset($body['answered']) ? (int) $body['answered'] : null,
             ':m'   => isset($body['missed'])   ? (int) $body['missed']   : null,
             ':c'   => isset($body['counted'])  ? (int) $body['counted']  : null,
+            ':r'   => isset($body['rate'])     ? (float) $body['rate']    : null,
         ]);
         if ($stmt->rowCount() === 0) {
             Http::error('Record not found', 404);
@@ -205,9 +204,9 @@ final class RecordController
     }
 
     /**
-     * The definite rate for a buyer/campaign. If the entity has no rate yet (e.g. a
-     * brand-new entity created via the record form) and a rate was supplied, that
-     * value becomes the entity's definite rate so future records inherit it.
+     * The definite rate for a buyer. If the buyer has no rate yet (e.g. a brand-new
+     * buyer created via the record form) and a rate was supplied, that value becomes
+     * the buyer's definite rate so future records inherit it.
      */
     private function entityRate(PDO $pdo, string $table, int $id, ?float $provided): float
     {
@@ -221,6 +220,39 @@ final class RecordController
             return $provided;
         }
         return $rate;
+    }
+
+    /**
+     * The rate for a campaign cost record, taken from its source/destination. If a
+     * rate is supplied it wins (the form auto-fills the source's rate but allows an
+     * override) and a brand-new source is created carrying it; otherwise the existing
+     * destination's rate is inherited.
+     */
+    private function sourceRate(PDO $pdo, ?string $source, ?float $provided): float
+    {
+        $name = trim((string) ($source ?? ''));
+
+        if ($provided !== null) {
+            if ($name !== '') {
+                // Seed the rate for a new source; never silently overwrite an existing one.
+                $ins = $pdo->prepare(
+                    'INSERT INTO destinations (name, rate) VALUES (:name, :rate)
+                     ON CONFLICT (name) DO NOTHING'
+                );
+                $ins->execute([':name' => $name, ':rate' => $provided]);
+            }
+            return $provided;
+        }
+
+        if ($name !== '') {
+            $stmt = $pdo->prepare('SELECT rate FROM destinations WHERE name = :name');
+            $stmt->execute([':name' => $name]);
+            $r = $stmt->fetchColumn();
+            if ($r !== false) {
+                return (float) $r;
+            }
+        }
+        return 0.0;
     }
 
     private function respondOne(PDO $pdo, int $id, int $status = 200): void

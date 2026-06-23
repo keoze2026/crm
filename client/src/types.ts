@@ -107,6 +107,7 @@ export interface Destination {
   id: number
   name: string
   status: string
+  rate: number
   created_at: string
 }
 
@@ -132,7 +133,6 @@ export interface Campaign {
   name: string | null
   status: string
   notes: string | null
-  rate: number
   created_at: string
   cost: number
   counted: number

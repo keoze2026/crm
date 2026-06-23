@@ -164,8 +164,14 @@ export default function RecordsSection({
   // const [pdfLoading, setPdfLoading] = useState(false)  // PDF export disabled
 
   const entities = useAsync<Entity[]>(async () => {
-    const list = isBuyer ? await api.buyers() : await api.campaigns()
-    return list.map((x) => ({ id: x.id, code: x.code, rate: x.rate }))
+    // Buyers carry their own rate (revenue side). Campaigns don't — on the cost side
+    // the rate lives on the source/destination, so campaign entities have no rate.
+    if (isBuyer) {
+      const list = await api.buyers()
+      return list.map((x) => ({ id: x.id, code: x.code, rate: x.rate }))
+    }
+    const list = await api.campaigns()
+    return list.map((x) => ({ id: x.id, code: x.code, rate: 0 }))
   }, [type])
   const records = useAsync(() => api.records(filters), [JSON.stringify(filters)])
 
@@ -585,16 +591,28 @@ function RecordForm({ type, editing, entities, destinations, onSaved, onCancel }
   const creatingNew    = !isEdit && entityId === '__new__'
   const creatingNewDest = !isBuyer && source === '__new__'
 
-  // The rate is a definite property of the buyer/campaign. For an existing entity
-  // it's fixed to that entity's rate (edit it on the Buyers/Campaigns page); only a
-  // brand-new entity lets you type its starting rate here, so it's derived rather
-  // than held in state (the `rate` state is only used while creating a new entity).
-  const selectedEntity = useMemo(
-    () => entities.find((e) => String(e.id) === entityId) ?? null,
-    [entities, entityId],
-  )
-  const effectiveRate  = creatingNew ? (Number(rate) || 0) : (selectedEntity?.rate ?? Number(editing?.rate ?? 0))
-  const total          = useMemo(() => (Number(counted) || 0) * effectiveRate, [counted, effectiveRate])
+  // Where the rate comes from:
+  //   buyer rows    -> the buyer's definite rate (locked; edit it on the Buyers page)
+  //   campaign rows -> the source/destination's rate (auto-filled, editable per row)
+  // A brand-new buyer or destination lets you type its starting rate here. The rate
+  // field is editable for campaigns and for new buyers; locked for existing buyers.
+  const rateLocked = isBuyer && !creatingNew
+  const effectiveRate = Number(rate) || 0
+  const total = useMemo(() => (Number(counted) || 0) * effectiveRate, [counted, effectiveRate])
+
+  // Auto-fill the rate when the buyer / destination selection changes.
+  const handleEntity = (v: string) => {
+    setEntityId(v)
+    if (isBuyer) {
+      const b = entities.find((e) => String(e.id) === v)
+      setRate(v === '__new__' ? '' : b ? String(b.rate) : '')
+    }
+  }
+  const handleSource = (v: string) => {
+    setSource(v)
+    const d = destinations.find((x) => x.name === v)
+    setRate(v === '__new__' ? '' : d ? String(d.rate) : '')
+  }
 
   const handleAnswered = (v: string) => { setAnswered(v); setCounted(String((Number(v) || 0) + (Number(missed) || 0))) }
   const handleMissed   = (v: string) => { setMissed(v);   setCounted(String((Number(answered) || 0) + (Number(v) || 0))) }
@@ -614,9 +632,9 @@ function RecordForm({ type, editing, entities, destinations, onSaved, onCancel }
         if (!isBuyer) {
           const destName = source === '__new__' ? newDest : source
           if (destName) {
-            // Auto-create destination if it doesn't exist yet
+            // Auto-create destination (with its rate) if it doesn't exist yet
             if (source === '__new__' && newDest) {
-              try { await api.createDestination({ name: newDest }) } catch { /* already exists */ }
+              try { await api.createDestination({ name: newDest, rate: Number(rate) || 0 }) } catch { /* already exists */ }
             }
             payload.source = destName
           }
@@ -634,7 +652,7 @@ function RecordForm({ type, editing, entities, destinations, onSaved, onCancel }
         {isEdit ? (
           <Input label={entityLabel} value={(isBuyer ? editing!.buyer_code : editing!.campaign_code) ?? ''} disabled />
         ) : (
-          <Select label={entityLabel} value={entityId} onChange={(e) => setEntityId(e.target.value)} required>
+          <Select label={entityLabel} value={entityId} onChange={(e) => handleEntity(e.target.value)} required>
             <option value="">Select {entityLabel.toLowerCase()}…</option>
             {entities.map((x) => <option key={x.id} value={x.id}>{x.code}</option>)}
             <option value="__new__">+ New {entityLabel.toLowerCase()}…</option>
@@ -647,9 +665,9 @@ function RecordForm({ type, editing, entities, destinations, onSaved, onCancel }
           {isEdit ? (
             <Input label="Destination" value={editing!.source ?? ''} onChange={(e) => setSource(e.target.value)} placeholder="e.g. AdsTerra" />
           ) : (
-            <Select label="Destination" value={source} onChange={(e) => setSource(e.target.value)}>
+            <Select label="Destination" value={source} onChange={(e) => handleSource(e.target.value)}>
               <option value="">Select destination…</option>
-              {destinations.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+              {destinations.map((d) => <option key={d.id} value={d.name}>{d.name} — {money2(d.rate)}</option>)}
               <option value="__new__">+ New destination…</option>
             </Select>
           )}
@@ -662,7 +680,7 @@ function RecordForm({ type, editing, entities, destinations, onSaved, onCancel }
         <Input label="Answered" type="number" min="0" value={answered} onChange={(e) => handleAnswered(e.target.value)} />
         <Input label="Missed"   type="number" min="0" value={missed}   onChange={(e) => handleMissed(e.target.value)} />
         <Input label="Counted"  type="number" min="0" value={counted}  disabled />
-        <Input label="Rate ($)" type="number" min="0" step="0.01" value={creatingNew ? rate : (entityId && entityId !== '__new__' ? String(effectiveRate) : '')} onChange={(e) => setRate(e.target.value)} disabled={!creatingNew} title={creatingNew ? undefined : `${entityLabel} rate — edit it on the ${isBuyer ? 'Buyers' : 'Campaigns'} page`} />
+        <Input label="Rate ($)" type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} disabled={rateLocked} title={rateLocked ? 'Buyer rate — edit it on the Buyers page' : isBuyer ? undefined : 'Source rate — auto-filled from the destination; editable per record'} />
       </div>
       <div className="flex items-center justify-between rounded-xl bg-linear-to-r from-blue-500 to-blue-600 px-4 py-3 text-white shadow-lg shadow-blue-600/25">
         <span className="text-sm font-medium text-blue-50">{isBuyer ? 'Total revenue' : 'Total cost'}</span>

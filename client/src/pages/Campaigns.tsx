@@ -92,8 +92,8 @@ function CampaignsPage() {
                 </div>
 
                 <dl className="mt-4 grid grid-cols-2 gap-y-2 text-sm">
-                  <dt className="text-slate-500">Rate</dt>
-                  <dd className="text-right font-semibold text-amber-700">{money2(c.rate)}</dd>
+                  <dt className="text-slate-500">Avg rate</dt>
+                  <dd className="text-right font-semibold text-amber-700">{money2(c.counted > 0 ? c.cost / c.counted : 0)}</dd>
                   <dt className="text-slate-500">Total volume</dt>
                   <dd className="text-right font-medium text-slate-700">{num(totalVolume)}</dd>
                   <dt className="text-slate-500">Replacement</dt>
@@ -107,7 +107,7 @@ function CampaignsPage() {
                 <div className="mt-4 rounded-xl bg-amber-50/70 px-3 py-2">
                   <div className="flex items-center justify-between text-xs text-amber-700">
                     <span>Total running fee</span>
-                    <span className="tabular-nums text-amber-600/70">{money2(c.rate)} × {num(c.counted)}</span>
+                    <span className="tabular-nums text-amber-600/70">{num(c.sources)} {c.sources === 1 ? 'source' : 'sources'}</span>
                   </div>
                   <div className="text-xl font-bold text-amber-700">{money(c.cost)}</div>
                 </div>
@@ -141,7 +141,6 @@ function CampaignForm({ editing, onSaved, onCancel }: { editing: Campaign | null
   const [name, setName] = useState(editing?.name ?? '')
   const [status, setStatus] = useState(editing?.status ?? 'active')
   const [notes, setNotes] = useState(editing?.notes ?? '')
-  const [rate, setRate] = useState(String(editing?.rate ?? ''))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -149,7 +148,7 @@ function CampaignForm({ editing, onSaved, onCancel }: { editing: Campaign | null
     e.preventDefault()
     setSaving(true); setError(null)
     try {
-      const data = { code, name: name || null, status, notes: notes || null, rate: Number(rate) || 0 }
+      const data = { code, name: name || null, status, notes: notes || null }
       if (editing) await api.updateCampaign(editing.id, data)
       else await api.createCampaign(data)
       onSaved()
@@ -169,10 +168,7 @@ function CampaignForm({ editing, onSaved, onCancel }: { editing: Campaign | null
           <option value="inactive">Inactive</option>
         </Select>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Input label="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
-        <Input label="Rate ($/call)" type="number" min="0" step="0.01" placeholder="e.g. 50.00" value={rate} onChange={(e) => setRate(e.target.value)} required />
-      </div>
+      <Input label="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
       <label className="block">
         <span className="mb-1 block text-sm font-medium text-slate-700">Notes</span>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="glass-input w-full rounded-xl border border-white/70 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />

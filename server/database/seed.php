@@ -6,10 +6,10 @@ declare(strict_types=1);
  * Seeds the CRM with the data from the source screenshots (dated 2026-06-11)
  * plus ~3 months of generated daily history so trend charts are populated.
  *
- * Each buyer/campaign has one *definite* rate: revenue = buyers.rate * counted,
- * cost = campaigns.rate * counted. Buyer figures reproduce the screenshot exactly
- * ($204,911 revenue). Campaign C-03's mixed source rates (48/48/47/46/46) collapse
- * to its single definite rate (48), so 2026-06-11 cost is $193,342 (profit $11,569).
+ * Rates are definite: each buyer has one rate (revenue = buyers.rate * counted) and
+ * each source/destination has one rate (cost = SUM over a campaign's sources of
+ * destinations.rate * counted). This reproduces the screenshots exactly:
+ * 2026-06-11 revenue $204,911, cost $193,255, profit $11,656.
  *
  * Run:  php database/seed.php
  */
@@ -76,13 +76,18 @@ $campaignRows = [
     ['C-11', 'DXTST', 98, 0, 98],
 ];
 
-// Definite per-campaign rates ($ per counted call). C-03 originally spanned a mix
-// of source rates (48/48/47/46/46); it collapses to its single definite rate, 48.
-$campaignRates = [
-    'C-05' => 50.00,
-    'C-02' => 49.00,
-    'C-03' => 48.00,
-    'C-11' => 14.00,
+// Definite per-source (destination) rates ($ per counted call). On the cost side the
+// rate belongs to the source/destination, so each source bills at its own rate and
+// campaign C-03's sources keep 48 / 48 / 47 / 46 / 46 (cost = SUM over sources).
+$sourceRates = [
+    'XXD'        => 50.00,
+    '05'         => 49.00,
+    'PDSO'       => 48.00,
+    'Priority Y' => 48.00,
+    'AdsTerra'   => 47.00,
+    'BBB'        => 46.00,
+    'RGR'        => 46.00,
+    'DXTST'      => 14.00,
 ];
 
 // --- Insert master data (buyers & campaigns) ------------------------------------
@@ -97,10 +102,20 @@ foreach ($buyerRows as $code => [, , , $rate]) {
 
 echo "Inserting campaigns...\n";
 $campaignIds = [];
-$insCampaign = $pdo->prepare('INSERT INTO campaigns (code, rate) VALUES (:code, :rate) RETURNING id');
+$insCampaign = $pdo->prepare('INSERT INTO campaigns (code) VALUES (:code) RETURNING id');
 foreach (array_unique(array_column($campaignRows, 0)) as $code) {
-    $insCampaign->execute([':code' => $code, ':rate' => $campaignRates[$code] ?? 0]);
+    $insCampaign->execute([':code' => $code]);
     $campaignIds[$code] = (int) $insCampaign->fetchColumn();
+}
+
+echo "Inserting destinations (sources) with their rates...\n";
+// destinations is kept out of the TRUNCATE above, so upsert to set/refresh rates.
+$insDest = $pdo->prepare(
+    'INSERT INTO destinations (name, rate) VALUES (:name, :rate)
+     ON CONFLICT (name) DO UPDATE SET rate = EXCLUDED.rate'
+);
+foreach ($sourceRates as $name => $rate) {
+    $insDest->execute([':name' => $name, ':rate' => $rate]);
 }
 
 // --- Insert call records --------------------------------------------------------
@@ -124,7 +139,7 @@ foreach ($buyerRows as $code => [$a, $m, $c, $r]) {
 foreach ($campaignRows as [$camp, $src, $a, $m, $c]) {
     $insRecord->execute([
         ':d' => $realDate, ':t' => 'campaign', ':bid' => null, ':cid' => $campaignIds[$camp],
-        ':src' => $src, ':a' => $a, ':m' => $m, ':c' => $c, ':r' => $campaignRates[$camp],
+        ':src' => $src, ':a' => $a, ':m' => $m, ':c' => $c, ':r' => $sourceRates[$src],
     ]);
 }
 
@@ -182,7 +197,7 @@ for ($day = $start; $day <= $end; $day = $day->modify('+1 day')) {
         $counted  = (int) round(vary($c, 0.5) * $weekend * $trend);
         $answered = (int) round($counted * (mt_rand(92, 100) / 100));
         $missed   = (int) round(vary($m, 0.7) * $weekend);
-        $rate     = $campaignRates[$camp]; // definite campaign rate (no jitter) -> cost = rate * counted
+        $rate     = $sourceRates[$src]; // definite per-source rate (no jitter) -> cost = rate * counted
         if ($counted === 0 && $answered === 0) {
             continue;
         }

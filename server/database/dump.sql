@@ -120,9 +120,7 @@ CREATE TABLE public.campaigns (
     name text,
     status text DEFAULT 'active'::text NOT NULL,
     notes text,
-    rate numeric(10,2) DEFAULT 0 NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT campaigns_rate_check CHECK ((rate >= (0)::numeric))
+    created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -3263,10 +3261,12 @@ ALTER TABLE ONLY public.call_records
 \unrestrict hGOtevWJYRpCLJQKNbulnUD3iEPNaluHmzgv0Ps8QgKDk6HrZFE9EetWb65DZmk
 
 --
--- Definite per-entity rates (revenue = buyers.rate * counted, cost = campaigns.rate * counted).
--- The COPY blocks above load buyers/campaigns with the default rate 0; the
--- statements below set the real screenshot rates (2026-06-11) and then re-stamp
--- every call record so the generated total_bill stays exactly rate * counted.
+-- Definite buyer rates (revenue = buyers.rate * counted). The buyers COPY above loads
+-- the default rate 0; this sets the real screenshot rates (2026-06-11) so the Buyers
+-- page computes revenue correctly. The buyer call records already carry these rates in
+-- the COPY data, so total_bill is unchanged. The COST side keeps its per-source rates
+-- in call_records (each source bills at its own rate, e.g. C-03 = 48/48/47/46/46); the
+-- destination rates themselves are added by migration 004 on top of this dump.
 --
 
 UPDATE public.buyers b SET rate = v.rate FROM (VALUES
@@ -3280,16 +3280,4 @@ UPDATE public.buyers b SET rate = v.rate FROM (VALUES
     ('RTG 10', 49.00), ('RTG 12', 49.00), ('RTG 16', 49.00), ('R48', 49.00),
     ('KBT', 48.00), ('N4K', 48.00), ('NB48', 48.00), ('SHN', 48.00)
 ) AS v(code, rate) WHERE b.code = v.code;
-
-UPDATE public.campaigns c SET rate = v.rate FROM (VALUES
-    ('C-05', 50.00), ('C-02', 49.00), ('C-03', 48.00), ('C-11', 14.00)
-) AS v(code, rate) WHERE c.code = v.code;
-
-UPDATE public.call_records r SET rate = b.rate
-    FROM public.buyers b
-    WHERE r.buyer_id = b.id AND r.record_type = 'buyer';
-
-UPDATE public.call_records r SET rate = c.rate
-    FROM public.campaigns c
-    WHERE r.campaign_id = c.id AND r.record_type = 'campaign';
 
