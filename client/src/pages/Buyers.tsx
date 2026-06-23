@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api/client'
+import { DateRangeControl, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
 import { Protected } from '../components/PasswordGate'
 import RecordsSection from '../components/RecordsSection'
@@ -27,10 +28,11 @@ export default function Buyers() {
 
 function BuyersPage() {
   const [search, setSearch] = useState('')
+  const [range, setRange] = useState<Range>({ from: '', to: '' })
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Buyer | null>(null)
 
-  const buyers = useAsync(() => api.buyers(search), [search])
+  const buyers = useAsync(() => api.buyers(search, range), [search, range.from, range.to])
 
   const openNew = () => { setEditing(null); setModalOpen(true) }
   const openEdit = (b: Buyer) => { setEditing(b); setModalOpen(true) }
@@ -47,8 +49,9 @@ function BuyersPage() {
   return (
     <div>
       <PageHeader title="Buyers" subtitle="Customers who purchase forwarded calls (revenue side)">
+        <DateRangeControl value={range} onChange={setRange} />
         <div className="w-full sm:w-auto">
-          <Input placeholder="Search buyers…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full sm:w-48" />
+          <Input placeholder="Search by name…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full sm:w-48" />
         </div>
         <Button onClick={openNew}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>

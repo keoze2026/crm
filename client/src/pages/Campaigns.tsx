@@ -54,7 +54,7 @@ function CampaignsPage() {
       <PageHeader title="Campaigns" subtitle="Media-buying campaigns that source calls (cost side)">
         <DateRangeFilter from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
         <div className="w-full sm:w-auto">
-          <Input placeholder="Search campaigns…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full sm:w-48" />
+          <Input placeholder="Search by name…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full sm:w-48" />
         </div>
         <Button onClick={openNew}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
@@ -69,7 +69,8 @@ function CampaignsPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {list.map((c) => {
-            const answerRate = c.answered + c.missed > 0 ? Math.round((c.answered / (c.answered + c.missed)) * 100) : 0
+            const totalVolume = c.answered + c.missed
+            const replacement = Math.max(0, totalVolume - c.counted)
             return (
               <Card key={c.id} className="p-5">
                 <div className="flex items-start justify-between">
@@ -90,21 +91,21 @@ function CampaignsPage() {
                   </div>
                 </div>
 
+                <dl className="mt-4 grid grid-cols-2 gap-y-2 text-sm">
+                  <dt className="text-slate-500">Total volume</dt>
+                  <dd className="text-right font-medium text-slate-700">{num(totalVolume)}</dd>
+                  <dt className="text-slate-500">Replacement</dt>
+                  <dd className="text-right font-medium text-slate-700">{num(replacement)}</dd>
+                  <dt className="text-slate-500">Final count</dt>
+                  <dd className="text-right font-medium text-slate-700">{num(c.counted)}</dd>
+                  <dt className="text-slate-500">Last active</dt>
+                  <dd className="text-right font-medium text-slate-700">{formatDate(c.last_activity)}</dd>
+                </dl>
+
                 <div className="mt-4 rounded-xl bg-amber-50/70 px-3 py-2">
                   <div className="text-xs text-amber-700">Total running fee</div>
                   <div className="text-xl font-bold text-amber-700">{money(c.cost)}</div>
                 </div>
-
-                <dl className="mt-3 grid grid-cols-2 gap-y-2 text-sm">
-                  <dt className="text-slate-500">Counted</dt>
-                  <dd className="text-right font-medium text-slate-700">{num(c.counted)}</dd>
-                  <dt className="text-slate-500">Destinations</dt>
-                  <dd className="text-right font-medium text-slate-700">{num(c.sources)}</dd>
-                  <dt className="text-slate-500">Answer rate</dt>
-                  <dd className="text-right font-medium text-slate-700">{answerRate}%</dd>
-                  <dt className="text-slate-500">Last activity</dt>
-                  <dd className="text-right font-medium text-slate-700">{formatDate(c.last_activity)}</dd>
-                </dl>
               </Card>
             )
           })}

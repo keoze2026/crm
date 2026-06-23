@@ -13,6 +13,16 @@ final class BuyerController
     public function index(): void
     {
         $search = Http::query('search');
+        $from   = Http::query('from');
+        $to     = Http::query('to');
+        $params = [];
+
+        // Date range is applied in the JOIN so buyers with no records in the
+        // selected period still appear (with zeroed totals).
+        $join = 'LEFT JOIN call_records r ON r.buyer_id = b.id';
+        if ($from) { $join .= ' AND r.record_date >= :from'; $params[':from'] = $from; }
+        if ($to)   { $join .= ' AND r.record_date <= :to';   $params[':to']   = $to; }
+
         $sql = "
             SELECT b.id, b.code, b.name, b.status, b.notes, b.created_at,
                    COALESCE(SUM(r.total_bill), 0)            AS revenue,
@@ -22,9 +32,8 @@ final class BuyerController
                    COUNT(r.id)                               AS records,
                    MAX(r.record_date)                        AS last_activity
             FROM buyers b
-            LEFT JOIN call_records r ON r.buyer_id = b.id
+            $join
         ";
-        $params = [];
         if ($search) {
             $sql .= " WHERE b.code ILIKE :s OR b.name ILIKE :s";
             $params[':s'] = "%{$search}%";

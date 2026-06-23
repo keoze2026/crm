@@ -64,7 +64,8 @@ export const api = {
     request<CompleteReport>(`/analytics/complete-report${qs(range ?? {})}`),
 
   // Buyers
-  buyers: (search?: string) => request<Buyer[]>(`/buyers${qs({ search })}`),
+  buyers: (search?: string, range?: DateRange) =>
+    request<Buyer[]>(`/buyers${qs({ search, ...range })}`),
   createBuyer: (data: Partial<Buyer>) =>
     request<Buyer>('/buyers', { method: 'POST', body: JSON.stringify(data) }),
   updateBuyer: (id: number, data: Partial<Buyer>) =>
