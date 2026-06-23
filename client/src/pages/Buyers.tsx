@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api/client'
 import { PageHeader } from '../components/Layout'
+import { Protected } from '../components/PasswordGate'
 import RecordsSection from '../components/RecordsSection'
 import {
   Badge,
@@ -17,6 +18,14 @@ import { useAsync } from '../lib/useAsync'
 import type { Buyer } from '../types'
 
 export default function Buyers() {
+  return (
+    <Protected pageTitle="Buyers" password="buyers-2026" storageKey="lock-buyers">
+      <BuyersPage />
+    </Protected>
+  )
+}
+
+function BuyersPage() {
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Buyer | null>(null)
