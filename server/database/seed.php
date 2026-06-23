@@ -3,8 +3,13 @@
 declare(strict_types=1);
 
 /**
- * Seeds the CRM with the exact data from the source screenshots (dated 2026-06-11)
+ * Seeds the CRM with the data from the source screenshots (dated 2026-06-11)
  * plus ~3 months of generated daily history so trend charts are populated.
+ *
+ * Each buyer/campaign has one *definite* rate: revenue = buyers.rate * counted,
+ * cost = campaigns.rate * counted. Buyer figures reproduce the screenshot exactly
+ * ($204,911 revenue). Campaign C-03's mixed source rates (48/48/47/46/46) collapse
+ * to its single definite rate (48), so 2026-06-11 cost is $193,342 (profit $11,569).
  *
  * Run:  php database/seed.php
  */
@@ -57,33 +62,44 @@ $buyerRows = [
     'SHN'    => [10, 1, 10, 48.00],
 ];
 
-// Campaign (cost) rows: [camp, source, answered, missed, counted, rate]
+// Campaign (cost) rows: [camp, source, answered, missed, counted]. The rate is a
+// definite property of the *campaign* (see $campaignRates below), not the source —
+// so every source under a campaign bills at the same rate.
 $campaignRows = [
-    ['C-05', 'XXD', 1464, 37, 1464, 50.00],
-    ['C-02', '05', 162, 11, 162, 49.00],
-    ['C-03', 'PDSO', 30, 1, 30, 48.00],
-    ['C-03', 'Priority Y', 2235, 52, 2235, 48.00],
-    ['C-03', 'AdsTerra', 1, 0, 1, 47.00],
-    ['C-03', 'BBB', 23, 2, 23, 46.00],
-    ['C-03', 'RGR', 20, 0, 20, 46.00],
-    ['C-11', 'DXTST', 98, 0, 98, 14.00],
+    ['C-05', 'XXD', 1464, 37, 1464],
+    ['C-02', '05', 162, 11, 162],
+    ['C-03', 'PDSO', 30, 1, 30],
+    ['C-03', 'Priority Y', 2235, 52, 2235],
+    ['C-03', 'AdsTerra', 1, 0, 1],
+    ['C-03', 'BBB', 23, 2, 23],
+    ['C-03', 'RGR', 20, 0, 20],
+    ['C-11', 'DXTST', 98, 0, 98],
+];
+
+// Definite per-campaign rates ($ per counted call). C-03 originally spanned a mix
+// of source rates (48/48/47/46/46); it collapses to its single definite rate, 48.
+$campaignRates = [
+    'C-05' => 50.00,
+    'C-02' => 49.00,
+    'C-03' => 48.00,
+    'C-11' => 14.00,
 ];
 
 // --- Insert master data (buyers & campaigns) ------------------------------------
 
 echo "Inserting buyers...\n";
 $buyerIds = [];
-$insBuyer = $pdo->prepare('INSERT INTO buyers (code) VALUES (:code) RETURNING id');
-foreach (array_keys($buyerRows) as $code) {
-    $insBuyer->execute([':code' => $code]);
+$insBuyer = $pdo->prepare('INSERT INTO buyers (code, rate) VALUES (:code, :rate) RETURNING id');
+foreach ($buyerRows as $code => [, , , $rate]) {
+    $insBuyer->execute([':code' => $code, ':rate' => $rate]);
     $buyerIds[$code] = (int) $insBuyer->fetchColumn();
 }
 
 echo "Inserting campaigns...\n";
 $campaignIds = [];
-$insCampaign = $pdo->prepare('INSERT INTO campaigns (code) VALUES (:code) RETURNING id');
+$insCampaign = $pdo->prepare('INSERT INTO campaigns (code, rate) VALUES (:code, :rate) RETURNING id');
 foreach (array_unique(array_column($campaignRows, 0)) as $code) {
-    $insCampaign->execute([':code' => $code]);
+    $insCampaign->execute([':code' => $code, ':rate' => $campaignRates[$code] ?? 0]);
     $campaignIds[$code] = (int) $insCampaign->fetchColumn();
 }
 
@@ -105,10 +121,10 @@ foreach ($buyerRows as $code => [$a, $m, $c, $r]) {
         ':src' => null, ':a' => $a, ':m' => $m, ':c' => $c, ':r' => $r,
     ]);
 }
-foreach ($campaignRows as [$camp, $src, $a, $m, $c, $r]) {
+foreach ($campaignRows as [$camp, $src, $a, $m, $c]) {
     $insRecord->execute([
         ':d' => $realDate, ':t' => 'campaign', ':bid' => null, ':cid' => $campaignIds[$camp],
-        ':src' => $src, ':a' => $a, ':m' => $m, ':c' => $c, ':r' => $r,
+        ':src' => $src, ':a' => $a, ':m' => $m, ':c' => $c, ':r' => $campaignRates[$camp],
     ]);
 }
 
@@ -148,7 +164,7 @@ for ($day = $start; $day <= $end; $day = $day->modify('+1 day')) {
         $counted  = (int) round(vary($c, 0.45) * $weekend * $trend);
         $answered = (int) round($counted * (mt_rand(90, 100) / 100));
         $missed   = (int) round(vary($m, 0.6) * $weekend);
-        $rate     = round(vary($r, 0.05), 2);
+        $rate     = $r; // definite buyer rate (no jitter) -> revenue = rate * counted
         if ($counted === 0 && $answered === 0) {
             continue;
         }
@@ -159,14 +175,14 @@ for ($day = $start; $day <= $end; $day = $day->modify('+1 day')) {
         $rowCount++;
     }
 
-    foreach ($campaignRows as [$camp, $src, $a, $m, $c, $r]) {
+    foreach ($campaignRows as [$camp, $src, $a, $m, $c]) {
         if (mt_rand(0, 100) < 15) {
             continue;
         }
         $counted  = (int) round(vary($c, 0.5) * $weekend * $trend);
         $answered = (int) round($counted * (mt_rand(92, 100) / 100));
         $missed   = (int) round(vary($m, 0.7) * $weekend);
-        $rate     = round(vary($r, 0.05), 2);
+        $rate     = $campaignRates[$camp]; // definite campaign rate (no jitter) -> cost = rate * counted
         if ($counted === 0 && $answered === 0) {
             continue;
         }

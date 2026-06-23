@@ -116,6 +116,7 @@ export interface Buyer {
   name: string | null
   status: string
   notes: string | null
+  rate: number
   created_at: string
   revenue: number
   counted: number
@@ -131,6 +132,7 @@ export interface Campaign {
   name: string | null
   status: string
   notes: string | null
+  rate: number
   created_at: string
   cost: number
   counted: number

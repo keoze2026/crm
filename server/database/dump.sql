@@ -48,7 +48,9 @@ CREATE TABLE public.buyers (
     name text,
     status text DEFAULT 'active'::text NOT NULL,
     notes text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    rate numeric(10,2) DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT buyers_rate_check CHECK ((rate >= (0)::numeric))
 );
 
 
@@ -118,7 +120,9 @@ CREATE TABLE public.campaigns (
     name text,
     status text DEFAULT 'active'::text NOT NULL,
     notes text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    rate numeric(10,2) DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT campaigns_rate_check CHECK ((rate >= (0)::numeric))
 );
 
 
@@ -3257,4 +3261,35 @@ ALTER TABLE ONLY public.call_records
 --
 
 \unrestrict hGOtevWJYRpCLJQKNbulnUD3iEPNaluHmzgv0Ps8QgKDk6HrZFE9EetWb65DZmk
+
+--
+-- Definite per-entity rates (revenue = buyers.rate * counted, cost = campaigns.rate * counted).
+-- The COPY blocks above load buyers/campaigns with the default rate 0; the
+-- statements below set the real screenshot rates (2026-06-11) and then re-stamp
+-- every call record so the generated total_bill stays exactly rate * counted.
+--
+
+UPDATE public.buyers b SET rate = v.rate FROM (VALUES
+    ('RTG 04', 55.00), ('RTG 24', 52.00), ('RTG 50', 52.00), ('RNY', 51.00),
+    ('CDM', 50.00), ('CRM', 50.00), ('L48', 50.00), ('MXX', 50.00),
+    ('RTG 02', 50.00), ('RTG 06', 50.00), ('RTG 08', 50.00), ('RTG 15', 50.00),
+    ('RTG 39', 50.00),
+    ('RTG 17', 49.50), ('ZZY', 49.50),
+    ('A49', 49.00), ('AAT', 49.00), ('BHS', 49.00), ('BOP', 49.00),
+    ('FDD', 49.00), ('HOZ', 49.00), ('JJR', 49.00), ('PIJ', 49.00),
+    ('RTG 10', 49.00), ('RTG 12', 49.00), ('RTG 16', 49.00), ('R48', 49.00),
+    ('KBT', 48.00), ('N4K', 48.00), ('NB48', 48.00), ('SHN', 48.00)
+) AS v(code, rate) WHERE b.code = v.code;
+
+UPDATE public.campaigns c SET rate = v.rate FROM (VALUES
+    ('C-05', 50.00), ('C-02', 49.00), ('C-03', 48.00), ('C-11', 14.00)
+) AS v(code, rate) WHERE c.code = v.code;
+
+UPDATE public.call_records r SET rate = b.rate
+    FROM public.buyers b
+    WHERE r.buyer_id = b.id AND r.record_type = 'buyer';
+
+UPDATE public.call_records r SET rate = c.rate
+    FROM public.campaigns c
+    WHERE r.campaign_id = c.id AND r.record_type = 'campaign';
 

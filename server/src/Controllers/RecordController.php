@@ -90,6 +90,16 @@ final class RecordController
             $source = $body['source'] ?? null;
         }
 
+        // The rate is a definite property of the buyer/campaign — every record bills
+        // at the entity's rate. A brand-new entity's first record seeds that rate.
+        $provided = isset($body['rate']) ? (float) $body['rate'] : null;
+        $rate = $this->entityRate(
+            $pdo,
+            $type === 'buyer' ? 'buyers' : 'campaigns',
+            (int) ($buyerId ?? $campaignId),
+            $provided
+        );
+
         $stmt = $pdo->prepare(
             'INSERT INTO call_records
                 (record_date, record_type, buyer_id, campaign_id, source, answered, missed, counted, rate)
@@ -100,7 +110,7 @@ final class RecordController
             ':a' => (int) ($body['answered'] ?? 0),
             ':m' => (int) ($body['missed'] ?? 0),
             ':c' => (int) ($body['counted'] ?? 0),
-            ':r' => (float) ($body['rate'] ?? 0),
+            ':r' => $rate,
         ]);
         $this->respondOne($pdo, (int) $stmt->fetchColumn(), 201);
     }
@@ -111,6 +121,9 @@ final class RecordController
         $pdo = Database::connection();
         $id = (int) $params['id'];
 
+        // Note: rate is intentionally not editable per record — it always mirrors
+        // the parent buyer/campaign definite rate (changed on the Buyers/Campaigns
+        // page), so total_bill stays exactly rate * counted.
         $stmt = $pdo->prepare(
             'UPDATE call_records SET
                 record_date = COALESCE(:d, record_date),
@@ -118,7 +131,6 @@ final class RecordController
                 answered    = COALESCE(:a, answered),
                 missed      = COALESCE(:m, missed),
                 counted     = COALESCE(:c, counted),
-                rate        = COALESCE(:r, rate),
                 updated_at  = now()
              WHERE id = :id'
         );
@@ -129,7 +141,6 @@ final class RecordController
             ':a'   => isset($body['answered']) ? (int) $body['answered'] : null,
             ':m'   => isset($body['missed'])   ? (int) $body['missed']   : null,
             ':c'   => isset($body['counted'])  ? (int) $body['counted']  : null,
-            ':r'   => isset($body['rate'])     ? (float) $body['rate']    : null,
         ]);
         if ($stmt->rowCount() === 0) {
             Http::error('Record not found', 404);
@@ -191,6 +202,25 @@ final class RecordController
         $ins = $pdo->prepare("INSERT INTO {$table} (code) VALUES (:code) RETURNING id");
         $ins->execute([':code' => $code]);
         return (int) $ins->fetchColumn();
+    }
+
+    /**
+     * The definite rate for a buyer/campaign. If the entity has no rate yet (e.g. a
+     * brand-new entity created via the record form) and a rate was supplied, that
+     * value becomes the entity's definite rate so future records inherit it.
+     */
+    private function entityRate(PDO $pdo, string $table, int $id, ?float $provided): float
+    {
+        $stmt = $pdo->prepare("SELECT rate FROM {$table} WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        $rate = (float) $stmt->fetchColumn();
+
+        if ($rate <= 0.0 && $provided !== null && $provided > 0.0) {
+            $upd = $pdo->prepare("UPDATE {$table} SET rate = :r WHERE id = :id");
+            $upd->execute([':r' => $provided, ':id' => $id]);
+            return $provided;
+        }
+        return $rate;
     }
 
     private function respondOne(PDO $pdo, int $id, int $status = 200): void

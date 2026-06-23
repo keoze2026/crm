@@ -9,7 +9,7 @@ import type { CallRecord, Destination, RecordFilters, RecordType } from '../type
 import { DateRangeFilter } from './DateRange'
 import { Button, Card, EmptyState, Input, Modal, Select, Spinner, cx } from './ui'
 
-interface Entity { id: number; code: string }
+interface Entity { id: number; code: string; rate: number }
 
 const PlusIcon  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
 const EditIcon  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
@@ -165,7 +165,7 @@ export default function RecordsSection({
 
   const entities = useAsync<Entity[]>(async () => {
     const list = isBuyer ? await api.buyers() : await api.campaigns()
-    return list.map((x) => ({ id: x.id, code: x.code }))
+    return list.map((x) => ({ id: x.id, code: x.code, rate: x.rate }))
   }, [type])
   const records = useAsync(() => api.records(filters), [JSON.stringify(filters)])
 
@@ -582,9 +582,19 @@ function RecordForm({ type, editing, entities, destinations, onSaved, onCancel }
   const [saving,      setSaving]      = useState(false)
   const [error,       setError]       = useState<string | null>(null)
 
-  const total          = useMemo(() => (Number(counted) || 0) * (Number(rate) || 0), [counted, rate])
   const creatingNew    = !isEdit && entityId === '__new__'
   const creatingNewDest = !isBuyer && source === '__new__'
+
+  // The rate is a definite property of the buyer/campaign. For an existing entity
+  // it's fixed to that entity's rate (edit it on the Buyers/Campaigns page); only a
+  // brand-new entity lets you type its starting rate here, so it's derived rather
+  // than held in state (the `rate` state is only used while creating a new entity).
+  const selectedEntity = useMemo(
+    () => entities.find((e) => String(e.id) === entityId) ?? null,
+    [entities, entityId],
+  )
+  const effectiveRate  = creatingNew ? (Number(rate) || 0) : (selectedEntity?.rate ?? Number(editing?.rate ?? 0))
+  const total          = useMemo(() => (Number(counted) || 0) * effectiveRate, [counted, effectiveRate])
 
   const handleAnswered = (v: string) => { setAnswered(v); setCounted(String((Number(v) || 0) + (Number(missed) || 0))) }
   const handleMissed   = (v: string) => { setMissed(v);   setCounted(String((Number(answered) || 0) + (Number(v) || 0))) }
@@ -592,7 +602,7 @@ function RecordForm({ type, editing, entities, destinations, onSaved, onCancel }
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setSaving(true); setError(null)
     try {
-      const base = { record_date: date, answered: Number(answered)||0, missed: Number(missed)||0, counted: Number(counted)||0, rate: Number(rate)||0 }
+      const base = { record_date: date, answered: Number(answered)||0, missed: Number(missed)||0, counted: Number(counted)||0, rate: effectiveRate }
       if (isEdit) {
         const updatePayload: Record<string, unknown> = { ...base }
         if (!isBuyer) updatePayload.source = source === '__new__' ? newDest : source
@@ -652,7 +662,7 @@ function RecordForm({ type, editing, entities, destinations, onSaved, onCancel }
         <Input label="Answered" type="number" min="0" value={answered} onChange={(e) => handleAnswered(e.target.value)} />
         <Input label="Missed"   type="number" min="0" value={missed}   onChange={(e) => handleMissed(e.target.value)} />
         <Input label="Counted"  type="number" min="0" value={counted}  disabled />
-        <Input label="Rate ($)" type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} />
+        <Input label="Rate ($)" type="number" min="0" step="0.01" value={creatingNew ? rate : (entityId && entityId !== '__new__' ? String(effectiveRate) : '')} onChange={(e) => setRate(e.target.value)} disabled={!creatingNew} title={creatingNew ? undefined : `${entityLabel} rate — edit it on the ${isBuyer ? 'Buyers' : 'Campaigns'} page`} />
       </div>
       <div className="flex items-center justify-between rounded-xl bg-linear-to-r from-blue-500 to-blue-600 px-4 py-3 text-white shadow-lg shadow-blue-600/25">
         <span className="text-sm font-medium text-blue-50">{isBuyer ? 'Total revenue' : 'Total cost'}</span>

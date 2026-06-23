@@ -28,22 +28,26 @@ DROP TABLE IF EXISTS buyers CASCADE;
 DROP TABLE IF EXISTS campaigns CASCADE;
 
 -- Buyers = customers who purchase forwarded calls (the "Destination" in the revenue table).
+-- Each buyer has one definite `rate`; revenue = rate * counted (calls).
 CREATE TABLE buyers (
     id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     code        TEXT        NOT NULL UNIQUE,           -- e.g. "RTG 04"
     name        TEXT,                                  -- optional friendly name
     status      TEXT        NOT NULL DEFAULT 'active', -- active | inactive
     notes       TEXT,
+    rate        NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (rate >= 0), -- $ per counted call
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Campaigns = media-buying campaigns that source the calls (the "Camp" in the cost table).
+-- Each campaign has one definite `rate`; cost = rate * counted (calls).
 CREATE TABLE campaigns (
     id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     code        TEXT        NOT NULL UNIQUE,           -- e.g. "C-05"
     name        TEXT,
     status      TEXT        NOT NULL DEFAULT 'active',
     notes       TEXT,
+    rate        NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (rate >= 0), -- $ per counted call
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -60,7 +64,7 @@ CREATE TABLE call_records (
     answered     INTEGER     NOT NULL DEFAULT 0 CHECK (answered >= 0),
     missed       INTEGER     NOT NULL DEFAULT 0 CHECK (missed   >= 0),
     counted      INTEGER     NOT NULL DEFAULT 0 CHECK (counted  >= 0),
-    rate         NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (rate  >= 0),
+    rate         NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (rate  >= 0), -- mirrors the parent buyer/campaign definite rate
     total_bill   NUMERIC(14, 2) GENERATED ALWAYS AS (counted * rate) STORED,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),

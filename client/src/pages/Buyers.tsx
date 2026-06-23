@@ -14,7 +14,7 @@ import {
   Select,
   Spinner,
 } from '../components/ui'
-import { formatDate, money, num } from '../lib/format'
+import { formatDate, money, money2, num } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { Buyer } from '../types'
 
@@ -89,6 +89,8 @@ function BuyersPage() {
                 </div>
 
                 <dl className="mt-4 grid grid-cols-2 gap-y-2 text-sm">
+                  <dt className="text-slate-500">Rate</dt>
+                  <dd className="text-right font-semibold text-blue-700">{money2(b.rate)}</dd>
                   <dt className="text-slate-500">Total volume</dt>
                   <dd className="text-right font-medium text-slate-700">{num(totalVolume)}</dd>
                   <dt className="text-slate-500">Replacement</dt>
@@ -100,7 +102,10 @@ function BuyersPage() {
                 </dl>
 
                 <div className="mt-4 rounded-xl bg-blue-50/70 px-3 py-2">
-                  <div className="text-xs text-blue-700">Total revenue</div>
+                  <div className="flex items-center justify-between text-xs text-blue-700">
+                    <span>Total revenue</span>
+                    <span className="tabular-nums text-blue-600/70">{money2(b.rate)} × {num(b.counted)}</span>
+                  </div>
                   <div className="text-xl font-bold text-blue-700">{money(b.revenue)}</div>
                 </div>
               </Card>
@@ -126,6 +131,7 @@ function BuyerForm({ editing, onSaved, onCancel }: { editing: Buyer | null; onSa
   const [name, setName] = useState(editing?.name ?? '')
   const [status, setStatus] = useState(editing?.status ?? 'active')
   const [notes, setNotes] = useState(editing?.notes ?? '')
+  const [rate, setRate] = useState(String(editing?.rate ?? ''))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -133,7 +139,7 @@ function BuyerForm({ editing, onSaved, onCancel }: { editing: Buyer | null; onSa
     e.preventDefault()
     setSaving(true); setError(null)
     try {
-      const data = { code, name: name || null, status, notes: notes || null }
+      const data = { code, name: name || null, status, notes: notes || null, rate: Number(rate) || 0 }
       if (editing) await api.updateBuyer(editing.id, data)
       else await api.createBuyer(data)
       onSaved()
@@ -153,7 +159,10 @@ function BuyerForm({ editing, onSaved, onCancel }: { editing: Buyer | null; onSa
           <option value="inactive">Inactive</option>
         </Select>
       </div>
-      <Input label="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
+      <div className="grid grid-cols-2 gap-3">
+        <Input label="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
+        <Input label="Rate ($/call)" type="number" min="0" step="0.01" placeholder="e.g. 55.00" value={rate} onChange={(e) => setRate(e.target.value)} required />
+      </div>
       <label className="block">
         <span className="mb-1 block text-sm font-medium text-slate-700">Notes</span>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="glass-input w-full rounded-xl border border-white/70 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />

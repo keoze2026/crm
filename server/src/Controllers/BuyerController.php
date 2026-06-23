@@ -23,9 +23,10 @@ final class BuyerController
         if ($from) { $join .= ' AND r.record_date >= :from'; $params[':from'] = $from; }
         if ($to)   { $join .= ' AND r.record_date <= :to';   $params[':to']   = $to; }
 
+        // Revenue is the buyer's definite rate * its counted calls in the period.
         $sql = "
-            SELECT b.id, b.code, b.name, b.status, b.notes, b.created_at,
-                   COALESCE(SUM(r.total_bill), 0)            AS revenue,
+            SELECT b.id, b.code, b.name, b.status, b.notes, b.rate, b.created_at,
+                   b.rate * COALESCE(SUM(r.counted), 0)      AS revenue,
                    COALESCE(SUM(r.counted), 0)               AS counted,
                    COALESCE(SUM(r.answered), 0)              AS answered,
                    COALESCE(SUM(r.missed), 0)                AS missed,
@@ -53,8 +54,8 @@ final class BuyerController
             Http::error('Buyer code is required', 422);
         }
         $stmt = Database::connection()->prepare(
-            'INSERT INTO buyers (code, name, status, notes)
-             VALUES (:code, :name, :status, :notes) RETURNING *'
+            'INSERT INTO buyers (code, name, status, notes, rate)
+             VALUES (:code, :name, :status, :notes, :rate) RETURNING *'
         );
         try {
             $stmt->execute([
@@ -62,33 +63,51 @@ final class BuyerController
                 ':name'   => $body['name']   ?? null,
                 ':status' => $body['status'] ?? 'active',
                 ':notes'  => $body['notes']  ?? null,
+                ':rate'   => isset($body['rate']) ? (float) $body['rate'] : 0,
             ]);
         } catch (\PDOException $e) {
             Http::error('A buyer with that code already exists', 409);
         }
-        Http::json($stmt->fetch(), 201);
+        Http::json($this->cast([$stmt->fetch()])[0], 201);
     }
 
     public function update(array $params): void
     {
         $body = Http::body();
-        $stmt = Database::connection()->prepare(
+        $id   = (int) $params['id'];
+        $rate = isset($body['rate']) ? (float) $body['rate'] : null;
+        $pdo  = Database::connection();
+
+        $stmt = $pdo->prepare(
             'UPDATE buyers SET
                 code = COALESCE(:code, code),
                 name = :name,
                 status = COALESCE(:status, status),
-                notes = :notes
+                notes = :notes,
+                rate = COALESCE(:rate, rate)
              WHERE id = :id RETURNING *'
         );
         $stmt->execute([
-            ':id'     => (int) $params['id'],
+            ':id'     => $id,
             ':code'   => $body['code']   ?? null,
             ':name'   => $body['name']   ?? null,
             ':status' => $body['status'] ?? null,
             ':notes'  => $body['notes']  ?? null,
+            ':rate'   => $rate,
         ]);
         $row = $stmt->fetch();
-        $row ? Http::json($row) : Http::error('Buyer not found', 404);
+        if (!$row) {
+            Http::error('Buyer not found', 404);
+        }
+
+        // Keep the definite rate in sync across this buyer's call records so the
+        // stored total_bill (counted * rate) stays exactly rate * counted.
+        if ($rate !== null) {
+            $re = $pdo->prepare('UPDATE call_records SET rate = :r, updated_at = now() WHERE buyer_id = :id');
+            $re->execute([':r' => $rate, ':id' => $id]);
+        }
+
+        Http::json($this->cast([$row])[0]);
     }
 
     public function destroy(array $params): void
@@ -101,8 +120,13 @@ final class BuyerController
     private function cast(array $rows): array
     {
         foreach ($rows as &$r) {
-            foreach (['revenue', 'counted', 'answered', 'missed', 'records'] as $k) {
-                $r[$k] = (float) $r[$k];
+            if (!$r) {
+                continue;
+            }
+            foreach (['revenue', 'counted', 'answered', 'missed', 'records', 'rate'] as $k) {
+                if (array_key_exists($k, $r)) {
+                    $r[$k] = (float) $r[$k];
+                }
             }
         }
         return $rows;

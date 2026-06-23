@@ -23,9 +23,10 @@ final class CampaignController
         if ($to)   { $joinConds[] = 'r.record_date <= :to';   $params[':to']   = $to; }
         $joinOn = implode(' AND ', $joinConds);
 
+        // Cost is the campaign's definite rate * its counted calls in the period.
         $sql = "
-            SELECT c.id, c.code, c.name, c.status, c.notes, c.created_at,
-                   COALESCE(SUM(r.total_bill), 0)            AS cost,
+            SELECT c.id, c.code, c.name, c.status, c.notes, c.rate, c.created_at,
+                   c.rate * COALESCE(SUM(r.counted), 0)      AS cost,
                    COALESCE(SUM(r.counted), 0)               AS counted,
                    COALESCE(SUM(r.answered), 0)              AS answered,
                    COALESCE(SUM(r.missed), 0)                AS missed,
@@ -54,8 +55,8 @@ final class CampaignController
             Http::error('Campaign code is required', 422);
         }
         $stmt = Database::connection()->prepare(
-            'INSERT INTO campaigns (code, name, status, notes)
-             VALUES (:code, :name, :status, :notes) RETURNING *'
+            'INSERT INTO campaigns (code, name, status, notes, rate)
+             VALUES (:code, :name, :status, :notes, :rate) RETURNING *'
         );
         try {
             $stmt->execute([
@@ -63,33 +64,51 @@ final class CampaignController
                 ':name'   => $body['name']   ?? null,
                 ':status' => $body['status'] ?? 'active',
                 ':notes'  => $body['notes']  ?? null,
+                ':rate'   => isset($body['rate']) ? (float) $body['rate'] : 0,
             ]);
         } catch (\PDOException $e) {
             Http::error('A campaign with that code already exists', 409);
         }
-        Http::json($stmt->fetch(), 201);
+        Http::json($this->cast([$stmt->fetch()])[0], 201);
     }
 
     public function update(array $params): void
     {
         $body = Http::body();
-        $stmt = Database::connection()->prepare(
+        $id   = (int) $params['id'];
+        $rate = isset($body['rate']) ? (float) $body['rate'] : null;
+        $pdo  = Database::connection();
+
+        $stmt = $pdo->prepare(
             'UPDATE campaigns SET
                 code = COALESCE(:code, code),
                 name = :name,
                 status = COALESCE(:status, status),
-                notes = :notes
+                notes = :notes,
+                rate = COALESCE(:rate, rate)
              WHERE id = :id RETURNING *'
         );
         $stmt->execute([
-            ':id'     => (int) $params['id'],
+            ':id'     => $id,
             ':code'   => $body['code']   ?? null,
             ':name'   => $body['name']   ?? null,
             ':status' => $body['status'] ?? null,
             ':notes'  => $body['notes']  ?? null,
+            ':rate'   => $rate,
         ]);
         $row = $stmt->fetch();
-        $row ? Http::json($row) : Http::error('Campaign not found', 404);
+        if (!$row) {
+            Http::error('Campaign not found', 404);
+        }
+
+        // Keep the definite rate in sync across this campaign's call records so the
+        // stored total_bill (counted * rate) stays exactly rate * counted.
+        if ($rate !== null) {
+            $re = $pdo->prepare('UPDATE call_records SET rate = :r, updated_at = now() WHERE campaign_id = :id');
+            $re->execute([':r' => $rate, ':id' => $id]);
+        }
+
+        Http::json($this->cast([$row])[0]);
     }
 
     public function destroy(array $params): void
@@ -102,8 +121,13 @@ final class CampaignController
     private function cast(array $rows): array
     {
         foreach ($rows as &$r) {
-            foreach (['cost', 'counted', 'answered', 'missed', 'records', 'sources'] as $k) {
-                $r[$k] = (float) $r[$k];
+            if (!$r) {
+                continue;
+            }
+            foreach (['cost', 'counted', 'answered', 'missed', 'records', 'sources', 'rate'] as $k) {
+                if (array_key_exists($k, $r)) {
+                    $r[$k] = (float) $r[$k];
+                }
             }
         }
         return $rows;
