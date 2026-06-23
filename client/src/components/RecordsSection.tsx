@@ -143,14 +143,17 @@ function buildPdf(
 
 export default function RecordsSection({
   type, title, subtitle, compact = false, onChange, onTotalsChange, onDateChange,
-  from, to, hideDateFilter = false,
+  from, to, hideDateFilter = false, theme = 'blue',
 }: {
   type: RecordType; title: string; subtitle: string; compact?: boolean; onChange?: () => void; onTotalsChange?: (total_bill: number | null) => void; onDateChange?: (from: string, to: string) => void; profit?: number | null
   /** When provided, the parent controls the date range (e.g. a single page-level filter). */
   from?: string; to?: string; hideDateFilter?: boolean
+  /** 'navy' matches the Complete Report table (navy header, cyan body, white grid). */
+  theme?: 'blue' | 'navy'
 }) {
   const isBuyer    = type === 'buyer'
   const entityLabel = isBuyer ? 'Destination' : 'Campaign'
+  const navy        = theme === 'navy'
 
   const [filters, setFilters] = useState<RecordFilters>({
     type, from: '', to: '', search: '', buyer_id: '', campaign_id: '',
@@ -439,7 +442,7 @@ export default function RecordsSection({
           <EmptyState message="No records match these filters." />
         ) : (
           <div className="overflow-x-auto rounded-t-2xl">
-            <table className="w-full table-fixed text-sm">
+            <table className={cx('w-full table-fixed text-sm', navy && 'border-collapse [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white')}>
               <colgroup>
                 {showSerial && <col className="w-[6%]" />}{/* # */}
                 {showDate && <col className="w-[12%]" />}{/* Date */}
@@ -453,7 +456,7 @@ export default function RecordsSection({
                 <col className="w-[8%]" />{/* Actions */}
               </colgroup>
               <thead>
-                <tr className="bg-blue-600 text-center text-xs font-semibold uppercase tracking-wide text-blue-50">
+                <tr className={cx('text-center text-xs font-semibold uppercase tracking-wide', navy ? 'bg-[#1a3654] text-white' : 'bg-blue-600 text-blue-50')}>
                   {showSerial && <th className="px-4 py-3 font-medium">#</th>}
                   {showDate && <Th onClick={() => set({ sort: 'record_date', dir: nextDir(filters, 'record_date') })} active={filters.sort === 'record_date'} dir={filters.dir}>Date</Th>}
                   <th className="px-4 py-3 font-medium">{entityLabel}</th>
@@ -468,7 +471,7 @@ export default function RecordsSection({
               </thead>
               <tbody>
                 {rows.map((r, i) => (
-                  <tr key={r.id} className="border-b border-slate-100/70 odd:bg-white/40 even:bg-blue-50/40 hover:bg-blue-100/50">
+                  <tr key={r.id} className={cx(navy ? 'bg-[#d4e9f2] text-[#0f172a]' : 'border-b border-slate-100/70 odd:bg-white/40 even:bg-blue-50/40 hover:bg-blue-100/50')}>
                     {showSerial && <td className="px-4 py-3 text-center tabular-nums text-slate-400">{(meta ? (meta.page - 1) * meta.per_page : 0) + i + 1}</td>}
                     {showDate && (isFiltered
                       ? <td className="whitespace-nowrap px-4 py-3 text-center text-slate-600 font-medium">
@@ -494,8 +497,8 @@ export default function RecordsSection({
               </tbody>
               {totals && (
                 <tfoot>
-                  <tr className="border-t-2 border-blue-200 bg-blue-50 font-semibold text-slate-900">
-                    <td className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-blue-700" colSpan={showSerial && showDate ? 2 : 1}>
+                  <tr className={cx('font-semibold', navy ? 'bg-[#1a3654] font-bold text-white' : 'border-t-2 border-blue-200 bg-blue-50 text-slate-900')}>
+                    <td className={cx('px-4 py-3 text-center text-xs font-bold uppercase tracking-wide', navy ? 'text-white' : 'text-blue-700')} colSpan={showSerial && showDate ? 2 : 1}>
                       TOTAL
                     </td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-16" align="left">{num(totals.count)}</Box></td>
@@ -503,8 +506,8 @@ export default function RecordsSection({
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-12">{num(totals.answered)}</Box></td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-10">{num(totals.missed)}</Box></td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-12">{num(totals.counted)}</Box></td>
-                    <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-400"><Box w="w-16">—</Box></td>
-                    <td className="py-3 pl-10 pr-2 text-center tabular-nums text-blue-700"><Box w="w-28">{money2(totals.total_bill)}</Box></td>
+                    <td className={cx('py-3 pl-10 pr-2 text-center tabular-nums', navy ? 'text-white/70' : 'text-slate-400')}><Box w="w-16">—</Box></td>
+                    <td className={cx('py-3 pl-10 pr-2 text-center tabular-nums', navy ? 'text-white' : 'text-blue-700')}><Box w="w-28">{money2(totals.total_bill)}</Box></td>
                     <td />
                   </tr>
                 </tfoot>
