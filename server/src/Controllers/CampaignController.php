@@ -48,6 +48,40 @@ final class CampaignController
         Http::json($this->cast($stmt->fetchAll()));
     }
 
+    /**
+     * The sources (destinations) used by a campaign, each with its current definite
+     * rate and volume. Powers the "Edit source rates" panel on the Campaigns tab, so
+     * a campaign with varying rates (e.g. C-03 = 48/48/47/46/46) can be tuned per source.
+     */
+    public function sources(array $params): void
+    {
+        $sql = "
+            SELECT d.id AS destination_id,
+                   r.source                       AS name,
+                   COALESCE(d.rate, 0)            AS rate,
+                   COALESCE(SUM(r.counted), 0)    AS counted,
+                   COALESCE(SUM(r.total_bill), 0) AS cost
+            FROM call_records r
+            LEFT JOIN destinations d ON d.name = r.source
+            WHERE r.record_type = 'campaign'
+              AND r.campaign_id = :id
+              AND r.source IS NOT NULL AND r.source <> ''
+            GROUP BY d.id, r.source, d.rate
+            ORDER BY cost DESC, r.source
+        ";
+        $stmt = Database::connection()->prepare($sql);
+        $stmt->execute([':id' => (int) $params['id']]);
+
+        $rows = $stmt->fetchAll();
+        foreach ($rows as &$row) {
+            $row['destination_id'] = $row['destination_id'] !== null ? (int) $row['destination_id'] : null;
+            $row['rate']    = (float) $row['rate'];
+            $row['counted'] = (float) $row['counted'];
+            $row['cost']    = (float) $row['cost'];
+        }
+        Http::json($rows);
+    }
+
     public function store(): void
     {
         $body = Http::body();

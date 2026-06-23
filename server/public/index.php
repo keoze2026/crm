@@ -61,8 +61,9 @@ $router->delete('/buyers/{id}', fn ($p) => $buyers->destroy($p));
 
 // Campaigns
 $campaigns = new CampaignController();
-$router->get('/campaigns',         fn () => $campaigns->index());
-$router->post('/campaigns',        fn () => $campaigns->store());
+$router->get('/campaigns',              fn () => $campaigns->index());
+$router->get('/campaigns/{id}/sources', fn ($p) => $campaigns->sources($p));
+$router->post('/campaigns',             fn () => $campaigns->store());
 $router->put('/campaigns/{id}',    fn ($p) => $campaigns->update($p));
 $router->delete('/campaigns/{id}', fn ($p) => $campaigns->destroy($p));
 

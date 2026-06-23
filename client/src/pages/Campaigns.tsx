@@ -16,7 +16,7 @@ import {
 } from '../components/ui'
 import { formatDate, money, money2, num } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
-import type { Campaign } from '../types'
+import type { Campaign, CampaignSource } from '../types'
 
 export default function Campaigns() {
   return (
@@ -30,6 +30,7 @@ function CampaignsPage() {
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Campaign | null>(null)
+  const [ratesFor, setRatesFor] = useState<Campaign | null>(null)
 
   // Single page-level date filter — applies to every section below.
   const [from, setFrom] = useState('')
@@ -40,6 +41,7 @@ function CampaignsPage() {
   const openNew = () => { setEditing(null); setModalOpen(true) }
   const openEdit = (c: Campaign) => { setEditing(c); setModalOpen(true) }
   const onSaved = () => { setModalOpen(false); campaigns.reload() }
+  const onRatesSaved = () => { setRatesFor(null); campaigns.reload() }
 
   const onDelete = async (c: Campaign) => {
     if (!confirm(`Delete campaign ${c.code}? This also deletes its ${num(c.records)} call records.`)) return
@@ -82,6 +84,9 @@ function CampaignsPage() {
                     {c.name && <p className="text-sm text-slate-500">{c.name}</p>}
                   </div>
                   <div className="flex gap-1">
+                    <button onClick={() => setRatesFor(c)} className="rounded p-1.5 text-slate-400 hover:bg-amber-50 hover:text-amber-600" title="Edit source rates">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
+                    </button>
                     <button onClick={() => openEdit(c)} className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600" title="Edit">
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
                     </button>
@@ -132,7 +137,94 @@ function CampaignsPage() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? `Edit ${editing.code}` : 'Add campaign'}>
         <CampaignForm editing={editing} onSaved={onSaved} onCancel={() => setModalOpen(false)} />
       </Modal>
+
+      <Modal open={!!ratesFor} onClose={() => setRatesFor(null)} title={ratesFor ? `Source rates — ${ratesFor.code}` : 'Source rates'}>
+        {ratesFor && <CampaignRatesForm campaign={ratesFor} onSaved={onRatesSaved} onCancel={() => setRatesFor(null)} />}
+      </Modal>
     </div>
+  )
+}
+
+function CampaignRatesForm({ campaign, onSaved, onCancel }: { campaign: Campaign; onSaved: () => void; onCancel: () => void }) {
+  const sources = useAsync(() => api.campaignSources(campaign.id), [campaign.id])
+  const [rates, setRates] = useState<Record<number, string>>({})
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const list = sources.data ?? []
+  const rateValue = (s: CampaignSource) =>
+    s.destination_id != null && rates[s.destination_id] !== undefined ? rates[s.destination_id] : String(s.rate)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true); setError(null)
+    try {
+      // Save only the sources whose rate actually changed.
+      const changed = list.filter(
+        (s) => s.destination_id != null &&
+          rates[s.destination_id] !== undefined &&
+          Number(rates[s.destination_id]) !== s.rate,
+      )
+      for (const s of changed) {
+        await api.updateDestination(s.destination_id!, { rate: Number(rates[s.destination_id!]) || 0 })
+      }
+      onSaved()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <p className="text-sm text-slate-500">
+        Each source bills at its own rate; the campaign cost is the sum across them. Changing a
+        rate updates that source everywhere it is used and re-prices its existing records.
+      </p>
+
+      {sources.loading ? (
+        <div className="flex justify-center py-8"><Spinner className="h-6 w-6" /></div>
+      ) : list.length === 0 ? (
+        <EmptyState message="This campaign has no source records yet." />
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-slate-200">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-3 py-2">Source</th>
+                <th className="px-3 py-2 text-right">Calls</th>
+                <th className="px-3 py-2 text-right">Rate ($/call)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((s) => (
+                <tr key={s.name} className="border-t border-slate-100">
+                  <td className="px-3 py-2 font-medium text-slate-800">{s.name}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-500">{num(s.counted)}</td>
+                  <td className="px-3 py-2 text-right">
+                    <Input
+                      type="number" min="0" step="0.01"
+                      value={rateValue(s)}
+                      disabled={s.destination_id == null}
+                      title={s.destination_id == null ? 'This source has no destination record to edit' : undefined}
+                      onChange={(e) => s.destination_id != null && setRates((r) => ({ ...r, [s.destination_id!]: e.target.value }))}
+                      className="w-28 text-right"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+        <Button type="submit" disabled={saving || list.length === 0}>{saving && <Spinner className="h-4 w-4 text-white" />}Save rates</Button>
+      </div>
+    </form>
   )
 }
 

@@ -127,6 +127,14 @@ export interface Buyer {
   last_activity: string | null
 }
 
+export interface CampaignSource {
+  destination_id: number | null
+  name: string
+  rate: number
+  counted: number
+  cost: number
+}
+
 export interface Campaign {
   id: number
   code: string

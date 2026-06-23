@@ -3,6 +3,7 @@ import type {
   Destination,
   CallRecord,
   Campaign,
+  CampaignSource,
   CompleteReport,
   Paginated,
   RecordFilters,
@@ -81,6 +82,8 @@ export const api = {
   // Campaigns
   campaigns: (search?: string, range?: DateRange) =>
     request<Campaign[]>(`/campaigns${qs({ search, ...range })}`),
+  campaignSources: (id: number) =>
+    request<CampaignSource[]>(`/campaigns/${id}/sources`),
   createCampaign: (data: Partial<Campaign>) =>
     request<Campaign>('/campaigns', { method: 'POST', body: JSON.stringify(data) }),
   updateCampaign: (id: number, data: Partial<Campaign>) =>
