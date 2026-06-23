@@ -77,7 +77,7 @@ function CampaignsPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-lg font-semibold text-slate-900">{c.code}</span>
-                      <Badge color={c.status === 'active' ? 'green' : 'slate'}>{c.status}</Badge>
+                      <Badge color={c.status === 'active' ? 'green' : 'red'}>{c.status}</Badge>
                     </div>
                     {c.name && <p className="text-sm text-slate-500">{c.name}</p>}
                   </div>

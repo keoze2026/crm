@@ -74,7 +74,7 @@ function BuyersPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-lg font-semibold text-slate-900">{b.code}</span>
-                      <Badge color={b.status === 'active' ? 'green' : 'slate'}>{b.status}</Badge>
+                      <Badge color={b.status === 'active' ? 'green' : 'red'}>{b.status}</Badge>
                     </div>
                     {b.name && <p className="text-sm text-slate-500">{b.name}</p>}
                   </div>
