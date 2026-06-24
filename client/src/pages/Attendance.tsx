@@ -1,21 +1,82 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, type ReactNode } from 'react'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { api, fmtAttendanceTime } from '../api/client'
 import { useAsync } from '../lib/useAsync'
 import type { AttendanceDay, AttendanceStaff } from '../types'
 import { PageHeader } from '../components/Layout'
-import { cx } from '../components/ui'
+import { Card, CardHeader, Spinner, cx } from '../components/ui'
 
 const TZ = 'America/New_York'
+const SUMMARY_DAYS = 32          // staff-summary look-back window (inclusive)
+const TARGET_LOGIN_MIN = 9 * 60  // 9:00 AM EST — late threshold
+
+// ─── Date / time helpers ───────────────────────────────────────────────────────
 
 function todayEST(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date())
 }
 
+/** Subtract whole days from a YYYY-MM-DD string (calendar-safe, no TZ drift). */
+function isoMinusDays(iso: string, n: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() - n)
+  return dt.toISOString().slice(0, 10)
+}
+
+/** Minutes-since-midnight of a UTC timestamp, in the org timezone. */
+function minutesEST(iso: string | null): number | null {
+  if (!iso) return null
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date(iso))
+  const h = Number(parts.find((p) => p.type === 'hour')?.value) % 24
+  const m = Number(parts.find((p) => p.type === 'minute')?.value)
+  if (Number.isNaN(h) || Number.isNaN(m)) return null
+  return h * 60 + m
+}
+
+/** Render minutes-since-midnight as a 12-hour clock label. */
+function fmtClock(min: number | null): string {
+  if (min == null) return '—'
+  const total = Math.round(min)
+  const h24 = Math.floor(total / 60) % 24
+  const m = total % 60
+  const ampm = h24 < 12 ? 'AM' : 'PM'
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+}
+
+const fmtHours = (n: number | null): string => (n == null ? '—' : `${n.toFixed(1)}h`)
+
+function shortDate(iso: string): string {
+  const d = new Date(iso + 'T00:00:00')
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function fullDate(iso: string): string {
+  const d = new Date(iso + 'T00:00:00')
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+const labelFor = (s: { staff_name: string | null; username: string | null; user_id: string }) =>
+  s.staff_name || (s.username ? `@${s.username}` : s.user_id)
+
+// ─── Small presentational pieces ────────────────────────────────────────────────
+
 function Avatar({ name, size = 28 }: { name: string | null; size?: number }) {
   const initials = (name || '?').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
-  const COLORS = ['#B5D4F4','#9FE1CB','#F4C0D1','#CECBF6','#FAC775','#C0DD97']
-  const TEXT   = ['#0C447C','#085041','#72243E','#3C3489','#633806','#27500A']
-  const idx    = (initials.charCodeAt(0) || 0) % COLORS.length
+  const COLORS = ['#B5D4F4', '#9FE1CB', '#F4C0D1', '#CECBF6', '#FAC775', '#C0DD97']
+  const TEXT = ['#0C447C', '#085041', '#72243E', '#3C3489', '#633806', '#27500A']
+  const idx = (initials.charCodeAt(0) || 0) % COLORS.length
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%',
@@ -39,25 +100,70 @@ function BreakStatusBadge({ overMin }: { overMin: number }) {
   return <span className="inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-700">OK</span>
 }
 
-function MetricCard({ label, value, sub, accent }: { label: string; value: string | number; sub?: string; accent?: string }) {
+/** Status derived from raw timestamps — works for /days rows that lack present/still_in. */
+function DayStatus({ row }: { row: AttendanceDay }) {
+  if (row.login_at == null) return <span className="text-slate-400 text-xs">—</span>
+  if (row.logout_at == null) return <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">No logout</span>
+  return <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Checked out</span>
+}
+
+/** Glass KPI card matching the Dashboard look. */
+function MetricCard({ label, value, sub, accent }: { label: string; value: ReactNode; sub?: string; accent?: string }) {
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100" style={{ borderTop: accent ? `3px solid ${accent}` : undefined }}>
+    <div className="glass rounded-2xl p-4 shadow-xl shadow-slate-900/5" style={{ borderTop: accent ? `3px solid ${accent}` : undefined }}>
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
+      <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
       {sub && <p className="mt-0.5 text-xs text-slate-400">{sub}</p>}
     </div>
   )
 }
 
-const PER_PAGE = 15
+function ChartLoading() {
+  return <div className="flex h-full items-center justify-center"><Spinner className="h-6 w-6" /></div>
+}
+
+/** Single-series bar-chart tooltip (matches the Dashboard tooltip style). */
+function BarTooltip({ active, payload, label, unit, name }: {
+  active?: boolean
+  payload?: { value?: number | string; name?: number | string }[]
+  label?: string | number
+  unit: string
+  name: string
+}) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-lg">
+      {label != null && <div className="mb-1 font-medium text-slate-700">{label}</div>}
+      <div className="flex items-center gap-1.5">
+        <span className="text-slate-500">{name}:</span>
+        <span className="font-medium tabular-nums text-slate-800">{payload[0].value}{unit}</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Tab switcher ───────────────────────────────────────────────────────────────
+
+type Tab = 'roster' | 'summary'
+
+const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
+  {
+    id: 'roster', label: 'Daily Roster',
+    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>,
+  },
+  {
+    id: 'summary', label: 'Staff Summary',
+    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18" /><path d="M18 17V9M13 17V5M8 17v-3" /></svg>,
+  },
+]
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  Page shell
+// ════════════════════════════════════════════════════════════════════════════════
 
 export default function Attendance() {
-  const [date,   setDate]   = useState(todayEST())
-  const [search, setSearch] = useState('')
-  const [page,   setPage]   = useState(0)
-  const [sortKey,  setSortKey]  = useState('login_at')
-  const [sortDir,  setSortDir]  = useState<'asc' | 'desc'>('asc')
-  const [clock,  setClock]  = useState('')
+  const [tab, setTab] = useState<Tab>('roster')
+  const [clock, setClock] = useState('')
 
   useEffect(() => {
     const tick = () => setClock(
@@ -66,16 +172,59 @@ export default function Attendance() {
     tick(); const id = setInterval(tick, 1000); return () => clearInterval(id)
   }, [])
 
-  const rosterReq    = useAsync(() => api.attendanceRoster(date), [date])
-  const staffReq     = useAsync(() => api.attendanceStaff(), [])
-  const liveReq      = useAsync(() => api.attendanceLive(), [])
-  const lateReq      = useAsync(() => api.attendanceExceptions('late', date, date), [date])
+  return (
+    <div>
+      <PageHeader title="Attendance" subtitle="Team check-in / check-out via Telegram bot">
+        <span className="text-xs text-slate-400 tabular-nums">{clock}</span>
+      </PageHeader>
+
+      {/* Sub-menu */}
+      <div className="mb-6 inline-flex rounded-xl glass-input border border-white/70 p-0.5">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={cx(
+              'flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors sm:px-4',
+              tab === t.id
+                ? 'bg-linear-to-b from-blue-500 to-blue-600 text-white shadow'
+                : 'text-slate-600 hover:bg-white/60',
+            )}
+          >
+            {t.icon}
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'roster' ? <RosterView /> : <StaffSummaryView />}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  Daily roster  (logic unchanged — restyled to the glass theme)
+// ════════════════════════════════════════════════════════════════════════════════
+
+const PER_PAGE = 15
+
+function RosterView() {
+  const [date, setDate] = useState(todayEST())
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(0)
+  const [sortKey, setSortKey] = useState('login_at')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  const rosterReq = useAsync(() => api.attendanceRoster(date), [date])
+  const staffReq = useAsync(() => api.attendanceStaff(), [])
+  const liveReq = useAsync(() => api.attendanceLive(), [])
+  const lateReq = useAsync(() => api.attendanceExceptions('late', date, date), [date])
   const overBreakReq = useAsync(() => api.attendanceExceptions('over_break', date, date), [date])
 
   const rows = rosterReq.data?.rows ?? []
 
   const filtered = useMemo(() => {
-    let data = rows.filter(r =>
+    const data = rows.filter((r) =>
       !search ||
       (r.staff_name ?? '').toLowerCase().includes(search.toLowerCase()) ||
       (r.username ?? '').toLowerCase().includes(search.toLowerCase())
@@ -93,15 +242,15 @@ export default function Attendance() {
   useEffect(() => setPage(0), [date, search, sortKey, sortDir])
 
   const absentMembers = useMemo(() => {
-    const present = new Set(rows.map(r => r.user_id))
+    const present = new Set(rows.map((r) => r.user_id))
     return (staffReq.data ?? []).filter((m: AttendanceStaff) => !present.has(m.user_id))
   }, [rows, staffReq.data])
 
   const metrics = useMemo(() => {
-    const workedRows = rows.filter(r => r.hours != null)
+    const workedRows = rows.filter((r) => r.hours != null)
     return {
-      present:  rows.filter(r => r.present).length,
-      stillIn:  rows.filter(r => r.still_in).length,
+      present: rows.filter((r) => r.present).length,
+      stillIn: rows.filter((r) => r.still_in).length,
       avgHours: workedRows.length
         ? (workedRows.reduce((s, r) => s + (r.hours ?? 0), 0) / workedRows.length).toFixed(1)
         : '—',
@@ -110,22 +259,18 @@ export default function Attendance() {
   }, [rows, lateReq.data])
 
   const handleSort = (key: string) => {
-    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     else { setSortKey(key); setSortDir('asc') }
   }
-  const sa = (key: string) => sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
+  const sa = (key: string) => (sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '')
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE)
-  const pageSlice  = filtered.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE)
+  const pageSlice = filtered.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE)
 
   return (
     <div>
-      <PageHeader title="Attendance" subtitle="Team check-in / check-out via Telegram bot">
-        <span className="text-xs text-slate-400 tabular-nums">{clock}</span>
-      </PageHeader>
-
       {/* Status strip */}
-      <div className="mb-6 flex flex-wrap items-center gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-100">
+      <div className="glass mb-6 flex flex-wrap items-center gap-2 rounded-2xl px-4 py-3 shadow-xl shadow-slate-900/5">
         <span className="mr-2 text-xs font-medium text-slate-500">Now online</span>
         {(liveReq.data ?? []).length === 0
           ? <span className="text-xs text-slate-400">Nobody checked in yet today</span>
@@ -140,18 +285,17 @@ export default function Attendance() {
 
       {/* Metric cards */}
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MetricCard label="Present today"    value={metrics.present}  sub={`of ${staffReq.data?.length ?? '?'} staff`} accent="#1D9E75" />
-        <MetricCard label="Still checked in" value={metrics.stillIn}  sub="no logout yet"        accent="#3B82F6" />
+        <MetricCard label="Present today" value={metrics.present} sub={`of ${staffReq.data?.length ?? '?'} staff`} accent="#1D9E75" />
+        <MetricCard label="Still checked in" value={metrics.stillIn} sub="no logout yet" accent="#3B82F6" />
         <MetricCard label="Avg hours worked" value={metrics.avgHours !== '—' ? `${metrics.avgHours}h` : '—'} sub="checked-out only" accent="#F59E0B" />
-        <MetricCard label="Late arrivals"    value={metrics.late}     sub="after 9:00 AM EST"    accent="#EF4444" />
+        <MetricCard label="Late arrivals" value={metrics.late} sub="after 9:00 AM EST" accent="#EF4444" />
       </div>
 
       {/* Alert cards */}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-
         {/* Absent */}
-        <div className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-100 overflow-hidden" style={{ borderTop: '3px solid #EF4444' }}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-50">
+        <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden" style={{ borderTop: '3px solid #EF4444' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/50">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Absent</p>
               <p className="text-xs text-slate-400 mt-0.5">No record on {date}</p>
@@ -162,20 +306,20 @@ export default function Attendance() {
             {absentMembers.length === 0
               ? <p className="text-xs text-emerald-600">✓ Full attendance</p>
               : <div className="flex flex-wrap gap-1.5">
-                  {absentMembers.map((m: AttendanceStaff) => (
-                    <span key={m.user_id} className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
-                      <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
-                      {m.staff_name || m.username || m.user_id}
-                    </span>
-                  ))}
-                </div>
+                {absentMembers.map((m: AttendanceStaff) => (
+                  <span key={m.user_id} className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                    {m.staff_name || m.username || m.user_id}
+                  </span>
+                ))}
+              </div>
             }
           </div>
         </div>
 
         {/* Late */}
-        <div className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-100 overflow-hidden" style={{ borderTop: '3px solid #F59E0B' }}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-50">
+        <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden" style={{ borderTop: '3px solid #F59E0B' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/50">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Late check-ins</p>
               <p className="text-xs text-slate-400 mt-0.5">After 9:00 AM EST</p>
@@ -186,20 +330,20 @@ export default function Attendance() {
             {metrics.late === 0
               ? <p className="text-xs text-emerald-600">✓ No late check-ins</p>
               : <div className="flex flex-col gap-1.5">
-                  {(lateReq.data?.rows ?? []).map((r, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs">
-                      <span className="rounded-full bg-amber-50 px-2.5 py-1 font-medium text-amber-700">{r.staff_name || r.user_id}</span>
-                      <span className="text-slate-400">{r.local_login}</span>
-                    </div>
-                  ))}
-                </div>
+                {(lateReq.data?.rows ?? []).map((r, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <span className="rounded-full bg-amber-50 px-2.5 py-1 font-medium text-amber-700">{r.staff_name || r.user_id}</span>
+                    <span className="text-slate-400">{r.local_login}</span>
+                  </div>
+                ))}
+              </div>
             }
           </div>
         </div>
 
         {/* Break overages */}
-        <div className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-100 overflow-hidden" style={{ borderTop: '3px solid #7C3AED' }}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-50">
+        <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden" style={{ borderTop: '3px solid #7C3AED' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/50">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Break overages</p>
               <p className="text-xs text-slate-400 mt-0.5">Exceeded 60-min allowance</p>
@@ -212,33 +356,32 @@ export default function Attendance() {
             {(overBreakReq.data?.rows?.length ?? 0) === 0
               ? <p className="text-xs text-emerald-600">✓ No overages</p>
               : <div className="flex flex-col gap-1.5">
-                  {(overBreakReq.data?.rows ?? []).map((r, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs">
-                      <span className="rounded-full bg-violet-50 px-2.5 py-1 font-medium text-violet-700">{r.staff_name || r.user_id}</span>
-                      <span className="text-violet-500">+{r.over_min}m</span>
-                    </div>
-                  ))}
-                </div>
+                {(overBreakReq.data?.rows ?? []).map((r, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <span className="rounded-full bg-violet-50 px-2.5 py-1 font-medium text-violet-700">{r.staff_name || r.user_id}</span>
+                    <span className="text-violet-500">+{r.over_min}m</span>
+                  </div>
+                ))}
+              </div>
             }
           </div>
         </div>
-
       </div>
 
       {/* Filters */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <input
-          type="date" value={date} onChange={e => setDate(e.target.value)}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          type="date" value={date} onChange={(e) => setDate(e.target.value)}
+          className="glass-input rounded-lg border border-white/70 px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
         />
         <input
           type="text" placeholder="Search name or username…" value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-52 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onChange={(e) => setSearch(e.target.value)}
+          className="glass-input w-52 rounded-lg border border-white/70 px-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
         />
         <button
           onClick={() => { setDate(todayEST()); setSearch('') }}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 shadow-sm hover:bg-slate-50"
+          className="glass-input rounded-lg border border-white/70 px-3 py-1.5 text-sm text-slate-600 hover:bg-white/80"
         >
           Reset
         </button>
@@ -246,11 +389,11 @@ export default function Attendance() {
       </div>
 
       {/* Table */}
-      <div className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-100 overflow-hidden">
+      <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50">
+              <tr className="border-b border-white/50 bg-white/40">
                 {[
                   ['Date', 'work_date'],
                   ['Username', 'username'],
@@ -291,7 +434,7 @@ export default function Attendance() {
               ) : pageSlice.length === 0 ? (
                 <tr><td colSpan={17} className="py-12 text-center text-sm text-slate-400">No records for {date}</td></tr>
               ) : pageSlice.map((r, i) => (
-                <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
+                <tr key={i} className="border-b border-white/40 hover:bg-white/40 transition-colors">
                   <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums text-slate-600">{r.work_date}</td>
                   <td className="px-3 py-2.5 text-xs font-medium text-slate-700">{r.username || '—'}</td>
                   <td className="px-3 py-2.5">
@@ -325,21 +468,461 @@ export default function Attendance() {
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
+        <div className="flex items-center justify-between border-t border-white/50 px-4 py-3 text-sm text-slate-500">
           <span>
             {filtered.length === 0 ? 'No records'
               : `Showing ${page * PER_PAGE + 1}–${Math.min(page * PER_PAGE + PER_PAGE, filtered.length)} of ${filtered.length}`}
           </span>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setPage(p => p - 1)} disabled={page === 0}
-              className="rounded-lg border border-slate-200 px-3 py-1 text-xs disabled:opacity-40 hover:bg-slate-50"
+              onClick={() => setPage((p) => p - 1)} disabled={page === 0}
+              className="glass-input rounded-lg border border-white/70 px-3 py-1 text-xs disabled:opacity-40 hover:bg-white/80"
             >← Prev</button>
             <span className="text-xs">Page {page + 1} / {totalPages || 1}</span>
             <button
-              onClick={() => setPage(p => p + 1)} disabled={page + 1 >= totalPages}
-              className="rounded-lg border border-slate-200 px-3 py-1 text-xs disabled:opacity-40 hover:bg-slate-50"
+              onClick={() => setPage((p) => p + 1)} disabled={page + 1 >= totalPages}
+              className="glass-input rounded-lg border border-white/70 px-3 py-1 text-xs disabled:opacity-40 hover:bg-white/80"
             >Next →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  Staff summary  (32-day window, computed client-side from /attendance/days)
+// ════════════════════════════════════════════════════════════════════════════════
+
+interface StaffStat {
+  user_id: string
+  staff_name: string | null
+  username: string | null
+  daysPresent: number
+  daysComplete: number
+  totalHours: number
+  netHours: number
+  avgHoursPerDay: number | null
+  avgCheckIn: number | null
+  avgCheckOut: number | null
+  totalBreakMin: number
+  avgBreakMin: number | null
+  overBreakDays: number
+  totalOverBreakMin: number
+  lateDays: number
+  attendanceRate: number   // 0..1 of operational days
+  completionRate: number   // 0..1 of present days that logged out
+  lastDay: string | null
+  rows: AttendanceDay[]
+}
+
+const SUMMARY_COLUMNS: { label: string; key: keyof StaffStat | 'name'; align: 'left' | 'right' | 'center' }[] = [
+  { label: 'Staff', key: 'name', align: 'left' },
+  { label: 'Present', key: 'daysPresent', align: 'center' },
+  { label: 'Attendance', key: 'attendanceRate', align: 'center' },
+  { label: 'Avg check-in', key: 'avgCheckIn', align: 'center' },
+  { label: 'Total hours', key: 'totalHours', align: 'right' },
+  { label: 'Avg hrs/day', key: 'avgHoursPerDay', align: 'right' },
+  { label: 'Break used', key: 'totalBreakMin', align: 'right' },
+  { label: 'Late', key: 'lateDays', align: 'center' },
+  { label: 'Completion', key: 'completionRate', align: 'center' },
+]
+
+function StaffSummaryView() {
+  const to = todayEST()
+  const from = isoMinusDays(to, SUMMARY_DAYS - 1)
+
+  const daysReq = useAsync(() => api.attendanceDays({ from, to }), [from, to])
+  const staffReq = useAsync(() => api.attendanceStaff(), [])
+
+  const [search, setSearch] = useState('')
+  const [sortKey, setSortKey] = useState<keyof StaffStat | 'name'>('totalHours')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [selected, setSelected] = useState<StaffStat | null>(null)
+
+  const rows = daysReq.data?.rows ?? []
+
+  const operationalDays = useMemo(
+    () => new Set(rows.map((r) => r.work_date)).size,
+    [rows],
+  )
+
+  const stats = useMemo<StaffStat[]>(() => {
+    const byUser = new Map<string, AttendanceDay[]>()
+    for (const r of rows) {
+      const arr = byUser.get(r.user_id) ?? []
+      arr.push(r)
+      byUser.set(r.user_id, arr)
+    }
+
+    // Seed with the full directory so chronic-absence staff still surface.
+    const ids = new Set<string>([...byUser.keys(), ...(staffReq.data ?? []).map((s) => s.user_id)])
+    const dir = new Map((staffReq.data ?? []).map((s) => [s.user_id, s]))
+
+    const out: StaffStat[] = []
+    for (const id of ids) {
+      const userRows = (byUser.get(id) ?? []).slice().sort((a, b) => (a.work_date < b.work_date ? -1 : 1))
+      const present = userRows.filter((r) => r.login_at != null)
+      const complete = userRows.filter((r) => r.logout_at != null)
+      const checkIns = present.map((r) => minutesEST(r.login_at)).filter((m): m is number => m != null)
+      const checkOuts = complete.map((r) => minutesEST(r.logout_at)).filter((m): m is number => m != null)
+      const totalHours = complete.reduce((s, r) => s + (r.hours ?? 0), 0)
+      const netHours = userRows.reduce((s, r) => s + (r.net_hours ?? 0), 0)
+      const totalBreakMin = userRows.reduce((s, r) => s + (r.break_min ?? 0), 0)
+      const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
+      const meta = dir.get(id)
+
+      out.push({
+        user_id: id,
+        staff_name: meta?.staff_name ?? userRows[0]?.staff_name ?? null,
+        username: meta?.username ?? userRows[0]?.username ?? null,
+        daysPresent: present.length,
+        daysComplete: complete.length,
+        totalHours,
+        netHours,
+        avgHoursPerDay: complete.length ? totalHours / complete.length : null,
+        avgCheckIn: avg(checkIns),
+        avgCheckOut: avg(checkOuts),
+        totalBreakMin,
+        avgBreakMin: present.length ? totalBreakMin / present.length : null,
+        overBreakDays: userRows.filter((r) => (r.over_break_min ?? 0) > 0).length,
+        totalOverBreakMin: userRows.reduce((s, r) => s + (r.over_break_min ?? 0), 0),
+        lateDays: checkIns.filter((m) => m > TARGET_LOGIN_MIN).length,
+        attendanceRate: operationalDays ? present.length / operationalDays : 0,
+        completionRate: present.length ? complete.length / present.length : 0,
+        lastDay: userRows.length ? userRows[userRows.length - 1].work_date : null,
+        rows: userRows,
+      })
+    }
+    return out
+  }, [rows, staffReq.data, operationalDays])
+
+  const filtered = useMemo(() => {
+    const data = stats.filter((s) =>
+      !search ||
+      (s.staff_name ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (s.username ?? '').toLowerCase().includes(search.toLowerCase())
+    )
+    return [...data].sort((a, b) => {
+      if (sortKey === 'name') {
+        const an = (a.staff_name ?? a.username ?? '').toLowerCase()
+        const bn = (b.staff_name ?? b.username ?? '').toLowerCase()
+        return sortDir === 'asc' ? (an > bn ? 1 : -1) : (an < bn ? 1 : -1)
+      }
+      const va = a[sortKey] as number | null
+      const vb = b[sortKey] as number | null
+      if (va == null) return 1; if (vb == null) return -1
+      return sortDir === 'asc' ? va - vb : vb - va
+    })
+  }, [stats, search, sortKey, sortDir])
+
+  const team = useMemo(() => {
+    const active = stats.filter((s) => s.daysPresent > 0)
+    const allCheckIns = rows.map((r) => minutesEST(r.login_at)).filter((m): m is number => m != null)
+    return {
+      active: active.length,
+      totalStaff: stats.length,
+      totalHours: stats.reduce((s, x) => s + x.totalHours, 0),
+      avgAttendance: active.length ? active.reduce((s, x) => s + x.attendanceRate, 0) / active.length : 0,
+      avgCheckIn: allCheckIns.length ? allCheckIns.reduce((a, b) => a + b, 0) / allCheckIns.length : null,
+      totalBreakMin: stats.reduce((s, x) => s + x.totalBreakMin, 0),
+      lateDays: stats.reduce((s, x) => s + x.lateDays, 0),
+    }
+  }, [stats, rows])
+
+  const topHours = useMemo(
+    () => [...stats].filter((s) => s.totalHours > 0).sort((a, b) => b.totalHours - a.totalHours).slice(0, 8)
+      .map((s) => ({ name: (s.staff_name || s.username || s.user_id).split(' ')[0], hours: Number(s.totalHours.toFixed(1)) })),
+    [stats],
+  )
+  const topBreaks = useMemo(
+    () => [...stats].filter((s) => s.totalBreakMin > 0).sort((a, b) => b.totalBreakMin - a.totalBreakMin).slice(0, 8)
+      .map((s) => ({ name: (s.staff_name || s.username || s.user_id).split(' ')[0], breakMin: s.totalBreakMin })),
+    [stats],
+  )
+
+  const handleSort = (key: keyof StaffStat | 'name') => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortKey(key); setSortDir(key === 'name' ? 'asc' : 'desc') }
+  }
+  const sa = (key: keyof StaffStat | 'name') => (sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '')
+
+  const loading = daysReq.loading
+  const error = daysReq.error
+
+  return (
+    <div>
+      {/* Window banner */}
+      <div className="glass mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl px-4 py-3 shadow-xl shadow-slate-900/5">
+        <div className="flex items-center gap-2 text-sm text-slate-600">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
+          <span className="font-medium text-slate-700">Last {SUMMARY_DAYS} days</span>
+          <span className="text-slate-400">·</span>
+          <span className="tabular-nums text-slate-500">{fullDate(from)} → {fullDate(to)}</span>
+        </div>
+        <span className="text-xs text-slate-400">{operationalDays} operational day{operationalDays === 1 ? '' : 's'} recorded</span>
+      </div>
+
+      {/* Team KPI cards */}
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        <MetricCard label="Active staff" value={team.active} sub={`of ${team.totalStaff} on record`} accent="#3B82F6" />
+        <MetricCard label="Total hours" value={fmtHours(team.totalHours)} sub="completed days" accent="#1D9E75" />
+        <MetricCard label="Avg attendance" value={`${Math.round(team.avgAttendance * 100)}%`} sub="of operational days" accent="#0EA5E9" />
+        <MetricCard label="Avg check-in" value={fmtClock(team.avgCheckIn)} sub="team-wide, EST" accent="#F59E0B" />
+        <MetricCard label="Break time" value={`${Math.round(team.totalBreakMin / 60)}h`} sub={`${team.totalBreakMin} min total`} accent="#7C3AED" />
+        <MetricCard label="Late check-ins" value={team.lateDays} sub="after 9:00 AM EST" accent="#EF4444" />
+      </div>
+
+      {/* Charts */}
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader title="Top staff by hours" subtitle={`Total worked hours over ${SUMMARY_DAYS} days`} />
+          <div className="h-72 px-2 py-4">
+            {loading ? <ChartLoading /> : topHours.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm text-slate-400">No completed days in window</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topHours} layout="vertical" margin={{ top: 0, right: 24, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                  <XAxis type="number" tickFormatter={(v) => `${v}h`} tick={{ fontSize: 12, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: '#475569' }} tickLine={false} axisLine={false} width={72} />
+                  <Tooltip cursor={{ fill: '#f8fafc' }} content={<BarTooltip unit="h" name="Hours" />} />
+                  <Bar dataKey="hours" name="Hours" radius={[0, 4, 4, 0]} fill="#2563eb" barSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="Break utilization" subtitle={`Total break minutes over ${SUMMARY_DAYS} days`} />
+          <div className="h-72 px-2 py-4">
+            {loading ? <ChartLoading /> : topBreaks.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm text-slate-400">No breaks recorded in window</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topBreaks} layout="vertical" margin={{ top: 0, right: 24, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                  <XAxis type="number" tickFormatter={(v) => `${v}m`} tick={{ fontSize: 12, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: '#475569' }} tickLine={false} axisLine={false} width={72} />
+                  <Tooltip cursor={{ fill: '#f8fafc' }} content={<BarTooltip unit=" min" name="Break" />} />
+                  <Bar dataKey="breakMin" name="Break minutes" radius={[0, 4, 4, 0]} fill="#7c3aed" barSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <input
+          type="text" placeholder="Search staff…" value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="glass-input w-52 rounded-lg border border-white/70 px-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+        />
+        <span className="ml-auto text-xs text-slate-400">{filtered.length} staff · click a row for details</span>
+      </div>
+
+      {/* Per-staff table */}
+      <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-white/50 bg-white/40">
+                {SUMMARY_COLUMNS.map((c) => (
+                  <th
+                    key={c.label}
+                    onClick={() => handleSort(c.key)}
+                    className={cx(
+                      'whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500 cursor-pointer select-none hover:text-slate-700',
+                      c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left',
+                    )}
+                  >
+                    {c.label}{sa(c.key)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={SUMMARY_COLUMNS.length} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
+              ) : error ? (
+                <tr><td colSpan={SUMMARY_COLUMNS.length} className="py-12 text-center text-sm text-red-500">{error}</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={SUMMARY_COLUMNS.length} className="py-12 text-center text-sm text-slate-400">No staff data in this window</td></tr>
+              ) : filtered.map((s) => (
+                <tr
+                  key={s.user_id}
+                  onClick={() => setSelected(s)}
+                  className="border-b border-white/40 hover:bg-white/50 transition-colors cursor-pointer"
+                >
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <Avatar name={s.staff_name || s.username} size={28} />
+                      <div className="leading-tight">
+                        <div className="text-xs font-medium text-slate-800">{s.staff_name || '—'}</div>
+                        {s.username && <div className="text-[11px] text-slate-400">@{s.username}</div>}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5 text-center text-xs tabular-nums text-slate-700">
+                    {s.daysPresent}<span className="text-slate-400">/{operationalDays}</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-center">
+                    <AttendancePill rate={s.attendanceRate} />
+                  </td>
+                  <td className="px-3 py-2.5 text-center text-xs tabular-nums text-slate-700">{fmtClock(s.avgCheckIn)}</td>
+                  <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-900">{fmtHours(s.totalHours)}</td>
+                  <td className="px-3 py-2.5 text-right text-xs tabular-nums text-slate-700">{fmtHours(s.avgHoursPerDay)}</td>
+                  <td className="px-3 py-2.5 text-right text-xs tabular-nums">
+                    <span className={cx(s.totalOverBreakMin > 0 ? 'text-violet-600 font-medium' : 'text-slate-700')}>{s.totalBreakMin}m</span>
+                    {s.avgBreakMin != null && <span className="text-slate-400"> · {Math.round(s.avgBreakMin)}m/d</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-center text-xs tabular-nums">
+                    {s.lateDays > 0
+                      ? <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700">{s.lateDays}</span>
+                      : <span className="text-slate-400">0</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-center text-xs tabular-nums text-slate-600">{Math.round(s.completionRate * 100)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {selected && (
+        <StaffDetailModal stat={selected} operationalDays={operationalDays} onClose={() => setSelected(null)} />
+      )}
+    </div>
+  )
+}
+
+function AttendancePill({ rate }: { rate: number }) {
+  const pct = Math.round(rate * 100)
+  const tone = pct >= 80 ? 'bg-emerald-50 text-emerald-700' : pct >= 50 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'
+  return <span className={cx('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium tabular-nums', tone)}>{pct}%</span>
+}
+
+// ─── Individual staff detail ────────────────────────────────────────────────────
+
+function DetailStat({ label, value, accent }: { label: string; value: ReactNode; accent?: string }) {
+  return (
+    <div className="rounded-xl bg-white/60 px-3 py-2.5 ring-1 ring-white/60" style={{ borderTop: accent ? `2px solid ${accent}` : undefined }}>
+      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-0.5 text-lg font-semibold tabular-nums text-slate-900">{value}</p>
+    </div>
+  )
+}
+
+function StaffDetailModal({ stat, operationalDays, onClose }: { stat: StaffStat; operationalDays: number; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const chartData = useMemo(
+    () => stat.rows.map((r) => ({
+      date: shortDate(r.work_date),
+      hours: r.hours != null ? Number(r.hours.toFixed(1)) : 0,
+      break: r.break_min ?? 0,
+    })),
+    [stat.rows],
+  )
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/30 p-4 backdrop-blur-sm sm:p-8"
+      onClick={onClose}
+    >
+      <div className="glass-strong w-full max-w-3xl rounded-2xl shadow-2xl shadow-slate-900/20" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-white/50 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <Avatar name={stat.staff_name || stat.username} size={40} />
+            <div className="leading-tight">
+              <h3 className="text-lg font-semibold text-slate-900">{stat.staff_name || labelFor(stat)}</h3>
+              <p className="text-xs text-slate-400">
+                {stat.username ? `@${stat.username} · ` : ''}Last {SUMMARY_DAYS} days{stat.lastDay ? ` · last seen ${shortDate(stat.lastDay)}` : ''}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        <div className="px-5 py-4">
+          {/* Stat grid */}
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            <DetailStat label="Days present" value={<>{stat.daysPresent}<span className="text-sm text-slate-400">/{operationalDays}</span></>} accent="#3B82F6" />
+            <DetailStat label="Total hours" value={fmtHours(stat.totalHours)} accent="#1D9E75" />
+            <DetailStat label="Avg hrs/day" value={fmtHours(stat.avgHoursPerDay)} accent="#0EA5E9" />
+            <DetailStat label="Net hours" value={fmtHours(stat.netHours)} accent="#10B981" />
+            <DetailStat label="Avg check-in" value={fmtClock(stat.avgCheckIn)} accent="#F59E0B" />
+            <DetailStat label="Avg check-out" value={fmtClock(stat.avgCheckOut)} accent="#6366F1" />
+            <DetailStat label="Break used" value={`${stat.totalBreakMin}m`} accent="#7C3AED" />
+            <DetailStat label="Late days" value={stat.lateDays} accent="#EF4444" />
+          </div>
+
+          {/* Secondary line */}
+          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
+            <span>Attendance <span className="font-semibold text-slate-700">{Math.round(stat.attendanceRate * 100)}%</span></span>
+            <span>Completion <span className="font-semibold text-slate-700">{Math.round(stat.completionRate * 100)}%</span></span>
+            <span>Avg break <span className="font-semibold text-slate-700">{stat.avgBreakMin != null ? `${Math.round(stat.avgBreakMin)}m/day` : '—'}</span></span>
+            <span>Over-allowance <span className={cx('font-semibold', stat.overBreakDays > 0 ? 'text-violet-600' : 'text-slate-700')}>{stat.overBreakDays} day{stat.overBreakDays === 1 ? '' : 's'} ({stat.totalOverBreakMin}m)</span></span>
+          </div>
+
+          {/* Daily hours chart */}
+          <div className="mt-4">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Daily hours</p>
+            <div className="h-40">
+              {chartData.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-sm text-slate-400">No activity in this window</div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 6, right: 8, left: -16, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={16} />
+                    <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={32} tickFormatter={(v) => `${v}h`} />
+                    <Tooltip cursor={{ fill: '#f8fafc' }} content={<BarTooltip unit="h" name="Hours" />} />
+                    <Bar dataKey="hours" name="hours" radius={[3, 3, 0, 0]} fill="#2563eb" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
+          {/* Day-by-day table */}
+          <div className="mt-4 max-h-64 overflow-y-auto rounded-xl ring-1 ring-white/60">
+            <table className="w-full border-collapse text-sm">
+              <thead className="sticky top-0">
+                <tr className="bg-white/80 backdrop-blur">
+                  {['Date', 'Check-in', 'Check-out', 'Hours', 'Break', 'Status'].map((h, i) => (
+                    <th key={h} className={cx('whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500', i === 0 ? 'text-left' : 'text-right', h === 'Status' && 'text-center')}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {stat.rows.length === 0 ? (
+                  <tr><td colSpan={6} className="py-8 text-center text-sm text-slate-400">No days recorded</td></tr>
+                ) : stat.rows.slice().reverse().map((r, i) => {
+                  const late = (minutesEST(r.login_at) ?? 0) > TARGET_LOGIN_MIN && r.login_at != null
+                  return (
+                    <tr key={i} className="border-t border-white/50 hover:bg-white/40">
+                      <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-600">{fullDate(r.work_date)}</td>
+                      <td className={cx('whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums', late ? 'text-amber-600 font-medium' : 'text-slate-700')}>{fmtAttendanceTime(r.login_at)}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-slate-700">{fmtAttendanceTime(r.logout_at)}</td>
+                      <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-700">{r.hours != null ? `${r.hours}h` : '—'}</td>
+                      <td className={cx('px-3 py-2 text-right text-xs tabular-nums', r.over_break_min > 0 ? 'text-violet-600 font-medium' : 'text-slate-700')}>{r.break_min}m</td>
+                      <td className="px-3 py-2 text-center"><DayStatus row={r} /></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
