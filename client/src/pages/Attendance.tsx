@@ -15,7 +15,6 @@ import { PageHeader } from '../components/Layout'
 import { Card, CardHeader, Spinner, cx } from '../components/ui'
 
 const TZ = 'America/New_York'
-const SUMMARY_DAYS = 32          // staff-summary look-back window (inclusive)
 const TARGET_LOGIN_MIN = 9 * 60  // 9:00 AM EST — late threshold
 
 // ─── Date / time helpers ───────────────────────────────────────────────────────
@@ -24,12 +23,34 @@ function todayEST(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date())
 }
 
-/** Subtract whole days from a YYYY-MM-DD string (calendar-safe, no TZ drift). */
-function isoMinusDays(iso: string, n: number): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  const dt = new Date(Date.UTC(y, m - 1, d))
-  dt.setUTCDate(dt.getUTCDate() - n)
-  return dt.toISOString().slice(0, 10)
+/** Current calendar month in the org timezone, as 'YYYY-MM'. */
+function thisMonthEST(): string {
+  return todayEST().slice(0, 7)
+}
+
+/** Shift a 'YYYY-MM' month string by `delta` months. */
+function addMonth(ym: string, delta: number): string {
+  const [y, m] = ym.split('-').map(Number)
+  const d = new Date(Date.UTC(y, m - 1 + delta, 1))
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+/** Human label for a 'YYYY-MM' month, e.g. "June 2026". */
+function monthLabel(ym: string): string {
+  const [y, m] = ym.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+}
+
+/**
+ * Inclusive date bounds for a calendar month. The end is capped at "today"
+ * for the current month so averages aren't diluted by future empty days.
+ */
+function monthBounds(ym: string): { from: string; to: string } {
+  const [y, m] = ym.split('-').map(Number)
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  const end = `${ym}-${String(lastDay).padStart(2, '0')}`
+  const todayStr = todayEST()
+  return { from: `${ym}-01`, to: end > todayStr ? todayStr : end }
 }
 
 /** Minutes-since-midnight of a UTC timestamp, in the org timezone. */
@@ -529,8 +550,9 @@ const SUMMARY_COLUMNS: { label: string; key: keyof StaffStat | 'name'; align: 'l
 ]
 
 function StaffSummaryView() {
-  const to = todayEST()
-  const from = isoMinusDays(to, SUMMARY_DAYS - 1)
+  const currentMonth = thisMonthEST()
+  const [month, setMonth] = useState(currentMonth)
+  const { from, to } = monthBounds(month)
 
   const daysReq = useAsync(() => api.attendanceDays({ from, to }), [from, to])
   const staffReq = useAsync(() => api.attendanceStaff(), [])
@@ -652,15 +674,42 @@ function StaffSummaryView() {
 
   return (
     <div>
-      {/* Window banner */}
-      <div className="glass mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl px-4 py-3 shadow-xl shadow-slate-900/5">
-        <div className="flex items-center gap-2 text-sm text-slate-600">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
-          <span className="font-medium text-slate-700">Last {SUMMARY_DAYS} days</span>
-          <span className="text-slate-400">·</span>
-          <span className="tabular-nums text-slate-500">{fullDate(from)} → {fullDate(to)}</span>
+      {/* Month navigator */}
+      <div className="glass mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl px-4 py-2.5 shadow-xl shadow-slate-900/5">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setMonth((m) => addMonth(m, -1))}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white/70 hover:text-slate-700"
+            aria-label="Previous month"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6" /></svg>
+          </button>
+          <div className="flex items-center gap-2 text-sm">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+            <span className="min-w-34 text-center font-semibold text-slate-800">{monthLabel(month)}</span>
+          </div>
+          <button
+            onClick={() => setMonth((m) => addMonth(m, 1))}
+            disabled={month >= currentMonth}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white/70 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent"
+            aria-label="Next month"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6" /></svg>
+          </button>
+          {month !== currentMonth && (
+            <button
+              onClick={() => setMonth(currentMonth)}
+              className="glass-input ml-1 rounded-lg border border-white/70 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-white/80"
+            >
+              This month
+            </button>
+          )}
         </div>
-        <span className="text-xs text-slate-400">{operationalDays} operational day{operationalDays === 1 ? '' : 's'} recorded</span>
+        <span className="text-xs text-slate-400">
+          <span className="tabular-nums">{fullDate(from)} → {fullDate(to)}</span>
+          <span className="mx-1.5">·</span>
+          {operationalDays} operational day{operationalDays === 1 ? '' : 's'}
+        </span>
       </div>
 
       {/* Team KPI cards */}
@@ -676,7 +725,7 @@ function StaffSummaryView() {
       {/* Charts */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader title="Top staff by hours" subtitle={`Total worked hours over ${SUMMARY_DAYS} days`} />
+          <CardHeader title="Top staff by hours" subtitle={`Total worked hours · ${monthLabel(month)}`} />
           <div className="h-72 px-2 py-4">
             {loading ? <ChartLoading /> : topHours.length === 0 ? (
               <div className="flex h-full items-center justify-center text-sm text-slate-400">No completed days in window</div>
@@ -695,7 +744,7 @@ function StaffSummaryView() {
         </Card>
 
         <Card>
-          <CardHeader title="Break utilization" subtitle={`Total break minutes over ${SUMMARY_DAYS} days`} />
+          <CardHeader title="Break utilization" subtitle={`Total break minutes · ${monthLabel(month)}`} />
           <div className="h-72 px-2 py-4">
             {loading ? <ChartLoading /> : topBreaks.length === 0 ? (
               <div className="flex h-full items-center justify-center text-sm text-slate-400">No breaks recorded in window</div>
@@ -793,7 +842,7 @@ function StaffSummaryView() {
       </div>
 
       {selected && (
-        <StaffDetailModal stat={selected} operationalDays={operationalDays} onClose={() => setSelected(null)} />
+        <StaffDetailModal stat={selected} operationalDays={operationalDays} periodLabel={monthLabel(month)} onClose={() => setSelected(null)} />
       )}
     </div>
   )
@@ -816,7 +865,7 @@ function DetailStat({ label, value, accent }: { label: string; value: ReactNode;
   )
 }
 
-function StaffDetailModal({ stat, operationalDays, onClose }: { stat: StaffStat; operationalDays: number; onClose: () => void }) {
+function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { stat: StaffStat; operationalDays: number; periodLabel: string; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
@@ -845,7 +894,7 @@ function StaffDetailModal({ stat, operationalDays, onClose }: { stat: StaffStat;
             <div className="leading-tight">
               <h3 className="text-lg font-semibold text-slate-900">{stat.staff_name || labelFor(stat)}</h3>
               <p className="text-xs text-slate-400">
-                {stat.username ? `@${stat.username} · ` : ''}Last {SUMMARY_DAYS} days{stat.lastDay ? ` · last seen ${shortDate(stat.lastDay)}` : ''}
+                {stat.username ? `@${stat.username} · ` : ''}{periodLabel}{stat.lastDay ? ` · last seen ${shortDate(stat.lastDay)}` : ''}
               </p>
             </div>
           </div>
