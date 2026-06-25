@@ -32,6 +32,7 @@ final class RecordController
             'counted'     => 'r.counted',
             'answered'    => 'r.answered',
             'missed'      => 'r.missed',
+            'rate'        => 'r.rate',
         ];
         $sort = $sortMap[Http::query('sort', 'total_bill')] ?? 'r.total_bill';
         $dir = strtolower((string) Http::query('dir', 'desc')) === 'asc' ? 'ASC' : 'DESC';

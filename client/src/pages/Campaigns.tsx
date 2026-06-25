@@ -49,7 +49,12 @@ function CampaignsPage() {
     campaigns.reload()
   }
 
-  const list = campaigns.data ?? []
+  // Sort by avg rate (cost ÷ counted) high → low, matching the report tables.
+  const list = (campaigns.data ?? []).slice().sort((a, b) => {
+    const ra = a.counted > 0 ? a.cost / a.counted : 0
+    const rb = b.counted > 0 ? b.cost / b.counted : 0
+    return rb - ra
+  })
 
   return (
     <div>

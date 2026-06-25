@@ -44,7 +44,8 @@ function BuyersPage() {
     buyers.reload()
   }
 
-  const list = buyers.data ?? []
+  // Sort by rate high → low, matching the report tables.
+  const list = (buyers.data ?? []).slice().sort((a, b) => b.rate - a.rate)
 
   return (
     <div>

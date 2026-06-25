@@ -6,6 +6,7 @@ export default function Records() {
       type="buyer"
       title="Leads Record"
       subtitle="Revenue — buyer call records"
+      theme="navy"
     />
   )
 }

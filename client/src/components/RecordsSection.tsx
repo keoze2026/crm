@@ -157,7 +157,7 @@ export default function RecordsSection({
 
   const [filters, setFilters] = useState<RecordFilters>({
     type, from: '', to: '', search: '', buyer_id: '', campaign_id: '',
-    sort: 'total_bill', dir: 'desc', page: 1, per_page: 35,
+    sort: 'rate', dir: 'desc', page: 1, per_page: 35,
   })
   const [modalOpen,  setModalOpen]  = useState(false)
   const [editing,    setEditing]    = useState<CallRecord | null>(null)
@@ -470,7 +470,7 @@ export default function RecordsSection({
                   <ThNum onClick={() => set({ sort: 'answered',   dir: nextDir(filters, 'answered')   })} active={filters.sort === 'answered'}   dir={filters.dir}>Answered</ThNum>
                   <ThNum onClick={() => set({ sort: 'missed',     dir: nextDir(filters, 'missed')     })} active={filters.sort === 'missed'}     dir={filters.dir}>Missed</ThNum>
                   <ThNum onClick={() => set({ sort: 'counted',    dir: nextDir(filters, 'counted')    })} active={filters.sort === 'counted'}    dir={filters.dir}>Counted</ThNum>
-                  <th className="px-4 py-3 text-center font-medium">Rate</th>
+                  <ThNum onClick={() => set({ sort: 'rate',       dir: nextDir(filters, 'rate')       })} active={filters.sort === 'rate'}       dir={filters.dir}>Rate</ThNum>
                   <ThNum onClick={() => set({ sort: 'total_bill', dir: nextDir(filters, 'total_bill') })} active={filters.sort === 'total_bill'} dir={filters.dir}>Total</ThNum>
                   <th className="px-4 py-3" />
                 </tr>
