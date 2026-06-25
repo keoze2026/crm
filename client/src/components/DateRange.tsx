@@ -107,7 +107,7 @@ export function DateRangeControl({ value, onChange }: { value: Range; onChange: 
   const [draft,       setDraft]       = useState<Range>(value)
   const [selecting,   setSelecting]   = useState<'from' | 'to'>('from')
   const [hover,       setHover]       = useState('')
-  const [dropPos,     setDropPos]     = useState({ top: 0, left: 0 })
+  const [dropPos,     setDropPos]     = useState({ top: 0, left: 0, width: 320 })
   const [presetOpen,  setPresetOpen]  = useState(false)
 
   const wrapRef    = useRef<HTMLDivElement>(null)
@@ -120,10 +120,20 @@ export function DateRangeControl({ value, onChange }: { value: Range; onChange: 
   useEffect(() => { setDraft(value) }, [value.from, value.to])
 
   useLayoutEffect(() => {
-    if (open && triggerRef.current) {
-      const r = triggerRef.current.getBoundingClientRect()
-      setDropPos({ top: r.bottom + window.scrollY + 6, left: r.left + window.scrollX })
-    }
+    if (!open || !triggerRef.current) return
+    const r = triggerRef.current.getBoundingClientRect()
+    const margin = 8
+    // Shrink to fit narrow screens so the calendar never overflows the viewport.
+    const width = Math.min(320, window.innerWidth - margin * 2)
+    const estHeight = 470 // presets + calendar + footer
+    // Align under the trigger, then clamp inside the viewport horizontally.
+    let left = r.left
+    if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width
+    if (left < margin) left = margin
+    // Open below; flip above when there isn't room and the space above is larger.
+    let top = r.bottom + 6
+    if (top + estHeight > window.innerHeight && r.top - estHeight - 6 > 0) top = r.top - estHeight - 6
+    setDropPos({ top: top + window.scrollY, left: left + window.scrollX, width })
   }, [open])
 
   useEffect(() => {
@@ -193,8 +203,8 @@ export function DateRangeControl({ value, onChange }: { value: Range; onChange: 
   const dropdown = (
     <div
       data-datepicker
-      className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
-      style={{ position: 'absolute', top: dropPos.top, left: dropPos.left, width: 320, zIndex: 9999 }}
+      className="overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
+      style={{ position: 'absolute', top: dropPos.top, left: dropPos.left, width: dropPos.width, maxHeight: 'calc(100vh - 16px)', zIndex: 9999 }}
     >
       <div className="p-4">
         {/* Presets dropdown */}

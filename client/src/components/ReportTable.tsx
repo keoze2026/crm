@@ -92,7 +92,7 @@ export function SectionTable({ dateLabel, cols, rows, totals }: { dateLabel: str
   const span = Math.max(rows.length, 1)
   return (
     <div className="overflow-x-auto">
-      <table className="w-full table-fixed border-collapse text-sm">
+      <table className="w-full min-w-180 table-fixed border-collapse text-sm">
         <colgroup>
           <col style={{ width: '11%' }} />{/* Date */}
           {cols.map((c) => <col key={c.label} style={{ width: c.w }} />)}
@@ -109,7 +109,7 @@ export function SectionTable({ dateLabel, cols, rows, totals }: { dateLabel: str
           {rows.length === 0 ? (
             <tr>
               <td className="border border-white bg-[#bfdeeb] px-2 py-2 text-center align-middle font-bold leading-tight text-[#1a3654]">{dateLabel}</td>
-              {cols.map((c) => <td key={c.label} className="border border-white bg-[#d4e9f2] py-2 pl-10 pr-2 text-center text-slate-400"><Box w={c.box}>—</Box></td>)}
+              {cols.map((c) => <td key={c.label} className="border border-white bg-[#d4e9f2] px-2 py-2 text-center text-slate-400"><Box w={c.box}>—</Box></td>)}
             </tr>
           ) : (
             rows.map((cells, ri) => (
@@ -120,7 +120,7 @@ export function SectionTable({ dateLabel, cols, rows, totals }: { dateLabel: str
                   </td>
                 )}
                 {cells.map((cell, ci) => (
-                  <td key={ci} className={cx('border border-white bg-[#d4e9f2] py-2 pl-10 pr-2 text-center', KIND_CLASS[cols[ci].kind])}>
+                  <td key={ci} className={cx('border border-white bg-[#d4e9f2] px-2 py-2 text-center', KIND_CLASS[cols[ci].kind])}>
                     <Box w={cols[ci].box}>{cell}</Box>
                   </td>
                 ))}
@@ -134,7 +134,7 @@ export function SectionTable({ dateLabel, cols, rows, totals }: { dateLabel: str
             {/* "TOTAL" sits under the DATE column; each data column shows its total. */}
             <td className="border border-white px-4 py-2.5 text-center text-xs font-bold uppercase tracking-wide">TOTAL</td>
             {totals.map((cell, ci) => (
-              <td key={ci} className="border border-white py-2.5 pl-10 pr-2 text-center font-bold tabular-nums">
+              <td key={ci} className="border border-white px-2 py-2.5 text-center font-bold tabular-nums">
                 <Box w={cols[ci].box}>{cell}</Box>
               </td>
             ))}
