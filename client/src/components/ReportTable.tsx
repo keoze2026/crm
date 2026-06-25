@@ -38,9 +38,9 @@ export const campCols: Col[] = [
   { label: 'TOTAL BILL',  w: '17%', box: 'w-28', kind: 'total'},
 ]
 
-/** Buyer (revenue) rows + totals, sorted by Total Bill high → low. */
+/** Buyer (revenue) rows + totals, sorted by Rate high → low. */
 export function buyerTableData(data: CompleteReport) {
-  const sorted = [...data.buyers].sort((a, b) => b.total_bill - a.total_bill)
+  const sorted = [...data.buyers].sort((a, b) => b.rate - a.rate)
   const rows = sorted.map((b) => [
     b.code, num(b.answered), num(b.missed), num(REPLACEMENT), num(b.counted), money2(b.rate), money2(b.total_bill),
   ])
@@ -51,9 +51,9 @@ export function buyerTableData(data: CompleteReport) {
   return { rows, totals }
 }
 
-/** Campaign (cost) rows + totals, sorted by Total Bill high → low. */
+/** Campaign (cost) rows + totals, sorted by Rate high → low. */
 export function campTableData(data: CompleteReport) {
-  const sorted = [...data.campaigns].sort((a, b) => b.total_bill - a.total_bill)
+  const sorted = [...data.campaigns].sort((a, b) => b.rate - a.rate)
   const rows = sorted.map((c) => [
     c.camp, c.destination, num(c.answered), num(c.missed), num(REPLACEMENT), num(c.counted), money2(c.rate), money2(c.total_bill),
   ])
