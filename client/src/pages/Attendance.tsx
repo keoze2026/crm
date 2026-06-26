@@ -239,7 +239,6 @@ function RosterView() {
   const rosterReq = useAsync(() => api.attendanceRoster(date), [date])
   const staffReq = useAsync(() => api.attendanceStaff(), [])
   const liveReq = useAsync(() => api.attendanceLive(), [])
-  const lateReq = useAsync(() => api.attendanceExceptions('late', date, date), [date])
   const overBreakReq = useAsync(() => api.attendanceExceptions('over_break', date, date), [date])
 
   const rows = rosterReq.data?.rows ?? []
@@ -275,9 +274,8 @@ function RosterView() {
       avgHours: workedRows.length
         ? (workedRows.reduce((s, r) => s + (r.hours ?? 0), 0) / workedRows.length).toFixed(1)
         : '—',
-      late: lateReq.data?.rows?.length ?? 0,
     }
-  }, [rows, lateReq.data])
+  }, [rows])
 
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
@@ -305,11 +303,10 @@ function RosterView() {
       </div>
 
       {/* Metric cards */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <MetricCard label="Present today" value={metrics.present} sub={`of ${staffReq.data?.length ?? '?'} staff`} accent="#1D9E75" />
         <MetricCard label="Still checked in" value={metrics.stillIn} sub="no logout yet" accent="#3B82F6" />
         <MetricCard label="Avg hours worked" value={metrics.avgHours !== '—' ? `${metrics.avgHours}h` : '—'} sub="checked-out only" accent="#F59E0B" />
-        <MetricCard label="Late arrivals" value={metrics.late} sub="after 9:00 AM EST" accent="#EF4444" />
       </div>
 
       {/* Alert cards */}
@@ -521,7 +518,6 @@ const SUMMARY_COLUMNS: { label: string; key: keyof StaffStat | 'name'; align: 'l
   { label: 'Total hours', key: 'totalHours', align: 'right' },
   { label: 'Avg hrs/day', key: 'avgHoursPerDay', align: 'right' },
   { label: 'Break used', key: 'totalBreakMin', align: 'right' },
-  { label: 'Late', key: 'lateDays', align: 'center' },
 ]
 
 function StaffSummaryView() {
@@ -801,11 +797,6 @@ function StaffSummaryView() {
                   <td className="px-3 py-2.5 text-right text-xs tabular-nums text-slate-700">{fmtHours(s.avgHoursPerDay)}</td>
                   <td className="px-3 py-2.5 text-right text-xs tabular-nums">
                     <span className={cx(s.totalOverBreakMin > 0 ? 'text-violet-600 font-medium' : 'text-slate-700')}>{fmtHours(s.totalBreakMin / 60)}</span>
-                  </td>
-                  <td className="px-3 py-2.5 text-center text-xs tabular-nums">
-                    {s.lateDays > 0
-                      ? <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700">{s.lateDays}</span>
-                      : <span className="text-slate-400">0</span>}
                   </td>
                 </tr>
               ))}
