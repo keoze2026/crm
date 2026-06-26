@@ -313,7 +313,7 @@ function RosterView() {
       </div>
 
       {/* Alert cards */}
-      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {/* Absent */}
         <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden" style={{ borderTop: '3px solid #EF4444' }}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/50">
@@ -332,30 +332,6 @@ function RosterView() {
                     <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
                     {m.staff_name || m.username || m.user_id}
                   </span>
-                ))}
-              </div>
-            }
-          </div>
-        </div>
-
-        {/* Late */}
-        <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden" style={{ borderTop: '3px solid #F59E0B' }}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/50">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Late check-ins</p>
-              <p className="text-xs text-slate-400 mt-0.5">After 9:00 AM EST</p>
-            </div>
-            <span className={cx('text-2xl font-semibold', metrics.late > 0 ? 'text-amber-500' : 'text-slate-800')}>{metrics.late}</span>
-          </div>
-          <div className="px-4 py-3 min-h-12">
-            {metrics.late === 0
-              ? <p className="text-xs text-emerald-600">✓ No late check-ins</p>
-              : <div className="flex flex-col gap-1.5">
-                {(lateReq.data?.rows ?? []).map((r, i) => (
-                  <div key={i} className="flex items-center justify-between text-xs">
-                    <span className="rounded-full bg-amber-50 px-2.5 py-1 font-medium text-amber-700">{r.staff_name || r.user_id}</span>
-                    <span className="text-slate-400">{r.local_login}</span>
-                  </div>
                 ))}
               </div>
             }
@@ -546,7 +522,6 @@ const SUMMARY_COLUMNS: { label: string; key: keyof StaffStat | 'name'; align: 'l
   { label: 'Avg hrs/day', key: 'avgHoursPerDay', align: 'right' },
   { label: 'Break used', key: 'totalBreakMin', align: 'right' },
   { label: 'Late', key: 'lateDays', align: 'center' },
-  { label: 'Completion', key: 'completionRate', align: 'center' },
 ]
 
 function StaffSummaryView() {
@@ -825,15 +800,13 @@ function StaffSummaryView() {
                   <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-900">{fmtHours(s.totalHours)}</td>
                   <td className="px-3 py-2.5 text-right text-xs tabular-nums text-slate-700">{fmtHours(s.avgHoursPerDay)}</td>
                   <td className="px-3 py-2.5 text-right text-xs tabular-nums">
-                    <span className={cx(s.totalOverBreakMin > 0 ? 'text-violet-600 font-medium' : 'text-slate-700')}>{s.totalBreakMin}m</span>
-                    {s.avgBreakMin != null && <span className="text-slate-400"> · {Math.round(s.avgBreakMin)}m/d</span>}
+                    <span className={cx(s.totalOverBreakMin > 0 ? 'text-violet-600 font-medium' : 'text-slate-700')}>{fmtHours(s.totalBreakMin / 60)}</span>
                   </td>
                   <td className="px-3 py-2.5 text-center text-xs tabular-nums">
                     {s.lateDays > 0
                       ? <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700">{s.lateDays}</span>
                       : <span className="text-slate-400">0</span>}
                   </td>
-                  <td className="px-3 py-2.5 text-center text-xs tabular-nums text-slate-600">{Math.round(s.completionRate * 100)}%</td>
                 </tr>
               ))}
             </tbody>
