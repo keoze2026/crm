@@ -20,6 +20,7 @@ import {
 import { api } from '../api/client'
 import { DateRangeControl, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
+import { Protected } from '../components/PasswordGate'
 import { Card, CardHeader, cx, Spinner } from '../components/ui'
 import { daysAgo, formatPeriod, money, num, pct, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
@@ -166,6 +167,14 @@ async function generateDashboardPdf(data: DashboardData) {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
+  return (
+    <Protected pageTitle="Dashboard" password="dashboard-2026" storageKey="lock-dashboard">
+      <DashboardPage />
+    </Protected>
+  )
+}
+
+function DashboardPage() {
   const [range, setRange] = useState<Range>({ from: daysAgo(6), to: today() })
   const [granularity, setGranularity] = useState<Granularity>('day')
   // const [pdfLoading, setPdfLoading] = useState(false)  // PDF export disabled
