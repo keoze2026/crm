@@ -174,18 +174,18 @@ export function buildTeamBreakPdf(stats: BreakStat[], from: string, to: string):
   const body: RowInput[] = stats.map((s) => [
     labelOf(s),
     String(s.daysPresent),
-    hoursCell(s.totalHours),
     fmtHm(s.totalBreakMin),
     fmtHm(s.totalOverMin),
+    hoursCell(s.totalHours),
   ])
-  if (body.length === 0) body.push(['No members active in this period', '0', '0.0h', '0m', '0m'])
-  body.push(['TEAM TOTAL', String(totalDays), hoursCell(totalHours), fmtHm(totalBreak), fmtHm(totalOver)])
+  if (body.length === 0) body.push(['No members active in this period', '0', '0m', '0m', '0.0h'])
+  body.push(['TEAM TOTAL', String(totalDays), fmtHm(totalBreak), fmtHm(totalOver), hoursCell(totalHours)])
   const totalIdx = body.length - 1
 
   autoTable(doc, {
     startY: y + 16,
     theme: 'grid',
-    head: [['STAFF', 'DAYS LOGGED IN', 'WORKED HOURS', 'BREAK USED', 'BREAK-TIME\nEXCEEDING\nALLOWANCE']],
+    head: [['STAFF', 'DAYS LOGGED IN', 'BREAK USED', 'BREAK-TIME\nEXCEEDING\nALLOWANCE', 'WORKED HOURS']],
     body,
     styles: baseStyles,
     headStyles: navyHead,
@@ -205,7 +205,7 @@ export function buildTeamBreakPdf(stats: BreakStat[], from: string, to: string):
       }
       const stat = stats[d.row.index]
       if (!stat) return
-      if (d.column.index === 4 && stat.totalOverMin > 0) {
+      if (d.column.index === 3 && stat.totalOverMin > 0) {
         d.cell.styles.textColor = RED
         d.cell.styles.fontStyle = 'bold'
       }
@@ -317,22 +317,22 @@ const round1 = (n: number): number => Math.round(n * 10) / 10
 export function teamBreakSheet(stats: BreakStat[]): XlsxSheet {
   return {
     name: 'Overall Staff Report',
-    head: ['Staff', 'Username', 'Days logged in', 'Worked hours', 'Break used (min)', 'Break-time exceeding allowance (min)'],
-    formats: ['text', 'text', 'integer', 'number', 'integer', 'integer'],
+    head: ['Staff', 'Username', 'Days logged in', 'Break used (min)', 'Break-time exceeding allowance (min)', 'Worked hours'],
+    formats: ['text', 'text', 'integer', 'integer', 'integer', 'number'],
     rows: stats.map((s) => [
       s.staff_name ?? '',
       s.username ? `@${s.username}` : '',
       s.daysPresent,
-      round1(s.totalHours),
       s.totalBreakMin,
       s.totalOverMin,
+      round1(s.totalHours),
     ]),
     foot: [
       'TOTAL', '',
       stats.reduce((s, x) => s + x.daysPresent, 0),
-      round1(stats.reduce((s, x) => s + x.totalHours, 0)),
       stats.reduce((s, x) => s + x.totalBreakMin, 0),
       stats.reduce((s, x) => s + x.totalOverMin, 0),
+      round1(stats.reduce((s, x) => s + x.totalHours, 0)),
     ],
   }
 }

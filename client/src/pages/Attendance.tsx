@@ -1124,9 +1124,9 @@ function BreakReportsView() {
                 {([
                   { label: 'Staff', cls: 'text-left' },
                   { label: 'Days Logged In', cls: 'text-center' },
-                  { label: 'Worked Hours', cls: 'text-right' },
                   { label: 'Break Used', cls: 'text-right' },
                   { label: 'Break-Time Exceeding Allowance', cls: 'text-right' },
+                  { label: 'Worked Hours', cls: 'text-right' },
                 ] as const).map((c) => (
                   <th key={c.label} className={cx('px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500', c.cls)}>
                     {c.label}
@@ -1153,11 +1153,11 @@ function BreakReportsView() {
                     </div>
                   </td>
                   <td className="px-3 py-2.5 text-center text-xs tabular-nums text-slate-700">{s.daysPresent}</td>
-                  <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-900">{hoursCell(s.totalHours)}</td>
                   <td className="px-3 py-2.5 text-right text-xs tabular-nums text-slate-700">{fmtHm(s.totalBreakMin)}</td>
                   <td className={cx('px-3 py-2.5 text-right text-xs font-semibold tabular-nums', s.totalOverMin > 0 ? 'text-red-600' : 'text-slate-400')}>
                     {fmtHm(s.totalOverMin)}
                   </td>
+                  <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-900">{hoursCell(s.totalHours)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1166,9 +1166,9 @@ function BreakReportsView() {
                 <tr className="border-t border-white/60 bg-white/50">
                   <td className="px-3 py-2.5 text-xs font-semibold text-slate-700">Team total</td>
                   <td className="px-3 py-2.5 text-center text-xs font-semibold tabular-nums text-slate-700">{team.presentDays}</td>
-                  <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-900">{hoursCell(team.totalHours)}</td>
                   <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-700">{fmtHm(team.totalBreak)}</td>
                   <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-red-600">{fmtHm(team.totalOver)}</td>
+                  <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-900">{hoursCell(team.totalHours)}</td>
                 </tr>
               </tfoot>
             )}
