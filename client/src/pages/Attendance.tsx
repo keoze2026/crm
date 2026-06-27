@@ -12,7 +12,22 @@ import { api, fmtAttendanceTime } from '../api/client'
 import { useAsync } from '../lib/useAsync'
 import type { AttendanceDay, AttendanceStaff } from '../types'
 import { PageHeader } from '../components/Layout'
-import { Card, CardHeader, Spinner, cx } from '../components/ui'
+import { Button, Card, CardHeader, Spinner, cx } from '../components/ui'
+import { DateRangeControl, type Range } from '../components/DateRange'
+import { fileDateRange } from '../lib/format'
+import { saveXlsx } from '../lib/xlsx'
+import {
+  aggregateBreaks,
+  buildAllUsersBreakPdf,
+  buildTeamBreakPdf,
+  buildUserBreakPdf,
+  fmtHm,
+  labelOf,
+  periodLabel,
+  teamBreakSheet,
+  userBreakSheet,
+  type BreakStat,
+} from '../lib/attendanceReports'
 
 const TZ = 'America/New_York'
 const TARGET_LOGIN_MIN = 9 * 60  // 9:00 AM EST — late threshold
@@ -51,6 +66,28 @@ function monthBounds(ym: string): { from: string; to: string } {
   const end = `${ym}-${String(lastDay).padStart(2, '0')}`
   const todayStr = todayEST()
   return { from: `${ym}-01`, to: end > todayStr ? todayStr : end }
+}
+
+/** Format a UTC date object back to a 'YYYY-MM-DD' string. */
+function isoFromUTC(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+}
+
+/**
+ * Inclusive Mon–Sun bounds for the week `delta` weeks from the current one,
+ * in the org timezone. The current week is capped at today.
+ */
+function weekBounds(delta: number): { from: string; to: string } {
+  const [y, m, d] = todayEST().split('-').map(Number)
+  const base = new Date(Date.UTC(y, m - 1, d))
+  const dow = (base.getUTCDay() + 6) % 7  // 0 = Monday
+  const monday = new Date(base)
+  monday.setUTCDate(base.getUTCDate() - dow + delta * 7)
+  const sunday = new Date(monday)
+  sunday.setUTCDate(monday.getUTCDate() + 6)
+  const todayStr = todayEST()
+  const to = isoFromUTC(sunday)
+  return { from: isoFromUTC(monday), to: to > todayStr ? todayStr : to }
 }
 
 /** Minutes-since-midnight of a UTC timestamp, in the org timezone. */
@@ -165,7 +202,7 @@ function BarTooltip({ active, payload, label, unit, name }: {
 
 // ─── Tab switcher ───────────────────────────────────────────────────────────────
 
-type Tab = 'roster' | 'summary'
+type Tab = 'roster' | 'summary' | 'reports'
 
 const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
   {
@@ -175,6 +212,10 @@ const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
   {
     id: 'summary', label: 'Staff Summary',
     icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18" /><path d="M18 17V9M13 17V5M8 17v-3" /></svg>,
+  },
+  {
+    id: 'reports', label: 'Break Reports',
+    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" /></svg>,
   },
 ]
 
@@ -218,7 +259,7 @@ export default function Attendance() {
         ))}
       </div>
 
-      {tab === 'roster' ? <RosterView /> : <StaffSummaryView />}
+      {tab === 'roster' ? <RosterView /> : tab === 'summary' ? <StaffSummaryView /> : <BreakReportsView />}
     </div>
   )
 }
@@ -940,5 +981,300 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
         </div>
       </div>
     </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  Break-overage reports  (weekly / monthly · team + per-member · PDF & Excel)
+// ════════════════════════════════════════════════════════════════════════════════
+
+const REPORT_PRESETS: { label: string; get: () => Range }[] = [
+  { label: 'This week',  get: () => weekBounds(0) },
+  { label: 'Last week',  get: () => weekBounds(-1) },
+  { label: 'This month', get: () => monthBounds(thisMonthEST()) },
+  { label: 'Last month', get: () => monthBounds(addMonth(thisMonthEST(), -1)) },
+]
+
+/** Filename-safe member label, e.g. "Jane Doe" → "Jane_Doe". */
+function safeFileName(s: BreakStat): string {
+  return labelOf(s).replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || s.user_id
+}
+
+function BreakReportsView() {
+  const [range, setRange] = useState<Range>(() => monthBounds(thisMonthEST()))
+  const [selectedUser, setSelectedUser] = useState('')
+  const [busy, setBusy] = useState<Record<string, boolean>>({})
+
+  const daysReq = useAsync(() => api.attendanceDays({ from: range.from, to: range.to }), [range.from, range.to])
+  const rows = daysReq.data?.rows ?? []
+  const stats = useMemo(() => aggregateBreaks(rows), [rows])
+  const operationalDays = useMemo(() => new Set(rows.map((r) => r.work_date)).size, [rows])
+
+  const team = useMemo(() => {
+    const totalBreak = stats.reduce((s, x) => s + x.totalBreakMin, 0)
+    const presentDays = stats.reduce((s, x) => s + x.daysPresent, 0)
+    return {
+      totalOver: stats.reduce((s, x) => s + x.totalOverMin, 0),
+      totalBreak,
+      presentDays,
+      overDays: stats.reduce((s, x) => s + x.overDays, 0),
+      overMembers: stats.filter((x) => x.totalOverMin > 0).length,
+      members: stats.length,
+      avgBreak: presentDays ? totalBreak / presentDays : 0,
+    }
+  }, [stats])
+
+  const selectedStat = useMemo(() => stats.find((s) => s.user_id === selectedUser) ?? null, [stats, selectedUser])
+
+  const activePreset = REPORT_PRESETS.find((p) => {
+    const r = p.get()
+    return r.from === range.from && r.to === range.to
+  })
+
+  const fileTag = fileDateRange(range.from, range.to)
+  const periodText = periodLabel(range.from, range.to)
+  const hasData = stats.length > 0
+
+  // Defer the synchronous PDF/Excel build one tick so the button spinner can paint.
+  const run = (key: string, fn: () => void) => {
+    setBusy((b) => ({ ...b, [key]: true }))
+    setTimeout(() => {
+      try { fn() } finally { setBusy((b) => ({ ...b, [key]: false })) }
+    }, 0)
+  }
+
+  const downloadTeamPdf = () => run('team-pdf', () =>
+    buildTeamBreakPdf(stats, range.from, range.to).save(`AHT_Break_Overage_Team_${fileTag}.pdf`))
+  const downloadTeamXlsx = () => run('team-xlsx', () =>
+    saveXlsx(`AHT_Break_Overage_Team_${fileTag}.xlsx`, [teamBreakSheet(stats)]))
+  const downloadAllPdf = () => run('all-pdf', () =>
+    buildAllUsersBreakPdf(stats, range.from, range.to).save(`AHT_Break_Overage_AllMembers_${fileTag}.pdf`))
+  const downloadUserPdf = () => { if (selectedStat) run('user-pdf', () =>
+    buildUserBreakPdf(selectedStat, range.from, range.to).save(`AHT_Break_Overage_${safeFileName(selectedStat)}_${fileTag}.pdf`)) }
+  const downloadUserXlsx = () => { if (selectedStat) run('user-xlsx', () =>
+    saveXlsx(`AHT_Break_Overage_${safeFileName(selectedStat)}_${fileTag}.xlsx`, [userBreakSheet(selectedStat)])) }
+
+  return (
+    <div>
+      {/* Period controls — weekly / monthly presets + custom range */}
+      <div className="glass mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-2.5 shadow-xl shadow-slate-900/5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {REPORT_PRESETS.map((p) => (
+            <button
+              key={p.label}
+              onClick={() => setRange(p.get())}
+              className={cx(
+                'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                activePreset?.label === p.label
+                  ? 'bg-linear-to-b from-blue-500 to-blue-600 text-white shadow'
+                  : 'glass-input border border-white/70 text-slate-600 hover:bg-white/80',
+              )}
+            >
+              {p.label}
+            </button>
+          ))}
+          <DateRangeControl value={range} onChange={setRange} />
+        </div>
+        <span className="text-xs text-slate-400 tabular-nums">
+          {periodText} · {operationalDays} operational day{operationalDays === 1 ? '' : 's'}
+        </span>
+      </div>
+
+      {/* Team KPI cards */}
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <MetricCard label="Total over-allowance" value={fmtHm(team.totalOver)} sub="beyond 60-min/day" accent="#EF4444" />
+        <MetricCard label="Members over" value={team.overMembers} sub={`of ${team.members} active`} accent="#7C3AED" />
+        <MetricCard label="Total break time" value={fmtHm(team.totalBreak)} sub="all members" accent="#0EA5E9" />
+        <MetricCard label="Avg break / day" value={fmtHm(team.avgBreak)} sub="per present day" accent="#F59E0B" />
+      </div>
+
+      {/* Team report */}
+      <Card className="mb-6">
+        <CardHeader
+          title="Team break-overage report"
+          subtitle={`Time over the 60-minute daily allowance · ${periodText}`}
+          action={
+            <div className="flex flex-wrap gap-2">
+              <ExportBtn kind="xlsx" onClick={downloadTeamXlsx} loading={!!busy['team-xlsx']} disabled={!hasData} />
+              <ExportBtn kind="pdf" onClick={downloadTeamPdf} loading={!!busy['team-pdf']} disabled={!hasData} />
+            </div>
+          }
+        />
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-white/50 bg-white/40">
+                {['Staff', 'Days', 'Break used', 'Days over', 'Over allowance'].map((h, i) => (
+                  <th
+                    key={h}
+                    className={cx(
+                      'whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500',
+                      i === 0 ? 'text-left' : i === 1 || i === 3 ? 'text-center' : 'text-right',
+                    )}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {daysReq.loading ? (
+                <tr><td colSpan={5} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
+              ) : daysReq.error ? (
+                <tr><td colSpan={5} className="py-12 text-center text-sm text-red-500">{daysReq.error}</td></tr>
+              ) : !hasData ? (
+                <tr><td colSpan={5} className="py-12 text-center text-sm text-slate-400">No attendance recorded in this period</td></tr>
+              ) : stats.map((s) => (
+                <tr key={s.user_id} className="border-b border-white/40 hover:bg-white/40 transition-colors">
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <Avatar name={s.staff_name || s.username} size={28} />
+                      <div className="leading-tight">
+                        <div className="text-xs font-medium text-slate-800">{s.staff_name || '—'}</div>
+                        {s.username && <div className="text-[11px] text-slate-400">@{s.username}</div>}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5 text-center text-xs tabular-nums text-slate-700">{s.daysPresent}</td>
+                  <td className="px-3 py-2.5 text-right text-xs tabular-nums text-slate-700">{fmtHm(s.totalBreakMin)}</td>
+                  <td className="px-3 py-2.5 text-center text-xs tabular-nums">
+                    {s.overDays > 0
+                      ? <span className="font-medium text-violet-600">{s.overDays}</span>
+                      : <span className="text-slate-400">0</span>}
+                  </td>
+                  <td className={cx('px-3 py-2.5 text-right text-xs font-semibold tabular-nums', s.totalOverMin > 0 ? 'text-red-600' : 'text-slate-400')}>
+                    {fmtHm(s.totalOverMin)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            {hasData && (
+              <tfoot>
+                <tr className="border-t border-white/60 bg-white/50">
+                  <td className="px-3 py-2.5 text-xs font-semibold text-slate-700">Team total</td>
+                  <td className="px-3 py-2.5 text-center text-xs font-semibold tabular-nums text-slate-700">{team.presentDays}</td>
+                  <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-700">{fmtHm(team.totalBreak)}</td>
+                  <td className="px-3 py-2.5 text-center text-xs font-semibold tabular-nums text-slate-700">{team.overDays}</td>
+                  <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-red-600">{fmtHm(team.totalOver)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </Card>
+
+      {/* Per-member report */}
+      <Card>
+        <CardHeader
+          title="Per-member report"
+          subtitle="Day-by-day break detail for one member"
+          action={
+            <ExportBtn kind="pdf" label="All members PDF" onClick={downloadAllPdf} loading={!!busy['all-pdf']} disabled={!hasData} />
+          }
+        />
+        <div className="px-5 py-4">
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <select
+              value={selectedUser}
+              onChange={(e) => setSelectedUser(e.target.value)}
+              className="glass-input rounded-lg border border-white/70 px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            >
+              <option value="">Select a member…</option>
+              {stats.map((s) => (
+                <option key={s.user_id} value={s.user_id}>{labelOf(s)}</option>
+              ))}
+            </select>
+            <ExportBtn kind="xlsx" onClick={downloadUserXlsx} loading={!!busy['user-xlsx']} disabled={!selectedStat} />
+            <ExportBtn kind="pdf" onClick={downloadUserPdf} loading={!!busy['user-pdf']} disabled={!selectedStat} />
+          </div>
+
+          {selectedStat ? (
+            <>
+              <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
+                <span>Days present <span className="font-semibold text-slate-700">{selectedStat.daysPresent}</span></span>
+                <span>Total break <span className="font-semibold text-slate-700">{fmtHm(selectedStat.totalBreakMin)}</span></span>
+                <span>
+                  Over allowance{' '}
+                  <span className={cx('font-semibold', selectedStat.totalOverMin > 0 ? 'text-red-600' : 'text-slate-700')}>{fmtHm(selectedStat.totalOverMin)}</span>
+                  {' '}on {selectedStat.overDays} day{selectedStat.overDays === 1 ? '' : 's'}
+                </span>
+              </div>
+              <div className="overflow-x-auto rounded-xl ring-1 ring-white/60">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-white/60">
+                      {['Date', 'Login', 'Logout', 'Break', 'Over allowance', 'Status'].map((h, i) => (
+                        <th
+                          key={h}
+                          className={cx(
+                            'whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500',
+                            i === 0 ? 'text-left' : i === 5 ? 'text-center' : 'text-right',
+                          )}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedStat.rows.length === 0 ? (
+                      <tr><td colSpan={6} className="py-8 text-center text-sm text-slate-400">No days recorded</td></tr>
+                    ) : selectedStat.rows.slice().reverse().map((r, i) => (
+                      <tr key={i} className="border-t border-white/50 hover:bg-white/40">
+                        <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-600">{fullDate(r.work_date)}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-slate-700">{fmtAttendanceTime(r.login_at)}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-slate-700">{fmtAttendanceTime(r.logout_at)}</td>
+                        <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-700">{r.break_min}m</td>
+                        <td className={cx('px-3 py-2 text-right text-xs font-medium tabular-nums', r.over_break_min > 0 ? 'text-red-600' : 'text-slate-400')}>{fmtHm(r.over_break_min)}</td>
+                        <td className="px-3 py-2 text-center"><DayStatus row={r} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-xl bg-white/40 py-10 text-center text-sm text-slate-400">
+              Choose a member above to preview and export their daily break breakdown.
+            </div>
+          )}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+// ─── Export buttons ───────────────────────────────────────────────────────────────
+
+function PdfIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
+    </svg>
+  )
+}
+
+function ExcelIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+    </svg>
+  )
+}
+
+function ExportBtn({ kind, label, onClick, loading, disabled }: {
+  kind: 'pdf' | 'xlsx'
+  label?: string
+  onClick: () => void
+  loading: boolean
+  disabled?: boolean
+}) {
+  return (
+    <Button variant="secondary" onClick={onClick} disabled={loading || disabled}>
+      {loading ? <Spinner className="h-3.5 w-3.5" /> : kind === 'pdf' ? <PdfIcon /> : <ExcelIcon />}
+      {label ?? (kind === 'pdf' ? 'PDF' : 'Excel')}
+    </Button>
   )
 }
