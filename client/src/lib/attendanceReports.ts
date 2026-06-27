@@ -5,8 +5,7 @@
  * statistics — worked hours, break time and **break time taken over the
  * 60-minute daily allowance** ("break-time exceeding allowance",
  * `over_break_min` summed across the range) — and renders them as
- * company-styled PDFs (and matching .xlsx sheets). Current online/offline
- * state comes from `/attendance/live`.
+ * company-styled PDFs (and matching .xlsx sheets).
  *
  * Pure data + document builders; no React. The page owns fetching and layout.
  */
@@ -26,7 +25,6 @@ const CYAN: [number, number, number] = [212, 233, 242]
 const INK: [number, number, number] = [15, 23, 42]
 const WHITE: [number, number, number] = [255, 255, 255]
 const RED: [number, number, number] = [185, 28, 28]
-const GREEN: [number, number, number] = [21, 128, 61]
 const MUTED: [number, number, number] = [100, 116, 139]
 
 // ─── Aggregation ────────────────────────────────────────────────────────────────
@@ -35,7 +33,6 @@ export interface BreakStat {
   user_id: string
   staff_name: string | null
   username: string | null
-  active: boolean           // currently checked in (from /attendance/live)
   daysPresent: number       // days logged in (has a login)
   daysWithBreak: number     // days at least one break was taken
   totalHours: number        // worked hours summed over completed days
@@ -71,7 +68,7 @@ export function hoursCell(h: number | null | undefined): string {
  * Group day rows by member and roll up worked-hours / break / overage totals,
  * worst break-overage first. `onlineIds` marks who is currently checked in.
  */
-export function aggregateBreaks(rows: AttendanceDay[], onlineIds: Set<string> = new Set()): BreakStat[] {
+export function aggregateBreaks(rows: AttendanceDay[]): BreakStat[] {
   const byUser = new Map<string, AttendanceDay[]>()
   for (const r of rows) {
     const arr = byUser.get(r.user_id) ?? []
@@ -90,7 +87,6 @@ export function aggregateBreaks(rows: AttendanceDay[], onlineIds: Set<string> = 
       user_id: id,
       staff_name: sorted[0]?.staff_name ?? null,
       username: sorted[0]?.username ?? null,
-      active: onlineIds.has(id),
       daysPresent: present.length,
       daysWithBreak: sorted.filter((r) => (r.break_min ?? 0) > 0).length,
       totalHours,
@@ -166,39 +162,37 @@ export function buildTeamBreakPdf(stats: BreakStat[], from: string, to: string):
   const totalHours = stats.reduce((s, x) => s + x.totalHours, 0)
   const totalDays = stats.reduce((s, x) => s + x.daysPresent, 0)
   const overMembers = stats.filter((x) => x.totalOverMin > 0).length
-  const activeCount = stats.filter((x) => x.active).length
 
   doc.setFontSize(9)
   doc.setTextColor(...INK)
   doc.text(
     `Worked hours ${hoursCell(totalHours)}   ·   Exceeding allowance ${fmtHm(totalOver)}   ·   ` +
-      `Members exceeding ${overMembers}/${stats.length}   ·   Active now ${activeCount}`,
+      `Members exceeding ${overMembers}/${stats.length}`,
     M, y + 4,
   )
 
   const body: RowInput[] = stats.map((s) => [
     labelOf(s),
-    s.active ? 'Active' : 'Offline',
     String(s.daysPresent),
     hoursCell(s.totalHours),
     fmtHm(s.totalBreakMin),
     fmtHm(s.totalOverMin),
   ])
-  if (body.length === 0) body.push(['No members active in this period', 'Offline', '0', '0.0h', '0m', '0m'])
-  body.push(['TEAM TOTAL', `${activeCount} active`, String(totalDays), hoursCell(totalHours), fmtHm(totalBreak), fmtHm(totalOver)])
+  if (body.length === 0) body.push(['No members active in this period', '0', '0.0h', '0m', '0m'])
+  body.push(['TEAM TOTAL', String(totalDays), hoursCell(totalHours), fmtHm(totalBreak), fmtHm(totalOver)])
   const totalIdx = body.length - 1
 
   autoTable(doc, {
     startY: y + 16,
     theme: 'grid',
-    head: [['STAFF', 'STATUS', 'DAYS LOGGED IN', 'WORKED HOURS', 'BREAK USED', 'BREAK-TIME\nEXCEEDING\nALLOWANCE']],
+    head: [['STAFF', 'DAYS LOGGED IN', 'WORKED HOURS', 'BREAK USED', 'BREAK-TIME\nEXCEEDING\nALLOWANCE']],
     body,
     styles: baseStyles,
     headStyles: navyHead,
     bodyStyles: { fillColor: CYAN },
     columnStyles: {
-      0: { halign: 'left' }, 1: { halign: 'center' }, 2: { halign: 'center' },
-      3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' },
+      0: { halign: 'left' }, 1: { halign: 'center' }, 2: { halign: 'right' },
+      3: { halign: 'right' }, 4: { halign: 'right' },
     },
     margin: { left: M, right: M },
     didParseCell: (d) => {
@@ -211,10 +205,7 @@ export function buildTeamBreakPdf(stats: BreakStat[], from: string, to: string):
       }
       const stat = stats[d.row.index]
       if (!stat) return
-      if (d.column.index === 1) {
-        d.cell.styles.textColor = stat.active ? GREEN : MUTED
-        d.cell.styles.fontStyle = 'bold'
-      } else if (d.column.index === 5 && stat.totalOverMin > 0) {
+      if (d.column.index === 4 && stat.totalOverMin > 0) {
         d.cell.styles.textColor = RED
         d.cell.styles.fontStyle = 'bold'
       }
@@ -232,11 +223,6 @@ function renderUserSection(doc: jsPDF, stat: BreakStat, startY: number): void {
   doc.setFontSize(12)
   doc.setTextColor(...NAVY)
   doc.text(labelOf(stat), M, startY)
-
-  // Active / Offline marker beside the name.
-  doc.setFontSize(9)
-  doc.setTextColor(...(stat.active ? GREEN : MUTED))
-  doc.text(stat.active ? '• Active' : '• Offline', M + doc.getTextWidth(labelOf(stat)) + 12, startY)
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
@@ -331,12 +317,11 @@ const round1 = (n: number): number => Math.round(n * 10) / 10
 export function teamBreakSheet(stats: BreakStat[]): XlsxSheet {
   return {
     name: 'Overall Staff Report',
-    head: ['Staff', 'Username', 'Status', 'Days logged in', 'Worked hours', 'Break used (min)', 'Break-time exceeding allowance (min)'],
-    formats: ['text', 'text', 'text', 'integer', 'number', 'integer', 'integer'],
+    head: ['Staff', 'Username', 'Days logged in', 'Worked hours', 'Break used (min)', 'Break-time exceeding allowance (min)'],
+    formats: ['text', 'text', 'integer', 'number', 'integer', 'integer'],
     rows: stats.map((s) => [
       s.staff_name ?? '',
       s.username ? `@${s.username}` : '',
-      s.active ? 'Active' : 'Offline',
       s.daysPresent,
       round1(s.totalHours),
       s.totalBreakMin,
@@ -344,7 +329,6 @@ export function teamBreakSheet(stats: BreakStat[]): XlsxSheet {
     ]),
     foot: [
       'TOTAL', '',
-      `${stats.filter((s) => s.active).length} active`,
       stats.reduce((s, x) => s + x.daysPresent, 0),
       round1(stats.reduce((s, x) => s + x.totalHours, 0)),
       stats.reduce((s, x) => s + x.totalBreakMin, 0),

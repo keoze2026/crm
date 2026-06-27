@@ -215,7 +215,7 @@ const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
     icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18" /><path d="M18 17V9M13 17V5M8 17v-3" /></svg>,
   },
   {
-    id: 'reports', label: 'Break Reports',
+    id: 'reports', label: 'Staff Reports',
     icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" /></svg>,
   },
 ]
@@ -284,6 +284,7 @@ function RosterView() {
   const overBreakReq = useAsync(() => api.attendanceExceptions('over_break', date, date), [date])
 
   const rows = rosterReq.data?.rows ?? []
+  const onlineIds = useMemo(() => new Set((liveReq.data ?? []).map((m: AttendanceDay) => m.user_id)), [liveReq.data])
 
   const filtered = useMemo(() => {
     const data = rows.filter((r) =>
@@ -434,10 +435,9 @@ function RosterView() {
                   ['Date', 'work_date'],
                   ['Username', 'username'],
                   ['Name', 'staff_name'],
+                  ['Active', null],
                   ['User ID', 'user_id'],
-                  ['Login (stated)', null],
                   ['Login (recorded)', 'login_at'],
-                  ['Logout (stated)', null],
                   ['Logout (recorded)', 'logout_at'],
                   ['Hours', 'hours'],
                   ['Net Hours', 'net_hours'],
@@ -464,11 +464,11 @@ function RosterView() {
             </thead>
             <tbody>
               {rosterReq.loading ? (
-                <tr><td colSpan={17} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
+                <tr><td colSpan={16} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
               ) : rosterReq.error ? (
-                <tr><td colSpan={17} className="py-12 text-center text-sm text-red-500">{rosterReq.error}</td></tr>
+                <tr><td colSpan={16} className="py-12 text-center text-sm text-red-500">{rosterReq.error}</td></tr>
               ) : pageSlice.length === 0 ? (
-                <tr><td colSpan={17} className="py-12 text-center text-sm text-slate-400">No records for {date}</td></tr>
+                <tr><td colSpan={16} className="py-12 text-center text-sm text-slate-400">No records for {date}</td></tr>
               ) : pageSlice.map((r, i) => (
                 <tr key={i} className="border-b border-white/40 hover:bg-white/40 transition-colors">
                   <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums text-slate-600">{r.work_date}</td>
@@ -479,10 +479,9 @@ function RosterView() {
                       <span className="text-xs">{r.staff_name || '—'}</span>
                     </div>
                   </td>
+                  <td className="px-3 py-2.5 text-center"><ActiveBadge active={onlineIds.has(r.user_id)} /></td>
                   <td className="px-3 py-2.5 text-xs tabular-nums text-slate-400">{r.user_id}</td>
-                  <td className="px-3 py-2.5 text-xs text-slate-500">{r.login_stated || '—'}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums">{fmtAttendanceTime(r.login_at)}</td>
-                  <td className="px-3 py-2.5 text-xs text-slate-500">{r.logout_stated || '—'}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums">{fmtAttendanceTime(r.logout_at)}</td>
                   <td className="px-3 py-2.5 text-xs tabular-nums">{r.hours != null ? r.hours : '—'}</td>
                   <td className={cx('px-3 py-2.5 text-xs tabular-nums', r.net_hours != null && r.net_hours < 0 ? 'text-red-600' : 'text-slate-700')}>
@@ -1007,11 +1006,9 @@ function BreakReportsView() {
   const [busy, setBusy] = useState<Record<string, boolean>>({})
 
   const daysReq = useAsync(() => api.attendanceDays({ from: range.from, to: range.to }), [range.from, range.to])
-  const liveReq = useAsync(() => api.attendanceLive(), [])
-  const onlineIds = useMemo(() => new Set((liveReq.data ?? []).map((m) => m.user_id)), [liveReq.data])
 
   const rows = daysReq.data?.rows ?? []
-  const stats = useMemo(() => aggregateBreaks(rows, onlineIds), [rows, onlineIds])
+  const stats = useMemo(() => aggregateBreaks(rows), [rows])
   const operationalDays = useMemo(() => new Set(rows.map((r) => r.work_date)).size, [rows])
 
   const team = useMemo(() => ({
@@ -1020,7 +1017,6 @@ function BreakReportsView() {
     totalOver: stats.reduce((s, x) => s + x.totalOverMin, 0),
     presentDays: stats.reduce((s, x) => s + x.daysPresent, 0),
     overMembers: stats.filter((x) => x.totalOverMin > 0).length,
-    activeCount: stats.filter((x) => x.active).length,
     members: stats.length,
   }), [stats])
 
@@ -1127,7 +1123,6 @@ function BreakReportsView() {
               <tr className="border-b border-white/50 bg-white/40">
                 {([
                   { label: 'Staff', cls: 'text-left' },
-                  { label: 'Status', cls: 'text-center' },
                   { label: 'Days Logged In', cls: 'text-center' },
                   { label: 'Worked Hours', cls: 'text-right' },
                   { label: 'Break Used', cls: 'text-right' },
@@ -1141,11 +1136,11 @@ function BreakReportsView() {
             </thead>
             <tbody>
               {daysReq.loading ? (
-                <tr><td colSpan={6} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
+                <tr><td colSpan={5} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
               ) : daysReq.error ? (
-                <tr><td colSpan={6} className="py-12 text-center text-sm text-red-500">{daysReq.error}</td></tr>
+                <tr><td colSpan={5} className="py-12 text-center text-sm text-red-500">{daysReq.error}</td></tr>
               ) : !hasData ? (
-                <tr><td colSpan={6} className="py-12 text-center text-sm text-slate-400">No attendance recorded in this period</td></tr>
+                <tr><td colSpan={5} className="py-12 text-center text-sm text-slate-400">No attendance recorded in this period</td></tr>
               ) : stats.map((s) => (
                 <tr key={s.user_id} className="border-b border-white/40 hover:bg-white/40 transition-colors">
                   <td className="px-3 py-2.5">
@@ -1157,7 +1152,6 @@ function BreakReportsView() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 text-center"><ActiveBadge active={s.active} /></td>
                   <td className="px-3 py-2.5 text-center text-xs tabular-nums text-slate-700">{s.daysPresent}</td>
                   <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-900">{hoursCell(s.totalHours)}</td>
                   <td className="px-3 py-2.5 text-right text-xs tabular-nums text-slate-700">{fmtHm(s.totalBreakMin)}</td>
@@ -1171,7 +1165,6 @@ function BreakReportsView() {
               <tfoot>
                 <tr className="border-t border-white/60 bg-white/50">
                   <td className="px-3 py-2.5 text-xs font-semibold text-slate-700">Team total</td>
-                  <td className="px-3 py-2.5 text-center text-xs font-medium tabular-nums text-emerald-700">{team.activeCount} active</td>
                   <td className="px-3 py-2.5 text-center text-xs font-semibold tabular-nums text-slate-700">{team.presentDays}</td>
                   <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-900">{hoursCell(team.totalHours)}</td>
                   <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-700">{fmtHm(team.totalBreak)}</td>
@@ -1211,7 +1204,6 @@ function BreakReportsView() {
           {selectedStat ? (
             <>
               <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-slate-500">
-                <span className="flex items-center gap-1.5">Status <ActiveBadge active={selectedStat.active} /></span>
                 <span>Days logged in <span className="font-semibold text-slate-700">{selectedStat.daysPresent}</span></span>
                 <span>Worked hours <span className="font-semibold text-slate-700">{hoursCell(selectedStat.totalHours)}</span></span>
                 <span>Total break <span className="font-semibold text-slate-700">{fmtHm(selectedStat.totalBreakMin)}</span></span>
