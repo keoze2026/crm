@@ -1,10 +1,12 @@
 /**
- * Break-overage reporting for the Attendance page.
+ * Overall staff reporting for the Attendance page.
  *
- * Aggregates the per-day rows from `/attendance/days` into per-member break
- * statistics and renders them as company-styled PDFs (and matching .xlsx
- * sheets). The headline metric is **time taken on break over the 60-minute
- * daily allowance** — `over_break_min` summed across the selected range.
+ * Aggregates the per-day rows from `/attendance/days` into per-member
+ * statistics — worked hours, break time and **break time taken over the
+ * 60-minute daily allowance** ("break-time exceeding allowance",
+ * `over_break_min` summed across the range) — and renders them as
+ * company-styled PDFs (and matching .xlsx sheets). Current online/offline
+ * state comes from `/attendance/live`.
  *
  * Pure data + document builders; no React. The page owns fetching and layout.
  */
@@ -24,6 +26,7 @@ const CYAN: [number, number, number] = [212, 233, 242]
 const INK: [number, number, number] = [15, 23, 42]
 const WHITE: [number, number, number] = [255, 255, 255]
 const RED: [number, number, number] = [185, 28, 28]
+const GREEN: [number, number, number] = [21, 128, 61]
 const MUTED: [number, number, number] = [100, 116, 139]
 
 // ─── Aggregation ────────────────────────────────────────────────────────────────
@@ -32,12 +35,14 @@ export interface BreakStat {
   user_id: string
   staff_name: string | null
   username: string | null
-  daysPresent: number       // days with a login
+  active: boolean           // currently checked in (from /attendance/live)
+  daysPresent: number       // days logged in (has a login)
   daysWithBreak: number     // days at least one break was taken
+  totalHours: number        // worked hours summed over completed days
   totalBreakMin: number     // all break minutes in the range
   totalOverMin: number      // minutes beyond the daily allowance, summed
   overDays: number          // days that exceeded the allowance
-  avgBreakMin: number       // mean break minutes per present day
+  avgBreakMin: number       // mean break minutes per logged-in day
   worstOverMin: number      // single worst day's overage
   rows: AttendanceDay[]     // day rows, ascending by date
 }
@@ -46,7 +51,7 @@ export interface BreakStat {
 export const labelOf = (s: { staff_name: string | null; username: string | null; user_id: string }): string =>
   s.staff_name || (s.username ? `@${s.username}` : s.user_id)
 
-/** Minutes → "Xh Ym" / "Ym" / "0m". The report's core unit. */
+/** Minutes → "Xh Ym" / "Ym" / "0m". The break-overage unit. */
 export function fmtHm(min: number | null | undefined): string {
   const total = Math.round(Number(min) || 0)
   if (total <= 0) return '0m'
@@ -57,8 +62,16 @@ export function fmtHm(min: number | null | undefined): string {
   return `${h}h ${m}m`
 }
 
-/** Group day rows by member and roll up break/overage totals, worst offenders first. */
-export function aggregateBreaks(rows: AttendanceDay[]): BreakStat[] {
+/** Decimal worked-hours cell, e.g. "12.7h"; em-dash when unknown (no logout). */
+export function hoursCell(h: number | null | undefined): string {
+  return h == null ? '—' : `${Number(h).toFixed(1)}h`
+}
+
+/**
+ * Group day rows by member and roll up worked-hours / break / overage totals,
+ * worst break-overage first. `onlineIds` marks who is currently checked in.
+ */
+export function aggregateBreaks(rows: AttendanceDay[], onlineIds: Set<string> = new Set()): BreakStat[] {
   const byUser = new Map<string, AttendanceDay[]>()
   for (const r of rows) {
     const arr = byUser.get(r.user_id) ?? []
@@ -70,14 +83,17 @@ export function aggregateBreaks(rows: AttendanceDay[]): BreakStat[] {
   for (const [id, userRows] of byUser) {
     const sorted = userRows.slice().sort((a, b) => (a.work_date < b.work_date ? -1 : 1))
     const present = sorted.filter((r) => r.login_at != null)
+    const totalHours = sorted.reduce((s, r) => s + (r.hours ?? 0), 0)
     const totalBreakMin = sorted.reduce((s, r) => s + (r.break_min ?? 0), 0)
     const totalOverMin = sorted.reduce((s, r) => s + (r.over_break_min ?? 0), 0)
     out.push({
       user_id: id,
       staff_name: sorted[0]?.staff_name ?? null,
       username: sorted[0]?.username ?? null,
+      active: onlineIds.has(id),
       daysPresent: present.length,
       daysWithBreak: sorted.filter((r) => (r.break_min ?? 0) > 0).length,
+      totalHours,
       totalBreakMin,
       totalOverMin,
       overDays: sorted.filter((r) => (r.over_break_min ?? 0) > 0).length,
@@ -87,13 +103,14 @@ export function aggregateBreaks(rows: AttendanceDay[]): BreakStat[] {
     })
   }
 
-  // Worst overage first; ties broken alphabetically.
+  // Worst break-overage first; ties broken alphabetically.
   return out.sort((a, b) => b.totalOverMin - a.totalOverMin || (labelOf(a) > labelOf(b) ? 1 : -1))
 }
 
 // ─── Shared PDF pieces ───────────────────────────────────────────────────────────
 
 const M = 40
+const REPORT_TITLE = 'OVERALL STAFF REPORT'
 
 const baseStyles: Partial<Styles> = {
   fontSize: 9, cellPadding: 5, lineColor: WHITE, lineWidth: 1, textColor: INK, valign: 'middle',
@@ -121,12 +138,12 @@ function lastY(doc: jsPDF): number {
 }
 
 /** Title / subtitle / period block shared by every report. Returns the y to start content. */
-function drawHeader(doc: jsPDF, title: string, subtitle: string, from: string, to: string): number {
+function drawHeader(doc: jsPDF, subtitle: string, from: string, to: string): number {
   const pageW = doc.internal.pageSize.getWidth()
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(15)
   doc.setTextColor(...NAVY)
-  doc.text(title, M, 46)
+  doc.text(REPORT_TITLE, M, 46)
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
@@ -139,46 +156,49 @@ function drawHeader(doc: jsPDF, title: string, subtitle: string, from: string, t
 
 // ─── Team report ─────────────────────────────────────────────────────────────────
 
-/** One page: every member as a row, ranked by total break-overage. */
+/** One page: every member as a row, ranked by break-time exceeding the allowance. */
 export function buildTeamBreakPdf(stats: BreakStat[], from: string, to: string): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
-  const y = drawHeader(doc, 'Team Break-Overage Report', `Break time taken over the ${BREAK_ALLOWANCE_MIN}-minute daily allowance`, from, to)
+  const y = drawHeader(doc, `Worked hours and break time over the ${BREAK_ALLOWANCE_MIN}-minute daily allowance`, from, to)
 
   const totalOver = stats.reduce((s, x) => s + x.totalOverMin, 0)
   const totalBreak = stats.reduce((s, x) => s + x.totalBreakMin, 0)
+  const totalHours = stats.reduce((s, x) => s + x.totalHours, 0)
   const totalDays = stats.reduce((s, x) => s + x.daysPresent, 0)
-  const totalOverDays = stats.reduce((s, x) => s + x.overDays, 0)
   const overMembers = stats.filter((x) => x.totalOverMin > 0).length
+  const activeCount = stats.filter((x) => x.active).length
 
   doc.setFontSize(9)
   doc.setTextColor(...INK)
   doc.text(
-    `Total over-allowance: ${fmtHm(totalOver)}     Members over: ${overMembers} of ${stats.length}     Total break: ${fmtHm(totalBreak)}`,
+    `Worked hours ${hoursCell(totalHours)}   ·   Exceeding allowance ${fmtHm(totalOver)}   ·   ` +
+      `Members exceeding ${overMembers}/${stats.length}   ·   Active now ${activeCount}`,
     M, y + 4,
   )
 
   const body: RowInput[] = stats.map((s) => [
     labelOf(s),
+    s.active ? 'Active' : 'Offline',
     String(s.daysPresent),
+    hoursCell(s.totalHours),
     fmtHm(s.totalBreakMin),
-    String(s.overDays),
     fmtHm(s.totalOverMin),
   ])
-  if (body.length === 0) body.push(['No members active in this period', '0', '0m', '0', '0m'])
-  body.push(['TEAM TOTAL', String(totalDays), fmtHm(totalBreak), String(totalOverDays), fmtHm(totalOver)])
+  if (body.length === 0) body.push(['No members active in this period', 'Offline', '0', '0.0h', '0m', '0m'])
+  body.push(['TEAM TOTAL', `${activeCount} active`, String(totalDays), hoursCell(totalHours), fmtHm(totalBreak), fmtHm(totalOver)])
   const totalIdx = body.length - 1
 
   autoTable(doc, {
     startY: y + 16,
     theme: 'grid',
-    head: [['STAFF', 'DAYS', 'BREAK USED', 'DAYS OVER', 'OVER ALLOWANCE']],
+    head: [['STAFF', 'STATUS', 'DAYS LOGGED IN', 'WORKED HOURS', 'BREAK USED', 'BREAK-TIME\nEXCEEDING\nALLOWANCE']],
     body,
     styles: baseStyles,
     headStyles: navyHead,
     bodyStyles: { fillColor: CYAN },
     columnStyles: {
-      0: { halign: 'left' }, 1: { halign: 'center' }, 2: { halign: 'right' },
-      3: { halign: 'center' }, 4: { halign: 'right' },
+      0: { halign: 'left' }, 1: { halign: 'center' }, 2: { halign: 'center' },
+      3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' },
     },
     margin: { left: M, right: M },
     didParseCell: (d) => {
@@ -187,7 +207,14 @@ export function buildTeamBreakPdf(stats: BreakStat[], from: string, to: string):
         d.cell.styles.fillColor = NAVY
         d.cell.styles.textColor = WHITE
         d.cell.styles.fontStyle = 'bold'
-      } else if (d.column.index === 4 && (stats[d.row.index]?.totalOverMin ?? 0) > 0) {
+        return
+      }
+      const stat = stats[d.row.index]
+      if (!stat) return
+      if (d.column.index === 1) {
+        d.cell.styles.textColor = stat.active ? GREEN : MUTED
+        d.cell.styles.fontStyle = 'bold'
+      } else if (d.column.index === 5 && stat.totalOverMin > 0) {
         d.cell.styles.textColor = RED
         d.cell.styles.fontStyle = 'bold'
       }
@@ -199,19 +226,25 @@ export function buildTeamBreakPdf(stats: BreakStat[], from: string, to: string):
 
 // ─── Per-member report ───────────────────────────────────────────────────────────
 
-/** Renders one member's heading + day-by-day break table at `startY`. */
+/** Renders one member's heading + day-by-day table at `startY`. */
 function renderUserSection(doc: jsPDF, stat: BreakStat, startY: number): void {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(12)
   doc.setTextColor(...NAVY)
   doc.text(labelOf(stat), M, startY)
 
+  // Active / Offline marker beside the name.
+  doc.setFontSize(9)
+  doc.setTextColor(...(stat.active ? GREEN : MUTED))
+  doc.text(stat.active ? '• Active' : '• Offline', M + doc.getTextWidth(labelOf(stat)) + 12, startY)
+
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.setTextColor(...MUTED)
   doc.text(
-    `Days present ${stat.daysPresent}     Total break ${fmtHm(stat.totalBreakMin)}` +
-      `     Over allowance ${fmtHm(stat.totalOverMin)} on ${stat.overDays} day${stat.overDays === 1 ? '' : 's'}`,
+    `Days logged in ${stat.daysPresent}     Worked hours ${hoursCell(stat.totalHours)}` +
+      `     Total break ${fmtHm(stat.totalBreakMin)}` +
+      `     Break-time exceeding allowance ${fmtHm(stat.totalOverMin)} on ${stat.overDays} day${stat.overDays === 1 ? '' : 's'}`,
     M, startY + 14,
   )
 
@@ -219,29 +252,26 @@ function renderUserSection(doc: jsPDF, stat: BreakStat, startY: number): void {
     formatDmy(r.work_date),
     fmtClockEST(r.login_at),
     fmtClockEST(r.logout_at),
+    hoursCell(r.hours),
     `${r.break_min ?? 0}m`,
     `${BREAK_ALLOWANCE_MIN}m`,
     fmtHm(r.over_break_min ?? 0),
   ])
-  if (body.length === 0) body.push(['—', '—', '—', '0m', `${BREAK_ALLOWANCE_MIN}m`, '0m'])
-  body.push([
-    'TOTAL', '', '',
-    `${stat.totalBreakMin}m`, '',
-    fmtHm(stat.totalOverMin),
-  ])
+  if (body.length === 0) body.push(['—', '—', '—', '—', '0m', `${BREAK_ALLOWANCE_MIN}m`, '0m'])
+  body.push(['TOTAL', '', '', hoursCell(stat.totalHours), `${stat.totalBreakMin}m`, '', fmtHm(stat.totalOverMin)])
   const totalIdx = body.length - 1
 
   autoTable(doc, {
     startY: startY + 22,
     theme: 'grid',
-    head: [['DATE', 'LOGIN', 'LOGOUT', 'BREAK', 'ALLOWANCE', 'OVER']],
+    head: [['DATE', 'LOGIN', 'LOGOUT', 'WORKED HOURS', 'BREAK', 'ALLOWANCE', 'EXCEEDING\nALLOWANCE']],
     body,
     styles: { ...baseStyles, fontSize: 8, cellPadding: 4 },
     headStyles: navyHead,
     bodyStyles: { fillColor: CYAN },
     columnStyles: {
       0: { halign: 'left' }, 1: { halign: 'center' }, 2: { halign: 'center' },
-      3: { halign: 'right' }, 4: { halign: 'center' }, 5: { halign: 'right' },
+      3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'center' }, 6: { halign: 'right' },
     },
     margin: { left: M, right: M },
     didParseCell: (d) => {
@@ -250,7 +280,7 @@ function renderUserSection(doc: jsPDF, stat: BreakStat, startY: number): void {
         d.cell.styles.fillColor = NAVY
         d.cell.styles.textColor = WHITE
         d.cell.styles.fontStyle = 'bold'
-      } else if (d.column.index === 5 && (stat.rows[d.row.index]?.over_break_min ?? 0) > 0) {
+      } else if (d.column.index === 6 && (stat.rows[d.row.index]?.over_break_min ?? 0) > 0) {
         d.cell.styles.textColor = RED
         d.cell.styles.fontStyle = 'bold'
       }
@@ -261,7 +291,7 @@ function renderUserSection(doc: jsPDF, stat: BreakStat, startY: number): void {
 /** Single member, day-by-day. */
 export function buildUserBreakPdf(stat: BreakStat, from: string, to: string): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
-  const y = drawHeader(doc, 'Break-Overage Report', `Individual report — ${labelOf(stat)}`, from, to)
+  const y = drawHeader(doc, `Individual report — ${labelOf(stat)}`, from, to)
   renderUserSection(doc, stat, y + 8)
   return doc
 }
@@ -270,7 +300,7 @@ export function buildUserBreakPdf(stat: BreakStat, from: string, to: string): js
 export function buildAllUsersBreakPdf(stats: BreakStat[], from: string, to: string): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
   const pageH = doc.internal.pageSize.getHeight()
-  let y = drawHeader(doc, 'Per-Member Break-Overage Report', 'Individual breakdown for every active member', from, to) + 8
+  let y = drawHeader(doc, 'Per-member breakdown for every active member', from, to) + 8
 
   if (stats.length === 0) {
     doc.setFontSize(10)
@@ -295,25 +325,29 @@ export function buildAllUsersBreakPdf(stats: BreakStat[], from: string, to: stri
 
 // ─── Excel parity ────────────────────────────────────────────────────────────────
 
+const round1 = (n: number): number => Math.round(n * 10) / 10
+
 /** Team report as a single .xlsx sheet with a TOTAL footer. */
 export function teamBreakSheet(stats: BreakStat[]): XlsxSheet {
   return {
-    name: 'Break Overage',
-    head: ['Staff', 'Username', 'Days present', 'Break used (min)', 'Days over', 'Over allowance (min)'],
-    formats: ['text', 'text', 'integer', 'integer', 'integer', 'integer'],
+    name: 'Overall Staff Report',
+    head: ['Staff', 'Username', 'Status', 'Days logged in', 'Worked hours', 'Break used (min)', 'Break-time exceeding allowance (min)'],
+    formats: ['text', 'text', 'text', 'integer', 'number', 'integer', 'integer'],
     rows: stats.map((s) => [
       s.staff_name ?? '',
       s.username ? `@${s.username}` : '',
+      s.active ? 'Active' : 'Offline',
       s.daysPresent,
+      round1(s.totalHours),
       s.totalBreakMin,
-      s.overDays,
       s.totalOverMin,
     ]),
     foot: [
       'TOTAL', '',
+      `${stats.filter((s) => s.active).length} active`,
       stats.reduce((s, x) => s + x.daysPresent, 0),
+      round1(stats.reduce((s, x) => s + x.totalHours, 0)),
       stats.reduce((s, x) => s + x.totalBreakMin, 0),
-      stats.reduce((s, x) => s + x.overDays, 0),
       stats.reduce((s, x) => s + x.totalOverMin, 0),
     ],
   }
@@ -322,17 +356,18 @@ export function teamBreakSheet(stats: BreakStat[]): XlsxSheet {
 /** One member's day-by-day breakdown as an .xlsx sheet. */
 export function userBreakSheet(stat: BreakStat): XlsxSheet {
   return {
-    name: 'Break Overage',
-    head: ['Date', 'Login', 'Logout', 'Break (min)', 'Allowance (min)', 'Over allowance (min)'],
-    formats: ['text', 'text', 'text', 'integer', 'integer', 'integer'],
+    name: 'Overall Staff Report',
+    head: ['Date', 'Login', 'Logout', 'Worked hours', 'Break (min)', 'Allowance (min)', 'Break-time exceeding allowance (min)'],
+    formats: ['text', 'text', 'text', 'number', 'integer', 'integer', 'integer'],
     rows: stat.rows.map((r) => [
       r.work_date,
       fmtClockEST(r.login_at),
       fmtClockEST(r.logout_at),
+      r.hours == null ? '' : round1(r.hours),
       r.break_min ?? 0,
       BREAK_ALLOWANCE_MIN,
       r.over_break_min ?? 0,
     ]),
-    foot: ['TOTAL', '', '', stat.totalBreakMin, '', stat.totalOverMin],
+    foot: ['TOTAL', '', '', round1(stat.totalHours), stat.totalBreakMin, '', stat.totalOverMin],
   }
 }

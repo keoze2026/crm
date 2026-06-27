@@ -13,7 +13,7 @@ import { useAsync } from '../lib/useAsync'
 import type { AttendanceDay, AttendanceStaff } from '../types'
 import { PageHeader } from '../components/Layout'
 import { Button, Card, CardHeader, Spinner, cx } from '../components/ui'
-import { DateRangeControl, type Range } from '../components/DateRange'
+import type { Range } from '../components/DateRange'
 import { fileDateRange } from '../lib/format'
 import { saveXlsx } from '../lib/xlsx'
 import {
@@ -22,6 +22,7 @@ import {
   buildTeamBreakPdf,
   buildUserBreakPdf,
   fmtHm,
+  hoursCell,
   labelOf,
   periodLabel,
   teamBreakSheet,
@@ -1006,23 +1007,22 @@ function BreakReportsView() {
   const [busy, setBusy] = useState<Record<string, boolean>>({})
 
   const daysReq = useAsync(() => api.attendanceDays({ from: range.from, to: range.to }), [range.from, range.to])
+  const liveReq = useAsync(() => api.attendanceLive(), [])
+  const onlineIds = useMemo(() => new Set((liveReq.data ?? []).map((m) => m.user_id)), [liveReq.data])
+
   const rows = daysReq.data?.rows ?? []
-  const stats = useMemo(() => aggregateBreaks(rows), [rows])
+  const stats = useMemo(() => aggregateBreaks(rows, onlineIds), [rows, onlineIds])
   const operationalDays = useMemo(() => new Set(rows.map((r) => r.work_date)).size, [rows])
 
-  const team = useMemo(() => {
-    const totalBreak = stats.reduce((s, x) => s + x.totalBreakMin, 0)
-    const presentDays = stats.reduce((s, x) => s + x.daysPresent, 0)
-    return {
-      totalOver: stats.reduce((s, x) => s + x.totalOverMin, 0),
-      totalBreak,
-      presentDays,
-      overDays: stats.reduce((s, x) => s + x.overDays, 0),
-      overMembers: stats.filter((x) => x.totalOverMin > 0).length,
-      members: stats.length,
-      avgBreak: presentDays ? totalBreak / presentDays : 0,
-    }
-  }, [stats])
+  const team = useMemo(() => ({
+    totalHours: stats.reduce((s, x) => s + x.totalHours, 0),
+    totalBreak: stats.reduce((s, x) => s + x.totalBreakMin, 0),
+    totalOver: stats.reduce((s, x) => s + x.totalOverMin, 0),
+    presentDays: stats.reduce((s, x) => s + x.daysPresent, 0),
+    overMembers: stats.filter((x) => x.totalOverMin > 0).length,
+    activeCount: stats.filter((x) => x.active).length,
+    members: stats.length,
+  }), [stats])
 
   const selectedStat = useMemo(() => stats.find((s) => s.user_id === selectedUser) ?? null, [stats, selectedUser])
 
@@ -1034,6 +1034,7 @@ function BreakReportsView() {
   const fileTag = fileDateRange(range.from, range.to)
   const periodText = periodLabel(range.from, range.to)
   const hasData = stats.length > 0
+  const maxDate = todayEST()
 
   // Defer the synchronous PDF/Excel build one tick so the button spinner can paint.
   const run = (key: string, fn: () => void) => {
@@ -1044,19 +1045,19 @@ function BreakReportsView() {
   }
 
   const downloadTeamPdf = () => run('team-pdf', () =>
-    buildTeamBreakPdf(stats, range.from, range.to).save(`AHT_Break_Overage_Team_${fileTag}.pdf`))
+    buildTeamBreakPdf(stats, range.from, range.to).save(`Overall_Staff_Report_Team_${fileTag}.pdf`))
   const downloadTeamXlsx = () => run('team-xlsx', () =>
-    saveXlsx(`AHT_Break_Overage_Team_${fileTag}.xlsx`, [teamBreakSheet(stats)]))
+    saveXlsx(`Overall_Staff_Report_Team_${fileTag}.xlsx`, [teamBreakSheet(stats)]))
   const downloadAllPdf = () => run('all-pdf', () =>
-    buildAllUsersBreakPdf(stats, range.from, range.to).save(`AHT_Break_Overage_AllMembers_${fileTag}.pdf`))
+    buildAllUsersBreakPdf(stats, range.from, range.to).save(`Overall_Staff_Report_AllMembers_${fileTag}.pdf`))
   const downloadUserPdf = () => { if (selectedStat) run('user-pdf', () =>
-    buildUserBreakPdf(selectedStat, range.from, range.to).save(`AHT_Break_Overage_${safeFileName(selectedStat)}_${fileTag}.pdf`)) }
+    buildUserBreakPdf(selectedStat, range.from, range.to).save(`Overall_Staff_Report_${safeFileName(selectedStat)}_${fileTag}.pdf`)) }
   const downloadUserXlsx = () => { if (selectedStat) run('user-xlsx', () =>
-    saveXlsx(`AHT_Break_Overage_${safeFileName(selectedStat)}_${fileTag}.xlsx`, [userBreakSheet(selectedStat)])) }
+    saveXlsx(`Overall_Staff_Report_${safeFileName(selectedStat)}_${fileTag}.xlsx`, [userBreakSheet(selectedStat)])) }
 
   return (
     <div>
-      {/* Period controls — weekly / monthly presets + custom range */}
+      {/* Period controls — weekly / monthly presets + explicit date filtering */}
       <div className="glass mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-2.5 shadow-xl shadow-slate-900/5">
         <div className="flex flex-wrap items-center gap-1.5">
           {REPORT_PRESETS.map((p) => (
@@ -1073,7 +1074,27 @@ function BreakReportsView() {
               {p.label}
             </button>
           ))}
-          <DateRangeControl value={range} onChange={setRange} />
+          <label className="ml-1 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+            From
+            <input
+              type="date"
+              value={range.from}
+              max={range.to || maxDate}
+              onChange={(e) => { if (e.target.value) setRange((r) => ({ ...r, from: e.target.value })) }}
+              className="glass-input rounded-lg border border-white/70 px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+            To
+            <input
+              type="date"
+              value={range.to}
+              min={range.from}
+              max={maxDate}
+              onChange={(e) => { if (e.target.value) setRange((r) => ({ ...r, to: e.target.value })) }}
+              className="glass-input rounded-lg border border-white/70 px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            />
+          </label>
         </div>
         <span className="text-xs text-slate-400 tabular-nums">
           {periodText} · {operationalDays} operational day{operationalDays === 1 ? '' : 's'}
@@ -1082,17 +1103,17 @@ function BreakReportsView() {
 
       {/* Team KPI cards */}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MetricCard label="Total over-allowance" value={fmtHm(team.totalOver)} sub="beyond 60-min/day" accent="#EF4444" />
-        <MetricCard label="Members over" value={team.overMembers} sub={`of ${team.members} active`} accent="#7C3AED" />
+        <MetricCard label="Total worked hours" value={hoursCell(team.totalHours)} sub="all members" accent="#1D9E75" />
         <MetricCard label="Total break time" value={fmtHm(team.totalBreak)} sub="all members" accent="#0EA5E9" />
-        <MetricCard label="Avg break / day" value={fmtHm(team.avgBreak)} sub="per present day" accent="#F59E0B" />
+        <MetricCard label="Break-time exceeding" value={fmtHm(team.totalOver)} sub="beyond 60-min/day" accent="#EF4444" />
+        <MetricCard label="Members exceeding" value={team.overMembers} sub={`of ${team.members} active`} accent="#7C3AED" />
       </div>
 
       {/* Team report */}
       <Card className="mb-6">
         <CardHeader
-          title="Team break-overage report"
-          subtitle={`Time over the 60-minute daily allowance · ${periodText}`}
+          title="Overall Staff Report"
+          subtitle={`Worked hours and break time over the 60-minute allowance · ${periodText}`}
           action={
             <div className="flex flex-wrap gap-2">
               <ExportBtn kind="xlsx" onClick={downloadTeamXlsx} loading={!!busy['team-xlsx']} disabled={!hasData} />
@@ -1104,26 +1125,27 @@ function BreakReportsView() {
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-white/50 bg-white/40">
-                {['Staff', 'Days', 'Break used', 'Days over', 'Over allowance'].map((h, i) => (
-                  <th
-                    key={h}
-                    className={cx(
-                      'whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500',
-                      i === 0 ? 'text-left' : i === 1 || i === 3 ? 'text-center' : 'text-right',
-                    )}
-                  >
-                    {h}
+                {([
+                  { label: 'Staff', cls: 'text-left' },
+                  { label: 'Status', cls: 'text-center' },
+                  { label: 'Days Logged In', cls: 'text-center' },
+                  { label: 'Worked Hours', cls: 'text-right' },
+                  { label: 'Break Used', cls: 'text-right' },
+                  { label: 'Break-Time Exceeding Allowance', cls: 'text-right' },
+                ] as const).map((c) => (
+                  <th key={c.label} className={cx('px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500', c.cls)}>
+                    {c.label}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {daysReq.loading ? (
-                <tr><td colSpan={5} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
+                <tr><td colSpan={6} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
               ) : daysReq.error ? (
-                <tr><td colSpan={5} className="py-12 text-center text-sm text-red-500">{daysReq.error}</td></tr>
+                <tr><td colSpan={6} className="py-12 text-center text-sm text-red-500">{daysReq.error}</td></tr>
               ) : !hasData ? (
-                <tr><td colSpan={5} className="py-12 text-center text-sm text-slate-400">No attendance recorded in this period</td></tr>
+                <tr><td colSpan={6} className="py-12 text-center text-sm text-slate-400">No attendance recorded in this period</td></tr>
               ) : stats.map((s) => (
                 <tr key={s.user_id} className="border-b border-white/40 hover:bg-white/40 transition-colors">
                   <td className="px-3 py-2.5">
@@ -1135,13 +1157,10 @@ function BreakReportsView() {
                       </div>
                     </div>
                   </td>
+                  <td className="px-3 py-2.5 text-center"><ActiveBadge active={s.active} /></td>
                   <td className="px-3 py-2.5 text-center text-xs tabular-nums text-slate-700">{s.daysPresent}</td>
+                  <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-900">{hoursCell(s.totalHours)}</td>
                   <td className="px-3 py-2.5 text-right text-xs tabular-nums text-slate-700">{fmtHm(s.totalBreakMin)}</td>
-                  <td className="px-3 py-2.5 text-center text-xs tabular-nums">
-                    {s.overDays > 0
-                      ? <span className="font-medium text-violet-600">{s.overDays}</span>
-                      : <span className="text-slate-400">0</span>}
-                  </td>
                   <td className={cx('px-3 py-2.5 text-right text-xs font-semibold tabular-nums', s.totalOverMin > 0 ? 'text-red-600' : 'text-slate-400')}>
                     {fmtHm(s.totalOverMin)}
                   </td>
@@ -1152,9 +1171,10 @@ function BreakReportsView() {
               <tfoot>
                 <tr className="border-t border-white/60 bg-white/50">
                   <td className="px-3 py-2.5 text-xs font-semibold text-slate-700">Team total</td>
+                  <td className="px-3 py-2.5 text-center text-xs font-medium tabular-nums text-emerald-700">{team.activeCount} active</td>
                   <td className="px-3 py-2.5 text-center text-xs font-semibold tabular-nums text-slate-700">{team.presentDays}</td>
+                  <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-900">{hoursCell(team.totalHours)}</td>
                   <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-700">{fmtHm(team.totalBreak)}</td>
-                  <td className="px-3 py-2.5 text-center text-xs font-semibold tabular-nums text-slate-700">{team.overDays}</td>
                   <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-red-600">{fmtHm(team.totalOver)}</td>
                 </tr>
               </tfoot>
@@ -1167,7 +1187,7 @@ function BreakReportsView() {
       <Card>
         <CardHeader
           title="Per-member report"
-          subtitle="Day-by-day break detail for one member"
+          subtitle="Day-by-day worked hours and break detail for one member"
           action={
             <ExportBtn kind="pdf" label="All members PDF" onClick={downloadAllPdf} loading={!!busy['all-pdf']} disabled={!hasData} />
           }
@@ -1190,11 +1210,13 @@ function BreakReportsView() {
 
           {selectedStat ? (
             <>
-              <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
-                <span>Days present <span className="font-semibold text-slate-700">{selectedStat.daysPresent}</span></span>
+              <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-slate-500">
+                <span className="flex items-center gap-1.5">Status <ActiveBadge active={selectedStat.active} /></span>
+                <span>Days logged in <span className="font-semibold text-slate-700">{selectedStat.daysPresent}</span></span>
+                <span>Worked hours <span className="font-semibold text-slate-700">{hoursCell(selectedStat.totalHours)}</span></span>
                 <span>Total break <span className="font-semibold text-slate-700">{fmtHm(selectedStat.totalBreakMin)}</span></span>
                 <span>
-                  Over allowance{' '}
+                  Break-time exceeding allowance{' '}
                   <span className={cx('font-semibold', selectedStat.totalOverMin > 0 ? 'text-red-600' : 'text-slate-700')}>{fmtHm(selectedStat.totalOverMin)}</span>
                   {' '}on {selectedStat.overDays} day{selectedStat.overDays === 1 ? '' : 's'}
                 </span>
@@ -1203,12 +1225,12 @@ function BreakReportsView() {
                 <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr className="bg-white/60">
-                      {['Date', 'Login', 'Logout', 'Break', 'Over allowance', 'Status'].map((h, i) => (
+                      {['Date', 'Login', 'Logout', 'Worked Hours', 'Break', 'Exceeding Allowance', 'Status'].map((h, i) => (
                         <th
                           key={h}
                           className={cx(
                             'whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500',
-                            i === 0 ? 'text-left' : i === 5 ? 'text-center' : 'text-right',
+                            i === 0 ? 'text-left' : i === 6 ? 'text-center' : 'text-right',
                           )}
                         >
                           {h}
@@ -1218,12 +1240,13 @@ function BreakReportsView() {
                   </thead>
                   <tbody>
                     {selectedStat.rows.length === 0 ? (
-                      <tr><td colSpan={6} className="py-8 text-center text-sm text-slate-400">No days recorded</td></tr>
+                      <tr><td colSpan={7} className="py-8 text-center text-sm text-slate-400">No days recorded</td></tr>
                     ) : selectedStat.rows.slice().reverse().map((r, i) => (
                       <tr key={i} className="border-t border-white/50 hover:bg-white/40">
                         <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-600">{fullDate(r.work_date)}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-slate-700">{fmtAttendanceTime(r.login_at)}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-slate-700">{fmtAttendanceTime(r.logout_at)}</td>
+                        <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-700">{hoursCell(r.hours)}</td>
                         <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-700">{r.break_min}m</td>
                         <td className={cx('px-3 py-2 text-right text-xs font-medium tabular-nums', r.over_break_min > 0 ? 'text-red-600' : 'text-slate-400')}>{fmtHm(r.over_break_min)}</td>
                         <td className="px-3 py-2 text-center"><DayStatus row={r} /></td>
@@ -1235,7 +1258,7 @@ function BreakReportsView() {
             </>
           ) : (
             <div className="rounded-xl bg-white/40 py-10 text-center text-sm text-slate-400">
-              Choose a member above to preview and export their daily break breakdown.
+              Choose a member above to preview and export their daily breakdown.
             </div>
           )}
         </div>
@@ -1244,7 +1267,22 @@ function BreakReportsView() {
   )
 }
 
-// ─── Export buttons ───────────────────────────────────────────────────────────────
+// ─── Status marker + export buttons ─────────────────────────────────────────────
+
+/** Active = currently checked in (from /attendance/live); otherwise Offline. */
+function ActiveBadge({ active }: { active: boolean }) {
+  return active ? (
+    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+      Active
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+      <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+      Offline
+    </span>
+  )
+}
 
 function PdfIcon() {
   return (
