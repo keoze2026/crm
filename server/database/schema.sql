@@ -23,8 +23,10 @@ CREATE TABLE IF NOT EXISTS destinations (
     name        TEXT        NOT NULL UNIQUE,
     status      TEXT        NOT NULL DEFAULT 'active', -- active | inactive
     rate        NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (rate >= 0), -- $ per counted call
+    campaign_id BIGINT,                                -- the campaign this source belongs to
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS idx_destinations_campaign ON destinations (campaign_id);
 
 DROP TABLE IF EXISTS call_records CASCADE;
 DROP TABLE IF EXISTS buyers CASCADE;

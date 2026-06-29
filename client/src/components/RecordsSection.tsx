@@ -632,9 +632,10 @@ function RecordForm({ type, editing, entities, destinations, onSaved, onCancel }
         if (!isBuyer) {
           const destName = source === '__new__' ? newDest : source
           if (destName) {
-            // Auto-create destination (with its rate) if it doesn't exist yet
+            // Auto-create destination (with its rate, linked to the campaign) if new
             if (source === '__new__' && newDest) {
-              try { await api.createDestination({ name: newDest, rate: Number(rate) || 0 }) } catch { /* already exists */ }
+              const campaignId = entityId && entityId !== '__new__' ? Number(entityId) : undefined
+              try { await api.createDestination({ name: newDest, rate: Number(rate) || 0, campaign_id: campaignId }) } catch { /* already exists */ }
             }
             payload.source = destName
           }
@@ -667,7 +668,9 @@ function RecordForm({ type, editing, entities, destinations, onSaved, onCancel }
           ) : (
             <Select label="Destination" value={source} onChange={(e) => handleSource(e.target.value)}>
               <option value="">Select destination…</option>
-              {destinations.map((d) => <option key={d.id} value={d.name}>{d.name} — {money2(d.rate)}</option>)}
+              {destinations
+                .filter((d) => !entityId || entityId === '__new__' || d.campaign_id == null || String(d.campaign_id) === entityId)
+                .map((d) => <option key={d.id} value={d.name}>{d.name} — {money2(d.rate)}</option>)}
               <option value="__new__">+ New destination…</option>
             </Select>
           )}

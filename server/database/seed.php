@@ -109,13 +109,23 @@ foreach (array_unique(array_column($campaignRows, 0)) as $code) {
 }
 
 echo "Inserting destinations (sources) with their rates...\n";
-// destinations is kept out of the TRUNCATE above, so upsert to set/refresh rates.
+// Map each source to the campaign it belongs to (source => campaign code).
+$sourceCampaign = [];
+foreach ($campaignRows as [$camp, $src]) {
+    $sourceCampaign[$src] = $camp;
+}
+// destinations is kept out of the TRUNCATE above, so upsert to set/refresh rates + link.
 $insDest = $pdo->prepare(
-    'INSERT INTO destinations (name, rate) VALUES (:name, :rate)
-     ON CONFLICT (name) DO UPDATE SET rate = EXCLUDED.rate'
+    'INSERT INTO destinations (name, rate, campaign_id) VALUES (:name, :rate, :cid)
+     ON CONFLICT (name) DO UPDATE SET rate = EXCLUDED.rate, campaign_id = EXCLUDED.campaign_id'
 );
 foreach ($sourceRates as $name => $rate) {
-    $insDest->execute([':name' => $name, ':rate' => $rate]);
+    $camp = $sourceCampaign[$name] ?? null;
+    $insDest->execute([
+        ':name' => $name,
+        ':rate' => $rate,
+        ':cid'  => $camp !== null ? $campaignIds[$camp] : null,
+    ]);
 }
 
 // --- Insert call records --------------------------------------------------------

@@ -12,12 +12,21 @@ final class DestinationController
     public function index(): void
     {
         $search = Http::query('search');
-        $sql = 'SELECT id, name, status, rate, created_at FROM destinations';
+        $campaignId = Http::query('campaign_id');
+        $sql = 'SELECT id, name, status, rate, campaign_id, created_at FROM destinations';
 
         $params = [];
+        $where = [];
         if ($search) {
-            $sql .= ' WHERE name ILIKE :s';
+            $where[] = 'name ILIKE :s';
             $params[':s'] = "%{$search}%";
+        }
+        if ($campaignId) {
+            $where[] = 'campaign_id = :cid';
+            $params[':cid'] = (int) $campaignId;
+        }
+        if ($where) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
         }
         $sql .= ' ORDER BY name ASC';
         $stmt = Database::connection()->prepare($sql);
@@ -33,13 +42,15 @@ final class DestinationController
             Http::error('Destination name is required', 422);
         }
         $stmt = Database::connection()->prepare(
-            'INSERT INTO destinations (name, status, rate) VALUES (:name, :status, :rate) RETURNING *'
+            'INSERT INTO destinations (name, status, rate, campaign_id)
+             VALUES (:name, :status, :rate, :cid) RETURNING *'
         );
         try {
             $stmt->execute([
                 ':name'   => $name,
                 ':status' => $body['status'] ?? 'active',
                 ':rate'   => isset($body['rate']) ? (float) $body['rate'] : 0,
+                ':cid'    => isset($body['campaign_id']) ? (int) $body['campaign_id'] : null,
             ]);
         } catch (\PDOException) {
             Http::error('A destination with that name already exists', 409);
@@ -87,8 +98,14 @@ final class DestinationController
     private function cast(array $rows): array
     {
         foreach ($rows as &$r) {
-            if ($r && array_key_exists('rate', $r)) {
+            if (!$r) {
+                continue;
+            }
+            if (array_key_exists('rate', $r)) {
                 $r['rate'] = (float) $r['rate'];
+            }
+            if (array_key_exists('campaign_id', $r)) {
+                $r['campaign_id'] = $r['campaign_id'] !== null ? (int) $r['campaign_id'] : null;
             }
         }
         return $rows;

@@ -97,7 +97,7 @@ final class RecordController
         $provided = isset($body['rate']) ? (float) $body['rate'] : null;
         $rate = $type === 'buyer'
             ? $this->entityRate($pdo, 'buyers', (int) $buyerId, $provided)
-            : $this->sourceRate($pdo, $source, $provided);
+            : $this->sourceRate($pdo, $source, $provided, $campaignId !== null ? (int) $campaignId : null);
 
         $stmt = $pdo->prepare(
             'INSERT INTO call_records
@@ -229,18 +229,20 @@ final class RecordController
      * override) and a brand-new source is created carrying it; otherwise the existing
      * destination's rate is inherited.
      */
-    private function sourceRate(PDO $pdo, ?string $source, ?float $provided): float
+    private function sourceRate(PDO $pdo, ?string $source, ?float $provided, ?int $campaignId = null): float
     {
         $name = trim((string) ($source ?? ''));
 
         if ($provided !== null) {
             if ($name !== '') {
-                // Seed the rate for a new source; never silently overwrite an existing one.
+                // Seed the rate for a new source and link it to the campaign; for an
+                // existing source keep its rate but fill in the campaign link if missing.
                 $ins = $pdo->prepare(
-                    'INSERT INTO destinations (name, rate) VALUES (:name, :rate)
-                     ON CONFLICT (name) DO NOTHING'
+                    'INSERT INTO destinations (name, rate, campaign_id) VALUES (:name, :rate, :cid)
+                     ON CONFLICT (name) DO UPDATE
+                        SET campaign_id = COALESCE(destinations.campaign_id, EXCLUDED.campaign_id)'
                 );
-                $ins->execute([':name' => $name, ':rate' => $provided]);
+                $ins->execute([':name' => $name, ':rate' => $provided, ':cid' => $campaignId]);
             }
             return $provided;
         }

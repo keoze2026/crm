@@ -108,6 +108,7 @@ export interface Destination {
   name: string
   status: string
   rate: number
+  campaign_id: number | null
   created_at: string
 }
 

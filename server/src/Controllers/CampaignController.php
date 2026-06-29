@@ -55,19 +55,22 @@ final class CampaignController
      */
     public function sources(array $params): void
     {
+        // Sources come from the destinations linked to this campaign, so the rates are
+        // always listed and editable even when the campaign has no call records yet.
         $sql = "
             SELECT d.id AS destination_id,
-                   r.source                       AS name,
-                   COALESCE(d.rate, 0)            AS rate,
+                   d.name                         AS name,
+                   d.rate                         AS rate,
                    COALESCE(SUM(r.counted), 0)    AS counted,
                    COALESCE(SUM(r.total_bill), 0) AS cost
-            FROM call_records r
-            LEFT JOIN destinations d ON d.name = r.source
-            WHERE r.record_type = 'campaign'
-              AND r.campaign_id = :id
-              AND r.source IS NOT NULL AND r.source <> ''
-            GROUP BY d.id, r.source, d.rate
-            ORDER BY cost DESC, r.source
+            FROM destinations d
+            LEFT JOIN call_records r
+                   ON r.record_type = 'campaign'
+                  AND r.campaign_id = d.campaign_id
+                  AND r.source = d.name
+            WHERE d.campaign_id = :id
+            GROUP BY d.id, d.name, d.rate
+            ORDER BY cost DESC, d.name
         ";
         $stmt = Database::connection()->prepare($sql);
         $stmt->execute([':id' => (int) $params['id']]);
@@ -130,8 +133,12 @@ final class CampaignController
 
     public function destroy(array $params): void
     {
-        $stmt = Database::connection()->prepare('DELETE FROM campaigns WHERE id = :id');
-        $stmt->execute([':id' => (int) $params['id']]);
+        $id  = (int) $params['id'];
+        $pdo = Database::connection();
+        // Remove this campaign's sources too (no FK cascade on the link column).
+        $pdo->prepare('DELETE FROM destinations WHERE campaign_id = :id')->execute([':id' => $id]);
+        $stmt = $pdo->prepare('DELETE FROM campaigns WHERE id = :id');
+        $stmt->execute([':id' => $id]);
         Http::json(['deleted' => $stmt->rowCount() > 0]);
     }
 

@@ -153,6 +153,7 @@ function CampaignsPage() {
 function CampaignRatesForm({ campaign, onSaved, onCancel }: { campaign: Campaign; onSaved: () => void; onCancel: () => void }) {
   const sources = useAsync(() => api.campaignSources(campaign.id), [campaign.id])
   const [rates, setRates] = useState<Record<number, string>>({})
+  const [newRows, setNewRows] = useState<{ name: string; rate: string }[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -160,11 +161,16 @@ function CampaignRatesForm({ campaign, onSaved, onCancel }: { campaign: Campaign
   const rateValue = (s: CampaignSource) =>
     s.destination_id != null && rates[s.destination_id] !== undefined ? rates[s.destination_id] : String(s.rate)
 
+  const addRow = () => setNewRows((r) => [...r, { name: '', rate: '' }])
+  const patchRow = (i: number, patch: Partial<{ name: string; rate: string }>) =>
+    setNewRows((r) => r.map((row, j) => (j === i ? { ...row, ...patch } : row)))
+  const removeRow = (i: number) => setNewRows((r) => r.filter((_, j) => j !== i))
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true); setError(null)
     try {
-      // Save only the sources whose rate actually changed.
+      // Update existing source rates that changed.
       const changed = list.filter(
         (s) => s.destination_id != null &&
           rates[s.destination_id] !== undefined &&
@@ -172,6 +178,11 @@ function CampaignRatesForm({ campaign, onSaved, onCancel }: { campaign: Campaign
       )
       for (const s of changed) {
         await api.updateDestination(s.destination_id!, { rate: Number(rates[s.destination_id!]) || 0 })
+      }
+      // Create any new sources, linked to this campaign.
+      const toCreate = newRows.filter((r) => r.name.trim() !== '')
+      for (const r of toCreate) {
+        await api.createDestination({ name: r.name.trim(), rate: Number(r.rate) || 0, campaign_id: campaign.id })
       }
       onSaved()
     } catch (err) {
@@ -181,17 +192,18 @@ function CampaignRatesForm({ campaign, onSaved, onCancel }: { campaign: Campaign
     }
   }
 
+  const nothingToSave = list.length === 0 && newRows.length === 0
+
   return (
     <form onSubmit={submit} className="space-y-4">
       <p className="text-sm text-slate-500">
-        Each source bills at its own rate; the campaign cost is the sum across them. Changing a
-        rate updates that source everywhere it is used and re-prices its existing records.
+        Each source bills at its own rate; the campaign cost is the sum across them. These rates
+        are stored on the campaign and stay editable even with no call records. Changing a rate
+        also re-prices that source's existing records.
       </p>
 
       {sources.loading ? (
         <div className="flex justify-center py-8"><Spinner className="h-6 w-6" /></div>
-      ) : list.length === 0 ? (
-        <EmptyState message="This campaign has no source records yet." />
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200">
           <table className="w-full text-sm">
@@ -200,9 +212,13 @@ function CampaignRatesForm({ campaign, onSaved, onCancel }: { campaign: Campaign
                 <th className="px-3 py-2">Source</th>
                 <th className="px-3 py-2 text-right">Calls</th>
                 <th className="px-3 py-2 text-right">Rate ($/call)</th>
+                <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody>
+              {list.length === 0 && newRows.length === 0 && (
+                <tr><td colSpan={4} className="px-3 py-6 text-center text-slate-400">No sources yet — add one below.</td></tr>
+              )}
               {list.map((s) => (
                 <tr key={s.name} className="border-t border-slate-100">
                   <td className="px-3 py-2 font-medium text-slate-800">{s.name}</td>
@@ -212,10 +228,26 @@ function CampaignRatesForm({ campaign, onSaved, onCancel }: { campaign: Campaign
                       type="number" min="0" step="0.01"
                       value={rateValue(s)}
                       disabled={s.destination_id == null}
-                      title={s.destination_id == null ? 'This source has no destination record to edit' : undefined}
                       onChange={(e) => s.destination_id != null && setRates((r) => ({ ...r, [s.destination_id!]: e.target.value }))}
-                      className="w-28 text-right"
+                      className="w-24 text-right"
                     />
+                  </td>
+                  <td className="px-3 py-2" />
+                </tr>
+              ))}
+              {newRows.map((row, i) => (
+                <tr key={`new-${i}`} className="border-t border-slate-100 bg-amber-50/40">
+                  <td className="px-3 py-2">
+                    <Input placeholder="New source name" value={row.name} onChange={(e) => patchRow(i, { name: e.target.value })} className="w-full" />
+                  </td>
+                  <td className="px-3 py-2 text-right text-slate-300">—</td>
+                  <td className="px-3 py-2 text-right">
+                    <Input type="number" min="0" step="0.01" placeholder="0.00" value={row.rate} onChange={(e) => patchRow(i, { rate: e.target.value })} className="w-24 text-right" />
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <button type="button" onClick={() => removeRow(i)} className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Remove">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -224,10 +256,15 @@ function CampaignRatesForm({ campaign, onSaved, onCancel }: { campaign: Campaign
         </div>
       )}
 
+      <Button type="button" variant="secondary" onClick={addRow}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+        Add source
+      </Button>
+
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" disabled={saving || list.length === 0}>{saving && <Spinner className="h-4 w-4 text-white" />}Save rates</Button>
+        <Button type="submit" disabled={saving || nothingToSave}>{saving && <Spinner className="h-4 w-4 text-white" />}Save rates</Button>
       </div>
     </form>
   )

@@ -443,7 +443,6 @@ function RosterView() {
                   ['Net Hours', 'net_hours'],
                   ['Break', 'break_count'],
                   ['Break M', 'break_min'],
-                  ['Allowance', null],
                   ['Over (m)', 'over_break_min'],
                   ['Break Status', null],
                   ['Break Detail', null],
@@ -464,11 +463,11 @@ function RosterView() {
             </thead>
             <tbody>
               {rosterReq.loading ? (
-                <tr><td colSpan={16} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
+                <tr><td colSpan={15} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
               ) : rosterReq.error ? (
-                <tr><td colSpan={16} className="py-12 text-center text-sm text-red-500">{rosterReq.error}</td></tr>
+                <tr><td colSpan={15} className="py-12 text-center text-sm text-red-500">{rosterReq.error}</td></tr>
               ) : pageSlice.length === 0 ? (
-                <tr><td colSpan={16} className="py-12 text-center text-sm text-slate-400">No records for {date}</td></tr>
+                <tr><td colSpan={15} className="py-12 text-center text-sm text-slate-400">No records for {date}</td></tr>
               ) : pageSlice.map((r, i) => (
                 <tr key={i} className="border-b border-white/40 hover:bg-white/40 transition-colors">
                   <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums text-slate-600">{r.work_date}</td>
@@ -489,7 +488,6 @@ function RosterView() {
                   </td>
                   <td className="px-3 py-2.5 text-xs text-center tabular-nums">{r.break_count}</td>
                   <td className="px-3 py-2.5 text-xs text-center tabular-nums">{r.break_min}</td>
-                  <td className="px-3 py-2.5 text-xs text-center text-slate-400">60</td>
                   <td className={cx('px-3 py-2.5 text-xs text-center tabular-nums', r.over_break_min > 0 ? 'text-red-600' : 'text-slate-700')}>
                     {r.over_break_min}
                   </td>
