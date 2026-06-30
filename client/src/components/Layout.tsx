@@ -63,11 +63,15 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       <div className="border-t border-white/50 px-4 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-blue-500 to-blue-700 text-sm font-semibold text-white shadow">
-            TM
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-linear-to-br from-blue-500 to-blue-700 text-white shadow-lg shadow-blue-600/30 ring-1 ring-white/40">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+              <path d="m7 14 3.5-4 3.5 2.5L21 6" />
+              <circle cx="21" cy="6" r="1.4" fill="currentColor" stroke="none" />
+            </svg>
           </div>
           <div className="leading-tight">
-            <div className="text-sm font-medium text-slate-700">Team Member</div>
+            <div className="text-sm font-semibold text-slate-700">Platform</div>
             <div className="text-xs text-slate-400">Operations</div>
           </div>
         </div>
