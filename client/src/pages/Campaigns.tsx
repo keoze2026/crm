@@ -4,17 +4,16 @@ import { PageHeader } from '../components/Layout'
 import { Protected } from '../components/PasswordGate'
 import { DateRangeFilter } from '../components/DateRange'
 import RecordsSection from '../components/RecordsSection'
+import CampaignsSheet from '../components/CampaignsSheet'
 import {
-  Badge,
   Button,
   Card,
-  EmptyState,
   Input,
   Modal,
   Select,
   Spinner,
 } from '../components/ui'
-import { formatDate, money, money2, num } from '../lib/format'
+import { num } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { Campaign, CampaignSource } from '../types'
 
@@ -39,15 +38,8 @@ function CampaignsPage() {
   const campaigns = useAsync(() => api.campaigns(search, { from, to }), [search, from, to])
 
   const openNew = () => { setEditing(null); setModalOpen(true) }
-  const openEdit = (c: Campaign) => { setEditing(c); setModalOpen(true) }
   const onSaved = () => { setModalOpen(false); campaigns.reload() }
   const onRatesSaved = () => { setRatesFor(null); campaigns.reload() }
-
-  const onDelete = async (c: Campaign) => {
-    if (!confirm(`Delete campaign ${c.code}? This also deletes its ${num(c.records)} call records.`)) return
-    await api.deleteCampaign(c.id)
-    campaigns.reload()
-  }
 
   // Sort by avg rate (cost ÷ counted) high → low, matching the report tables.
   const list = (campaigns.data ?? []).slice().sort((a, b) => {
@@ -71,60 +63,14 @@ function CampaignsPage() {
 
       {campaigns.loading ? (
         <div className="flex justify-center py-16"><Spinner className="h-6 w-6" /></div>
-      ) : list.length === 0 ? (
-        <Card><EmptyState message="No campaigns yet. Add your first campaign to get started." /></Card>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {list.map((c) => {
-            const totalVolume = c.answered + c.missed
-            const replacement = Math.max(0, totalVolume - c.counted)
-            return (
-              <Card key={c.id} className="p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-semibold text-slate-900">{c.code}</span>
-                      <Badge color={c.status === 'active' ? 'green' : 'red'}>{c.status}</Badge>
-                    </div>
-                    {c.name && <p className="text-sm text-slate-500">{c.name}</p>}
-                  </div>
-                  <div className="flex gap-1">
-                    <button onClick={() => setRatesFor(c)} className="rounded p-1.5 text-slate-400 hover:bg-amber-50 hover:text-amber-600" title="Edit source rates">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
-                    </button>
-                    <button onClick={() => openEdit(c)} className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600" title="Edit">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
-                    </button>
-                    <button onClick={() => onDelete(c)} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
-                    </button>
-                  </div>
-                </div>
-
-                <dl className="mt-4 grid grid-cols-2 gap-y-2 text-sm">
-                  <dt className="text-slate-500">Avg rate</dt>
-                  <dd className="text-right font-semibold text-amber-700">{money2(c.counted > 0 ? c.cost / c.counted : 0)}</dd>
-                  <dt className="text-slate-500">Total volume</dt>
-                  <dd className="text-right font-medium text-slate-700">{num(totalVolume)}</dd>
-                  <dt className="text-slate-500">Replacement</dt>
-                  <dd className="text-right font-medium text-slate-700">{num(replacement)}</dd>
-                  <dt className="text-slate-500">Final count</dt>
-                  <dd className="text-right font-medium text-slate-700">{num(c.counted)}</dd>
-                  <dt className="text-slate-500">Last active</dt>
-                  <dd className="text-right font-medium text-slate-700">{formatDate(c.last_activity)}</dd>
-                </dl>
-
-                <div className="mt-4 rounded-xl bg-amber-50/70 px-3 py-2">
-                  <div className="flex items-center justify-between text-xs text-amber-700">
-                    <span>Total running fee</span>
-                    <span className="tabular-nums text-amber-600/70">{num(c.sources)} {c.sources === 1 ? 'source' : 'sources'}</span>
-                  </div>
-                  <div className="text-xl font-bold text-amber-700">{money(c.cost)}</div>
-                </div>
-              </Card>
-            )
-          })}
-        </div>
+        <Card className="overflow-hidden">
+          <div className="border-b border-white/50 px-5 py-4">
+            <h2 className="font-semibold text-slate-900">Monthly Sheet</h2>
+            <p className="mt-0.5 text-sm text-slate-500">Edit a cell to update a campaign; the $ button sets per-source rates; fill the bottom row (or press +) to add one; the trash deletes.</p>
+          </div>
+          <CampaignsSheet campaigns={list} onChanged={() => campaigns.reload()} onEditRates={setRatesFor} />
+        </Card>
       )}
 
       {campaigns.error && <p className="mt-4 text-sm text-red-600">{campaigns.error}</p>}
