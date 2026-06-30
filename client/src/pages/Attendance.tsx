@@ -167,9 +167,9 @@ function DayStatus({ row }: { row: AttendanceDay }) {
 }
 
 /** Glass KPI card matching the Dashboard look. */
-function MetricCard({ label, value, sub, accent }: { label: string; value: ReactNode; sub?: string; accent?: string }) {
+function MetricCard({ label, value, sub }: { label: string; value: ReactNode; sub?: string; accent?: string }) {
   return (
-    <div className="glass rounded-2xl p-4 shadow-xl shadow-slate-900/5" style={{ borderTop: accent ? `3px solid ${accent}` : undefined }}>
+    <div className="glass rounded-2xl p-4 shadow-xl shadow-slate-900/5">
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
       {sub && <p className="mt-0.5 text-xs text-slate-400">{sub}</p>}
@@ -355,13 +355,13 @@ function RosterView() {
       {/* Alert cards */}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {/* Absent */}
-        <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden" style={{ borderTop: '3px solid #EF4444' }}>
+        <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/50">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Absent</p>
               <p className="text-xs text-slate-400 mt-0.5">No record on {date}</p>
             </div>
-            <span className={cx('text-2xl font-semibold', absentMembers.length > 0 ? 'text-red-500' : 'text-slate-800')}>{absentMembers.length}</span>
+            <span className="text-2xl font-semibold text-slate-800">{absentMembers.length}</span>
           </div>
           <div className="px-4 py-3 min-h-12">
             {absentMembers.length === 0
@@ -379,13 +379,13 @@ function RosterView() {
         </div>
 
         {/* Break overages */}
-        <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden" style={{ borderTop: '3px solid #7C3AED' }}>
+        <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/50">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Break overages</p>
               <p className="text-xs text-slate-400 mt-0.5">Exceeded 60-min allowance</p>
             </div>
-            <span className={cx('text-2xl font-semibold', (overBreakReq.data?.rows?.length ?? 0) > 0 ? 'text-violet-600' : 'text-slate-800')}>
+            <span className="text-2xl font-semibold text-slate-800">
               {overBreakReq.data?.rows?.length ?? 0}
             </span>
           </div>
