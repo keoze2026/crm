@@ -36,7 +36,7 @@ export default function BuyersSheet({ buyers, onChanged }: { buyers: Buyer[]; on
       <table className="w-full border-collapse text-sm [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white">
         <thead>
           <tr>
-            <th className={headCls}>Name</th>
+            <th className={headCls}>Code</th>
             <th className={headCls}>Answered</th>
             <th className={headCls}>Missed</th>
             <th className={headCls}>Counted</th>
@@ -158,7 +158,7 @@ function DraftBuyerRow({ onActivate, onSaved }: { onActivate: () => void; onSave
 
   return (
     <tr ref={rowRef} onBlur={onRowBlur} className="bg-amber-50/50 text-[#0f172a]">
-      <td className={td}><Input value={code} onChange={(e) => onCode(e.target.value)} placeholder="New name" /></td>
+      <td className={td}><Input value={code} onChange={(e) => onCode(e.target.value)} placeholder="New code" /></td>
       <td className={cx(td, 'text-center text-slate-300')}>—</td>
       <td className={cx(td, 'text-center text-slate-300')}>—</td>
       <td className={cx(td, 'text-center text-slate-300')}>—</td>
