@@ -78,11 +78,18 @@ const CheckIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="no
 const TrashIcon = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
 
 function StatusSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const active = value === 'active'
   return (
-    <Select value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="active">Active</option>
-      <option value="inactive">Inactive</option>
-    </Select>
+    <div className={cx('rounded-xl', active ? 'bg-emerald-200/80' : 'bg-red-200/80')}>
+      <Select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={cx('border-transparent! bg-transparent! font-semibold', active ? 'text-emerald-800' : 'text-red-700')}
+      >
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+      </Select>
+    </div>
   )
 }
 
