@@ -4,17 +4,15 @@ import { DateRangeControl, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
 import { Protected } from '../components/PasswordGate'
 import RecordsSection from '../components/RecordsSection'
+import BuyersSheet from '../components/BuyersSheet'
 import {
-  Badge,
   Button,
   Card,
-  EmptyState,
   Input,
   Modal,
   Select,
   Spinner,
 } from '../components/ui'
-import { formatDate, money, money2, num } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { Buyer } from '../types'
 
@@ -35,14 +33,7 @@ function BuyersPage() {
   const buyers = useAsync(() => api.buyers(search, range), [search, range.from, range.to])
 
   const openNew = () => { setEditing(null); setModalOpen(true) }
-  const openEdit = (b: Buyer) => { setEditing(b); setModalOpen(true) }
   const onSaved = () => { setModalOpen(false); buyers.reload() }
-
-  const onDelete = async (b: Buyer) => {
-    if (!confirm(`Delete buyer ${b.code}? This also deletes its ${num(b.records)} call records.`)) return
-    await api.deleteBuyer(b.id)
-    buyers.reload()
-  }
 
   // Sort by rate high → low, matching the report tables.
   const list = (buyers.data ?? []).slice().sort((a, b) => b.rate - a.rate)
@@ -62,57 +53,14 @@ function BuyersPage() {
 
       {buyers.loading ? (
         <div className="flex justify-center py-16"><Spinner className="h-6 w-6" /></div>
-      ) : list.length === 0 ? (
-        <Card><EmptyState message="No buyers yet. Add your first buyer to get started." /></Card>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {list.map((b) => {
-            const totalVolume = b.answered + b.missed
-            const replacement = Math.max(0, totalVolume - b.counted)
-            return (
-              <Card key={b.id} className="p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-semibold text-slate-900">{b.code}</span>
-                      <Badge color={b.status === 'active' ? 'green' : 'red'}>{b.status}</Badge>
-                    </div>
-                    {b.name && <p className="text-sm text-slate-500">{b.name}</p>}
-                  </div>
-                  <div className="flex gap-1">
-                    <button onClick={() => openEdit(b)} className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600" title="Edit">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
-                    </button>
-                    <button onClick={() => onDelete(b)} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
-                    </button>
-                  </div>
-                </div>
-
-                <dl className="mt-4 grid grid-cols-2 gap-y-2 text-sm">
-                  <dt className="text-slate-500">Rate</dt>
-                  <dd className="text-right font-semibold text-blue-700">{money2(b.rate)}</dd>
-                  <dt className="text-slate-500">Total volume</dt>
-                  <dd className="text-right font-medium text-slate-700">{num(totalVolume)}</dd>
-                  <dt className="text-slate-500">Replacement</dt>
-                  <dd className="text-right font-medium text-slate-700">{num(replacement)}</dd>
-                  <dt className="text-slate-500">Final count</dt>
-                  <dd className="text-right font-medium text-slate-700">{num(b.counted)}</dd>
-                  <dt className="text-slate-500">Last active</dt>
-                  <dd className="text-right font-medium text-slate-700">{formatDate(b.last_activity)}</dd>
-                </dl>
-
-                <div className="mt-4 rounded-xl bg-blue-50/70 px-3 py-2">
-                  <div className="flex items-center justify-between text-xs text-blue-700">
-                    <span>Total revenue</span>
-                    <span className="tabular-nums text-blue-600/70">{money2(b.rate)} × {num(b.counted)}</span>
-                  </div>
-                  <div className="text-xl font-bold text-blue-700">{money(b.revenue)}</div>
-                </div>
-              </Card>
-            )
-          })}
-        </div>
+        <Card className="overflow-hidden">
+          <div className="border-b border-white/50 px-5 py-4">
+            <h2 className="font-semibold text-slate-900">Monthly Sheet</h2>
+            <p className="mt-0.5 text-sm text-slate-500">Edit any cell to update a buyer; fill the bottom row (or press +) to add one; the trash icon deletes.</p>
+          </div>
+          <BuyersSheet buyers={list} onChanged={() => buyers.reload()} />
+        </Card>
       )}
 
       {buyers.error && <p className="mt-4 text-sm text-red-600">{buyers.error}</p>}
