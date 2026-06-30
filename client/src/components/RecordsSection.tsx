@@ -7,6 +7,7 @@ import { formatDate, money2, num, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { CallRecord, Destination, RecordFilters, RecordType } from '../types'
 import { DateRangeFilter } from './DateRange'
+import RecordsGrid from './RecordsGrid'
 import { Button, Card, EmptyState, Input, Modal, Select, Spinner, cx } from './ui'
 
 interface Entity { id: number; code: string; rate: number }
@@ -155,8 +156,9 @@ export default function RecordsSection({
   const entityLabel = isBuyer ? 'Destination' : 'Campaign'
   const navy        = theme === 'navy'
 
+  // Default to today (a single day) so the editable grid is visible immediately.
   const [filters, setFilters] = useState<RecordFilters>({
-    type, from: '', to: '', search: '', buyer_id: '', campaign_id: '',
+    type, from: today(), to: today(), search: '', buyer_id: '', campaign_id: '',
     sort: 'rate', dir: 'desc', page: 1, per_page: 35,
   })
   const [modalOpen,  setModalOpen]  = useState(false)
@@ -221,6 +223,8 @@ export default function RecordsSection({
   const openEdit = (r: CallRecord) => { setEditing(r); setModalOpen(true) }
 
   const onSaved = () => { setModalOpen(false); records.reload(); entities.reload(); onChange?.() }
+  // After an inline grid edit/add/delete, refresh everything the grid depends on.
+  const gridChanged = () => { records.reload(); allRecords.reload(); entities.reload(); destinations.reload(); onChange?.() }
   const onDelete = async (r: CallRecord) => {
     if (!confirm(`Delete this record from ${formatDate(r.record_date)}?`)) return
     await api.deleteRecord(r.id); records.reload(); onChange?.()
@@ -442,6 +446,20 @@ export default function RecordsSection({
             <p className="text-base font-semibold text-slate-700">Select a date to view records</p>
             <p className="max-w-sm text-sm text-slate-400">Pick a day or date range with the <span className="font-medium text-slate-500">Date</span> picker above to load call records.</p>
           </div>
+        ) : isSingleDay ? (
+          allRecords.loading ? (
+            <div className="flex justify-center py-16"><Spinner className="h-6 w-6" /></div>
+          ) : (
+            <RecordsGrid
+              type={type}
+              date={filters.from ?? today()}
+              records={allRecords.data?.data ?? []}
+              entities={entities.data ?? []}
+              destinations={destinations.data ?? []}
+              navy={navy}
+              onChanged={gridChanged}
+            />
+          )
         ) : records.loading ? (
           <div className="flex justify-center py-16"><Spinner className="h-6 w-6" /></div>
         ) : rows.length === 0 ? (
@@ -522,7 +540,7 @@ export default function RecordsSection({
           </div>
         )}
 
-        {isFiltered && meta && meta.total > 0 && (
+        {isFiltered && !isSingleDay && meta && meta.total > 0 && (
           <div className="flex flex-col items-center justify-between gap-2 border-t border-slate-100 px-4 py-3 text-sm text-slate-500 sm:flex-row">
             <span>Showing {(meta.page - 1) * meta.per_page + 1}–{Math.min(meta.page * meta.per_page, meta.total)} of {num(meta.total)}</span>
             <div className="flex items-center gap-1">
