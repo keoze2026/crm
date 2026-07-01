@@ -12,7 +12,7 @@ import { Button, Card, EmptyState, Input, Modal, Select, Spinner, cx } from './u
 
 interface Entity { id: number; code: string; rate: number }
 
-const PlusIcon  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+// const PlusIcon  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>  // "Add record" button retired
 const EditIcon  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
 const TrashIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
 
@@ -219,7 +219,7 @@ export default function RecordsSection({
   const showSerial = !isFiltered || isSingleDay
   const showDate   = !isSingleDay
 
-  const openNew  = () => { setEditing(null); setModalOpen(true) }
+  // const openNew  = () => { setEditing(null); setModalOpen(true) }  // "Add record" button retired
   const openEdit = (r: CallRecord) => { setEditing(r); setModalOpen(true) }
 
   const onSaved = () => { setModalOpen(false); records.reload(); entities.reload(); onChange?.() }
@@ -373,7 +373,9 @@ export default function RecordsSection({
         {pdfLoading ? <Spinner className="h-3.5 w-3.5" /> : <PdfIcon />} PDF
       </Button>
       */}
+      {/* "Add record" retired — records are keyed in directly on the inline sheet below.
       <Button onClick={openNew}><PlusIcon /> Add record</Button>
+      */}
     </>
   )
 
@@ -530,7 +532,7 @@ export default function RecordsSection({
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-12">{num(totals.answered)}</Box></td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-10">{num(totals.missed)}</Box></td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-12">{num(totals.counted)}</Box></td>
-                    <td className={cx('py-3 pl-10 pr-2 text-center tabular-nums', navy ? 'text-white/70' : 'text-slate-400')}><Box w="w-16">—</Box></td>
+                    <td className={cx('py-3 pl-10 pr-2 text-center tabular-nums', navy ? 'text-white/90' : 'text-blue-700')} title="Average rate = Total ÷ Counted"><Box w="w-16">{totals.counted > 0 ? money2(totals.total_bill / totals.counted) : '—'}</Box></td>
                     <td className={cx('py-3 pl-10 pr-2 text-center tabular-nums', navy ? 'text-white' : 'text-blue-700')}><Box w="w-28">{money2(totals.total_bill)}</Box></td>
                     <td />
                   </tr>
@@ -610,11 +612,9 @@ function RecordForm({ type, editing, entities, destinations, onSaved, onCancel }
   const creatingNewDest = !isBuyer && source === '__new__'
 
   // Where the rate comes from:
-  //   buyer rows    -> the buyer's definite rate (locked; edit it on the Buyers page)
+  //   buyer rows    -> the buyer's rate, auto-filled but now keyable per record
   //   campaign rows -> the source/destination's rate (auto-filled, editable per row)
-  // A brand-new buyer or destination lets you type its starting rate here. The rate
-  // field is editable for campaigns and for new buyers; locked for existing buyers.
-  const rateLocked = isBuyer && !creatingNew
+  // The rate field is typeable everywhere so it stays consistent with the inline sheet.
   const effectiveRate = Number(rate) || 0
   const total = useMemo(() => (Number(counted) || 0) * effectiveRate, [counted, effectiveRate])
 
@@ -701,7 +701,7 @@ function RecordForm({ type, editing, entities, destinations, onSaved, onCancel }
         <Input label="Answered" type="number" min="0" value={answered} onChange={(e) => handleAnswered(e.target.value)} />
         <Input label="Missed"   type="number" min="0" value={missed}   onChange={(e) => handleMissed(e.target.value)} />
         <Input label="Counted"  type="number" min="0" value={counted}  disabled />
-        <Input label="Rate ($)" type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} disabled={rateLocked} title={rateLocked ? 'Buyer rate — edit it on the Buyers page' : isBuyer ? undefined : 'Source rate — auto-filled from the destination; editable per record'} />
+        <Input label="Rate ($)" type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} title={isBuyer ? 'Buyer rate — auto-filled, editable per record' : 'Source rate — auto-filled from the destination; editable per record'} />
       </div>
       <div className="flex items-center justify-between rounded-xl bg-linear-to-r from-blue-500 to-blue-600 px-4 py-3 text-white shadow-lg shadow-blue-600/25">
         <span className="text-sm font-medium text-blue-50">{isBuyer ? 'Total revenue' : 'Total cost'}</span>

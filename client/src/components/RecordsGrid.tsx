@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { api } from '../api/client'
 import { money2, num } from '../lib/format'
 import type { CallRecord, Destination, RecordType } from '../types'
-import { Input, Select, Spinner, cx } from './ui'
+import { Input, Spinner, cx } from './ui'
 
 interface Entity { id: number; code: string; rate: number }
 
@@ -90,7 +90,7 @@ export default function RecordsGrid({
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.answered)}</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.missed)}</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.counted)}</td>
-            <td className={cx('px-3 py-2.5 text-center', navy ? 'text-white/70' : 'text-slate-400')}>—</td>
+            <td className={cx('px-3 py-2.5 text-center tabular-nums', navy ? 'text-white/90' : 'text-blue-700')} title="Average rate = Total ÷ Counted">{totals.counted > 0 ? money2(totals.total / totals.counted) : '—'}</td>
             <td className={cx('px-3 py-2.5 text-center tabular-nums', navy ? 'text-white' : 'text-blue-700')}>{money2(totals.total)}</td>
             <td className="px-2 py-2.5 text-center">
               <button type="button" onClick={addRow} title="Add row"
@@ -119,17 +119,21 @@ function ExistingRow({ record, isBuyer, navy, onChanged }: {
 }) {
   const [answered, setAnswered] = useState(String(record.answered))
   const [missed,   setMissed]   = useState(String(record.missed))
+  // Counted is keyed in manually so both buyer categories work: "Yes" adds missed
+  // to answered, "No / Non-Missed" excludes them. It no longer auto-derives here.
+  const [counted,  setCounted]  = useState(String(record.counted))
   const [source,   setSource]   = useState(record.source ?? '')
   const [rate,     setRate]     = useState(String(record.rate))
   const [busy,     setBusy]     = useState(false)
   const rowRef   = useRef<HTMLTableRowElement>(null)
   const saving   = useRef(false)
 
-  const counted = (Number(answered) || 0) + (Number(missed) || 0)
-  const total   = counted * (Number(rate) || 0)
+  const countedNum = Number(counted) || 0
+  const total   = countedNum * (Number(rate) || 0)
   const dirty =
     Number(answered) !== record.answered ||
     Number(missed)   !== record.missed ||
+    countedNum       !== record.counted ||
     (Number(rate) || 0) !== record.rate ||
     (!isBuyer && (source ?? '') !== (record.source ?? ''))
 
@@ -138,7 +142,7 @@ function ExistingRow({ record, isBuyer, navy, onChanged }: {
     saving.current = true; setBusy(true)
     try {
       const payload: Record<string, unknown> = {
-        answered: Number(answered) || 0, missed: Number(missed) || 0, counted, rate: Number(rate) || 0,
+        answered: Number(answered) || 0, missed: Number(missed) || 0, counted: countedNum, rate: Number(rate) || 0,
       }
       if (!isBuyer) payload.source = source
       await api.updateRecord(record.id, payload)
@@ -159,8 +163,8 @@ function ExistingRow({ record, isBuyer, navy, onChanged }: {
       {!isBuyer && <td className={cellCls}><Input value={source} onChange={(e) => setSource(e.target.value)} /></td>}
       <td className={cellCls}><Input type="number" min="0" value={answered} onChange={(e) => setAnswered(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" value={missed} onChange={(e) => setMissed(e.target.value)} className={numInput} /></td>
-      <td className={cx(cellCls, 'text-center tabular-nums text-slate-700')}>{num(counted)}</td>
-      <td className={cellCls}><Input type="number" min="0" step="0.01" value={rate} disabled={isBuyer} onChange={(e) => setRate(e.target.value)} className={numInput} title={isBuyer ? 'Buyer rate — edit it on the Buyers page' : undefined} /></td>
+      <td className={cellCls}><Input type="number" min="0" value={counted} onChange={(e) => setCounted(e.target.value)} className={numInput} /></td>
+      <td className={cellCls}><Input type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} className={numInput} /></td>
       <td className={cx(cellCls, 'text-center font-semibold tabular-nums text-slate-900')}>{money2(total)}</td>
       <td className={cx(cellCls, 'text-center')}>
         <div className="flex items-center justify-center gap-1">
@@ -178,47 +182,68 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
   isBuyer: boolean; date: string; entities: Entity[]; destinations: Destination[]
   navy: boolean; onActivate: () => void; onSaved: () => void
 }) {
-  const [entityId, setEntityId] = useState('')
-  const [source,   setSource]   = useState('')
-  const [newSource, setNewSource] = useState('')
+  const [newCode,  setNewCode]  = useState('')   // entity code, typed directly
+  const [source,   setSource]   = useState('')   // source/destination, typed directly (campaigns)
   const [answered, setAnswered] = useState('')
   const [missed,   setMissed]   = useState('')
+  const [counted,  setCounted]  = useState('')
   const [rate,     setRate]     = useState('')
   const [busy,     setBusy]     = useState(false)
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
+  // Counted is keyed in manually. As a convenience it auto-fills to answered +
+  // missed while untouched, but once the user edits it directly we stop overriding
+  // so the "No / Non-Missed" category (answered − missed, or any value) can be set.
+  const countedTouched = useRef(false)
+  // Rate auto-fills from the matched destination while untouched; once keyed in
+  // manually we stop overriding it.
+  const rateTouched = useRef(false)
 
-  const creatingNewSource = !isBuyer && source === '__new__'
-  const counted = (Number(answered) || 0) + (Number(missed) || 0)
-  const total   = counted * (Number(rate) || 0)
+  const typedCode = newCode.trim()
+  const destName  = source.trim()
+  const countedNum = Number(counted) || 0
+  const total   = countedNum * (Number(rate) || 0)
 
-  const onEntity = (v: string) => {
-    setEntityId(v)
-    if (isBuyer) setRate(v ? String(entities.find((e) => String(e.id) === v)?.rate ?? '') : '')
-    if (v) onActivate()
+  const onAnswered = (v: string) => { setAnswered(v); if (!countedTouched.current) setCounted(String((Number(v) || 0) + (Number(missed) || 0))) }
+  const onMissed   = (v: string) => { setMissed(v);   if (!countedTouched.current) setCounted(String((Number(answered) || 0) + (Number(v) || 0))) }
+  const onCounted  = (v: string) => { countedTouched.current = true; setCounted(v) }
+  const onRate     = (v: string) => { rateTouched.current = true; setRate(v) }
+
+  // Entity (buyer destination / campaign) typed directly: activate a trailing row
+  // and, for buyers, auto-fill the rate from a matching destination while untouched.
+  const onEntityType = (v: string) => {
+    setNewCode(v)
+    if (v.trim()) onActivate()
+    if (isBuyer && !rateTouched.current) {
+      const match = entities.find((e) => e.code.toLowerCase() === v.trim().toLowerCase())
+      setRate(match ? String(match.rate) : '')
+    }
   }
-  const onSourceSel = (v: string) => {
+  // Campaign source typed directly: auto-fill the rate from a matching source while untouched.
+  const onSourceType = (v: string) => {
     setSource(v)
-    if (v === '__new__') setRate('')
-    else setRate(v ? String(destinations.find((d) => d.name === v)?.rate ?? '') : '')
+    if (v.trim()) onActivate()
+    if (!rateTouched.current) {
+      const match = destinations.find((d) => d.name.toLowerCase() === v.trim().toLowerCase())
+      setRate(match ? String(match.rate) : '')
+    }
   }
 
-  const destName = creatingNewSource ? newSource.trim() : source
-  const complete = !!entityId && counted > 0 && (isBuyer || destName !== '')
+  const entityChosen = typedCode !== ''
+  const complete = entityChosen && countedNum > 0 && (isBuyer || destName !== '')
 
   const save = async () => {
     if (saving.current || !complete) return
     saving.current = true; setBusy(true)
     try {
-      if (!isBuyer && creatingNewSource && destName) {
-        try { await api.createDestination({ name: destName, rate: Number(rate) || 0, campaign_id: Number(entityId) }) } catch { /* exists */ }
-      }
       const payload: Record<string, unknown> = {
         record_type: isBuyer ? 'buyer' : 'campaign',
         record_date: date,
-        answered: Number(answered) || 0, missed: Number(missed) || 0, counted, rate: Number(rate) || 0,
+        answered: Number(answered) || 0, missed: Number(missed) || 0, counted: countedNum, rate: Number(rate) || 0,
       }
-      payload[isBuyer ? 'buyer_id' : 'campaign_id'] = Number(entityId)
+      // The typed code find-or-creates the buyer/campaign; a typed source is created
+      // and linked (with its rate) on the server when the record is saved.
+      payload[isBuyer ? 'buyer_code' : 'campaign_code'] = typedCode
       if (!isBuyer) payload.source = destName
       await api.createRecord(payload)
       onSaved()
@@ -228,33 +253,32 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
     if (rowRef.current && !rowRef.current.contains(document.activeElement)) save()
   }, 0)
 
-  const destOptions = destinations.filter((d) => !entityId || d.campaign_id == null || String(d.campaign_id) === entityId)
-
   return (
     <tr ref={rowRef} onBlur={onRowBlur} className={rowCls(navy, navy ? '!bg-white/70' : 'bg-amber-50/30')}>
       <td className={cellCls}>
-        <Select value={entityId} onChange={(e) => onEntity(e.target.value)}>
-          <option value="">{isBuyer ? 'Destination…' : 'Campaign…'}</option>
-          {entities.map((x) => <option key={x.id} value={x.id}>{x.code}</option>)}
-        </Select>
+        {/* Entity is a free typing field (find-or-create by code). Dropdown retired:
+              <Select value={entityId} onChange={(e) => onEntity(e.target.value)}>
+                <option value="">{isBuyer ? 'Destination…' : 'Campaign…'}</option>
+                {entities.map((x) => <option key={x.id} value={x.id}>{x.code}</option>)}
+                <option value="__new__">+ New…</option>
+              </Select> */}
+        <Input placeholder={isBuyer ? 'Destination' : 'Campaign'} value={newCode} onChange={(e) => onEntityType(e.target.value)} />
       </td>
       {!isBuyer && (
         <td className={cellCls}>
-          {creatingNewSource
-            ? <Input placeholder="New source name" value={newSource} onChange={(e) => setNewSource(e.target.value)} />
-            : (
-              <Select value={source} onChange={(e) => onSourceSel(e.target.value)}>
-                <option value="">Source…</option>
-                {destOptions.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
-                <option value="__new__">+ New…</option>
-              </Select>
-            )}
+          {/* Source is a free typing field (find-or-create by name on save). Dropdown retired:
+                <Select value={source} onChange={(e) => onSourceSel(e.target.value)}>
+                  <option value="">Source…</option>
+                  {destOptions.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                  <option value="__new__">+ New…</option>
+                </Select> */}
+          <Input placeholder="Source" value={source} onChange={(e) => onSourceType(e.target.value)} />
         </td>
       )}
-      <td className={cellCls}><Input type="number" min="0" value={answered} onChange={(e) => setAnswered(e.target.value)} className={numInput} /></td>
-      <td className={cellCls}><Input type="number" min="0" value={missed} onChange={(e) => setMissed(e.target.value)} className={numInput} /></td>
-      <td className={cx(cellCls, 'text-center tabular-nums text-slate-700')}>{num(counted)}</td>
-      <td className={cellCls}><Input type="number" min="0" step="0.01" value={rate} disabled={isBuyer} onChange={(e) => setRate(e.target.value)} className={numInput} /></td>
+      <td className={cellCls}><Input type="number" min="0" value={answered} onChange={(e) => onAnswered(e.target.value)} className={numInput} /></td>
+      <td className={cellCls}><Input type="number" min="0" value={missed} onChange={(e) => onMissed(e.target.value)} className={numInput} /></td>
+      <td className={cellCls}><Input type="number" min="0" value={counted} onChange={(e) => onCounted(e.target.value)} className={numInput} /></td>
+      <td className={cellCls}><Input type="number" min="0" step="0.01" value={rate} onChange={(e) => onRate(e.target.value)} className={numInput} /></td>
       <td className={cx(cellCls, 'text-center font-semibold tabular-nums text-slate-900')}>{money2(total)}</td>
       <td className={cx(cellCls, 'text-center')}>
         {busy ? <Spinner className="h-4 w-4" /> : (
