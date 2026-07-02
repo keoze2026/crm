@@ -17,19 +17,21 @@ final class BuyerController
         $to     = Http::query('to');
         $params = [];
 
-        // Date range is applied in the JOIN so buyers with no records in the
-        // selected period still appear (with zeroed totals).
+        // Answered/Missed/Counted are now keyed in directly on the Monthly Sheet and
+        // stored on the buyer, so they come straight off the row (independent of call
+        // records). The call_records join only feeds the records count / last activity;
+        // the date range still scopes those.
         $join = 'LEFT JOIN call_records r ON r.buyer_id = b.id';
         if ($from) { $join .= ' AND r.record_date >= :from'; $params[':from'] = $from; }
         if ($to)   { $join .= ' AND r.record_date <= :to';   $params[':to']   = $to; }
 
-        // Revenue is the buyer's definite rate * its counted calls in the period.
+        // Revenue is the buyer's definite rate * its stored counted calls.
         $sql = "
             SELECT b.id, b.code, b.name, b.status, b.notes, b.rate, b.created_at,
-                   b.rate * COALESCE(SUM(r.counted), 0)      AS revenue,
-                   COALESCE(SUM(r.counted), 0)               AS counted,
-                   COALESCE(SUM(r.answered), 0)              AS answered,
-                   COALESCE(SUM(r.missed), 0)                AS missed,
+                   b.rate * b.counted                        AS revenue,
+                   b.counted                                 AS counted,
+                   b.answered                                AS answered,
+                   b.missed                                  AS missed,
                    COUNT(r.id)                               AS records,
                    MAX(r.record_date)                        AS last_activity
             FROM buyers b
@@ -54,16 +56,19 @@ final class BuyerController
             Http::error('Buyer code is required', 422);
         }
         $stmt = Database::connection()->prepare(
-            'INSERT INTO buyers (code, name, status, notes, rate)
-             VALUES (:code, :name, :status, :notes, :rate) RETURNING *'
+            'INSERT INTO buyers (code, name, status, notes, rate, answered, missed, counted)
+             VALUES (:code, :name, :status, :notes, :rate, :answered, :missed, :counted) RETURNING *'
         );
         try {
             $stmt->execute([
-                ':code'   => $code,
-                ':name'   => $body['name']   ?? null,
-                ':status' => $body['status'] ?? 'active',
-                ':notes'  => $body['notes']  ?? null,
-                ':rate'   => isset($body['rate']) ? (float) $body['rate'] : 0,
+                ':code'     => $code,
+                ':name'     => $body['name']   ?? null,
+                ':status'   => $body['status'] ?? 'active',
+                ':notes'    => $body['notes']  ?? null,
+                ':rate'     => isset($body['rate']) ? (float) $body['rate'] : 0,
+                ':answered' => (int) ($body['answered'] ?? 0),
+                ':missed'   => (int) ($body['missed']   ?? 0),
+                ':counted'  => (int) ($body['counted']  ?? 0),
             ]);
         } catch (\PDOException $e) {
             Http::error('A buyer with that code already exists', 409);
@@ -84,16 +89,22 @@ final class BuyerController
                 name = :name,
                 status = COALESCE(:status, status),
                 notes = :notes,
-                rate = COALESCE(:rate, rate)
+                rate = COALESCE(:rate, rate),
+                answered = COALESCE(:answered, answered),
+                missed = COALESCE(:missed, missed),
+                counted = COALESCE(:counted, counted)
              WHERE id = :id RETURNING *'
         );
         $stmt->execute([
-            ':id'     => $id,
-            ':code'   => $body['code']   ?? null,
-            ':name'   => $body['name']   ?? null,
-            ':status' => $body['status'] ?? null,
-            ':notes'  => $body['notes']  ?? null,
-            ':rate'   => $rate,
+            ':id'       => $id,
+            ':code'     => $body['code']   ?? null,
+            ':name'     => $body['name']   ?? null,
+            ':status'   => $body['status'] ?? null,
+            ':notes'    => $body['notes']  ?? null,
+            ':rate'     => $rate,
+            ':answered' => isset($body['answered']) ? (int) $body['answered'] : null,
+            ':missed'   => isset($body['missed'])   ? (int) $body['missed']   : null,
+            ':counted'  => isset($body['counted'])  ? (int) $body['counted']  : null,
         ]);
         $row = $stmt->fetch();
         if (!$row) {

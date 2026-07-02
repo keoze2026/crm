@@ -95,21 +95,35 @@ function StatusSelect({ value, onChange }: { value: string; onChange: (v: string
 
 // ── Existing buyer row ──────────────────────────────────────────────────────────
 function BuyerRow({ buyer, onChanged }: { buyer: Buyer; onChanged: () => void }) {
-  const [code,   setCode]   = useState(buyer.code)
-  const [status, setStatus] = useState(buyer.status)
-  const [rate,   setRate]   = useState(String(buyer.rate))
-  const [busy,   setBusy]   = useState(false)
+  const [code,     setCode]     = useState(buyer.code)
+  const [status,   setStatus]   = useState(buyer.status)
+  const [rate,     setRate]     = useState(String(buyer.rate))
+  const [answered, setAnswered] = useState(String(buyer.answered))
+  const [missed,   setMissed]   = useState(String(buyer.missed))
+  const [counted,  setCounted]  = useState(String(buyer.counted))
+  const [busy,     setBusy]     = useState(false)
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
 
-  const dirty = code.trim() !== buyer.code || status !== buyer.status || (Number(rate) || 0) !== buyer.rate
+  // Totals are keyed in directly; Total Bill stays auto-calculated (rate × counted).
+  const rateNum = Number(rate) || 0
+  const countedNum = Number(counted) || 0
+  const total = rateNum * countedNum
+  const dirty =
+    code.trim() !== buyer.code || status !== buyer.status || rateNum !== buyer.rate ||
+    (Number(answered) || 0) !== buyer.answered ||
+    (Number(missed) || 0)   !== buyer.missed ||
+    countedNum              !== buyer.counted
 
   const save = async () => {
     if (saving.current || !dirty || code.trim() === '') return
     saving.current = true; setBusy(true)
     try {
       // Name doubles as the code, so keep them in sync.
-      await api.updateBuyer(buyer.id, { code: code.trim(), name: code.trim(), status, rate: Number(rate) || 0 })
+      await api.updateBuyer(buyer.id, {
+        code: code.trim(), name: code.trim(), status, rate: rateNum,
+        answered: Number(answered) || 0, missed: Number(missed) || 0, counted: countedNum,
+      })
       onChanged()
     } catch (e) { alert((e as Error).message) } finally { saving.current = false; setBusy(false) }
   }
@@ -124,11 +138,11 @@ function BuyerRow({ buyer, onChanged }: { buyer: Buyer; onChanged: () => void })
   return (
     <tr ref={rowRef} onBlur={onRowBlur} className="bg-[#d4e9f2] text-[#0f172a]">
       <td className={td}><Input value={code} onChange={(e) => setCode(e.target.value)} /></td>
-      <td className={roCell}>{num(buyer.answered)}</td>
-      <td className={roCell}>{num(buyer.missed)}</td>
-      <td className={roCell}>{num(buyer.counted)}</td>
+      <td className={td}><Input type="number" min="0" value={answered} onChange={(e) => setAnswered(e.target.value)} className="text-right" /></td>
+      <td className={td}><Input type="number" min="0" value={missed} onChange={(e) => setMissed(e.target.value)} className="text-right" /></td>
+      <td className={td}><Input type="number" min="0" value={counted} onChange={(e) => setCounted(e.target.value)} className="text-right" /></td>
       <td className={td}><Input type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} className="text-right" /></td>
-      <td className={cx(roCell, 'font-bold')}>{money(buyer.revenue)}</td>
+      <td className={cx(roCell, 'font-bold')}>{money(total)}</td>
       <td className={td}><StatusSelect value={status} onChange={setStatus} /></td>
       <td className={cx(td, 'text-center')}>
         {busy ? <Spinner className="h-4 w-4" /> : dirty
@@ -141,13 +155,17 @@ function BuyerRow({ buyer, onChanged }: { buyer: Buyer; onChanged: () => void })
 
 // ── New (draft) buyer row ───────────────────────────────────────────────────────
 function DraftBuyerRow({ onActivate, onSaved }: { onActivate: () => void; onSaved: () => void }) {
-  const [code,   setCode]   = useState('')
-  const [status, setStatus] = useState('active')
-  const [rate,   setRate]   = useState('')
-  const [busy,   setBusy]   = useState(false)
+  const [code,     setCode]     = useState('')
+  const [status,   setStatus]   = useState('active')
+  const [rate,     setRate]     = useState('')
+  const [answered, setAnswered] = useState('')
+  const [missed,   setMissed]   = useState('')
+  const [counted,  setCounted]  = useState('')
+  const [busy,     setBusy]     = useState(false)
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
 
+  const total = (Number(rate) || 0) * (Number(counted) || 0)
   const complete = code.trim() !== ''
   const onCode = (v: string) => { setCode(v); if (v.trim()) onActivate() }
 
@@ -155,7 +173,10 @@ function DraftBuyerRow({ onActivate, onSaved }: { onActivate: () => void; onSave
     if (saving.current || !complete) return
     saving.current = true; setBusy(true)
     try {
-      await api.createBuyer({ code: code.trim(), name: code.trim(), status, rate: Number(rate) || 0 })
+      await api.createBuyer({
+        code: code.trim(), name: code.trim(), status, rate: Number(rate) || 0,
+        answered: Number(answered) || 0, missed: Number(missed) || 0, counted: Number(counted) || 0,
+      })
       onSaved()
     } catch (e) { alert((e as Error).message); saving.current = false; setBusy(false) }
   }
@@ -166,11 +187,11 @@ function DraftBuyerRow({ onActivate, onSaved }: { onActivate: () => void; onSave
   return (
     <tr ref={rowRef} onBlur={onRowBlur} className="bg-amber-50/50 text-[#0f172a]">
       <td className={td}><Input value={code} onChange={(e) => onCode(e.target.value)} placeholder="New code" /></td>
-      <td className={cx(td, 'text-center text-slate-300')}>—</td>
-      <td className={cx(td, 'text-center text-slate-300')}>—</td>
-      <td className={cx(td, 'text-center text-slate-300')}>—</td>
+      <td className={td}><Input type="number" min="0" value={answered} onChange={(e) => setAnswered(e.target.value)} placeholder="0" className="text-right" /></td>
+      <td className={td}><Input type="number" min="0" value={missed} onChange={(e) => setMissed(e.target.value)} placeholder="0" className="text-right" /></td>
+      <td className={td}><Input type="number" min="0" value={counted} onChange={(e) => setCounted(e.target.value)} placeholder="0" className="text-right" /></td>
       <td className={td}><Input type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="0.00" className="text-right" /></td>
-      <td className={cx(td, 'text-center text-slate-300')}>—</td>
+      <td className={cx(roCell, 'font-bold')}>{total > 0 ? money(total) : <span className="text-slate-300">—</span>}</td>
       <td className={td}><StatusSelect value={status} onChange={setStatus} /></td>
       <td className={cx(td, 'text-center')}>
         {busy ? <Spinner className="h-4 w-4" /> : (

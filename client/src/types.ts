@@ -163,6 +163,7 @@ export interface CallRecord {
   source: string | null
   answered: number
   missed: number
+  replacement: number
   counted: number
   rate: number
   total_bill: number

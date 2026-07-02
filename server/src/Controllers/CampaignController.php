@@ -23,14 +23,16 @@ final class CampaignController
         if ($to)   { $joinConds[] = 'r.record_date <= :to';   $params[':to']   = $to; }
         $joinOn = implode(' AND ', $joinConds);
 
-        // Cost is summed from the campaign's per-source records (each source bills at
-        // its own destination rate), so cost = SUM(total_bill) across its sources.
+        // Answered/Missed/Counted and the Total Bill (`cost`) are now keyed in directly
+        // on the Monthly Sheet and stored on the campaign, so they come straight off the
+        // row (independent of call records). The join only feeds the records/sources
+        // counts + last activity; the date range still scopes those.
         $sql = "
             SELECT c.id, c.code, c.name, c.status, c.notes, c.created_at,
-                   COALESCE(SUM(r.total_bill), 0)            AS cost,
-                   COALESCE(SUM(r.counted), 0)               AS counted,
-                   COALESCE(SUM(r.answered), 0)              AS answered,
-                   COALESCE(SUM(r.missed), 0)                AS missed,
+                   c.cost                                    AS cost,
+                   c.counted                                 AS counted,
+                   c.answered                                AS answered,
+                   c.missed                                  AS missed,
                    COUNT(r.id)                               AS records,
                    COUNT(DISTINCT r.source)                  AS sources,
                    MAX(r.record_date)                        AS last_activity
@@ -93,20 +95,24 @@ final class CampaignController
             Http::error('Campaign code is required', 422);
         }
         $stmt = Database::connection()->prepare(
-            'INSERT INTO campaigns (code, name, status, notes)
-             VALUES (:code, :name, :status, :notes) RETURNING *'
+            'INSERT INTO campaigns (code, name, status, notes, answered, missed, counted, cost)
+             VALUES (:code, :name, :status, :notes, :answered, :missed, :counted, :cost) RETURNING *'
         );
         try {
             $stmt->execute([
-                ':code'   => $code,
-                ':name'   => $body['name']   ?? null,
-                ':status' => $body['status'] ?? 'active',
-                ':notes'  => $body['notes']  ?? null,
+                ':code'     => $code,
+                ':name'     => $body['name']   ?? null,
+                ':status'   => $body['status'] ?? 'active',
+                ':notes'    => $body['notes']  ?? null,
+                ':answered' => (int) ($body['answered'] ?? 0),
+                ':missed'   => (int) ($body['missed']   ?? 0),
+                ':counted'  => (int) ($body['counted']  ?? 0),
+                ':cost'     => isset($body['cost']) ? (float) $body['cost'] : 0,
             ]);
         } catch (\PDOException $e) {
             Http::error('A campaign with that code already exists', 409);
         }
-        Http::json($stmt->fetch(), 201);
+        Http::json($this->cast([$stmt->fetch()])[0], 201);
     }
 
     public function update(array $params): void
@@ -117,18 +123,26 @@ final class CampaignController
                 code = COALESCE(:code, code),
                 name = :name,
                 status = COALESCE(:status, status),
-                notes = :notes
+                notes = :notes,
+                answered = COALESCE(:answered, answered),
+                missed = COALESCE(:missed, missed),
+                counted = COALESCE(:counted, counted),
+                cost = COALESCE(:cost, cost)
              WHERE id = :id RETURNING *'
         );
         $stmt->execute([
-            ':id'     => (int) $params['id'],
-            ':code'   => $body['code']   ?? null,
-            ':name'   => $body['name']   ?? null,
-            ':status' => $body['status'] ?? null,
-            ':notes'  => $body['notes']  ?? null,
+            ':id'       => (int) $params['id'],
+            ':code'     => $body['code']   ?? null,
+            ':name'     => $body['name']   ?? null,
+            ':status'   => $body['status'] ?? null,
+            ':notes'    => $body['notes']  ?? null,
+            ':answered' => isset($body['answered']) ? (int) $body['answered'] : null,
+            ':missed'   => isset($body['missed'])   ? (int) $body['missed']   : null,
+            ':counted'  => isset($body['counted'])  ? (int) $body['counted']  : null,
+            ':cost'     => isset($body['cost'])     ? (float) $body['cost']   : null,
         ]);
         $row = $stmt->fetch();
-        $row ? Http::json($row) : Http::error('Campaign not found', 404);
+        $row ? Http::json($this->cast([$row])[0]) : Http::error('Campaign not found', 404);
     }
 
     public function destroy(array $params): void

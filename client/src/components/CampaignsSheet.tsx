@@ -101,20 +101,35 @@ function StatusSelect({ value, onChange }: { value: string; onChange: (v: string
 function CampaignRow({ campaign, onChanged, onEditRates }: {
   campaign: Campaign; onChanged: () => void; onEditRates: (c: Campaign) => void
 }) {
-  const [code,   setCode]   = useState(campaign.code)
-  const [status, setStatus] = useState(campaign.status)
-  const [busy,   setBusy]   = useState(false)
+  const [code,     setCode]     = useState(campaign.code)
+  const [status,   setStatus]   = useState(campaign.status)
+  const [answered, setAnswered] = useState(String(campaign.answered))
+  const [missed,   setMissed]   = useState(String(campaign.missed))
+  const [counted,  setCounted]  = useState(String(campaign.counted))
+  const [cost,     setCost]     = useState(String(campaign.cost))
+  const [busy,     setBusy]     = useState(false)
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
 
-  const avgRate = campaign.counted > 0 ? campaign.cost / campaign.counted : 0
-  const dirty = code.trim() !== campaign.code || status !== campaign.status
+  // Totals + Total Bill (cost) are keyed in directly; Avg Rate stays auto (cost ÷ counted).
+  const countedNum = Number(counted) || 0
+  const costNum = Number(cost) || 0
+  const avgRate = countedNum > 0 ? costNum / countedNum : 0
+  const dirty =
+    code.trim() !== campaign.code || status !== campaign.status ||
+    (Number(answered) || 0) !== campaign.answered ||
+    (Number(missed) || 0)   !== campaign.missed ||
+    countedNum              !== campaign.counted ||
+    costNum                 !== campaign.cost
 
   const save = async () => {
     if (saving.current || !dirty || code.trim() === '') return
     saving.current = true; setBusy(true)
     try {
-      await api.updateCampaign(campaign.id, { code: code.trim(), name: campaign.name, status })
+      await api.updateCampaign(campaign.id, {
+        code: code.trim(), name: campaign.name, status,
+        answered: Number(answered) || 0, missed: Number(missed) || 0, counted: countedNum, cost: costNum,
+      })
       onChanged()
     } catch (e) { alert((e as Error).message) } finally { saving.current = false; setBusy(false) }
   }
@@ -129,11 +144,11 @@ function CampaignRow({ campaign, onChanged, onEditRates }: {
   return (
     <tr ref={rowRef} onBlur={onRowBlur} className="bg-[#d4e9f2] text-[#0f172a]">
       <td className={td}><Input value={code} onChange={(e) => setCode(e.target.value)} /></td>
-      <td className={roCell}>{num(campaign.answered)}</td>
-      <td className={roCell}>{num(campaign.missed)}</td>
-      <td className={roCell}>{num(campaign.counted)}</td>
+      <td className={td}><Input type="number" min="0" value={answered} onChange={(e) => setAnswered(e.target.value)} className="text-right" /></td>
+      <td className={td}><Input type="number" min="0" value={missed} onChange={(e) => setMissed(e.target.value)} className="text-right" /></td>
+      <td className={td}><Input type="number" min="0" value={counted} onChange={(e) => setCounted(e.target.value)} className="text-right" /></td>
       <td className={roCell}>{money2(avgRate)}</td>
-      <td className={cx(roCell, 'font-bold')}>{money(campaign.cost)}</td>
+      <td className={td}><Input type="number" min="0" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} className="text-right" /></td>
       <td className={td}><StatusSelect value={status} onChange={setStatus} /></td>
       <td className={cx(td, 'text-center')}>
         <div className="flex items-center justify-center gap-1">
@@ -149,12 +164,18 @@ function CampaignRow({ campaign, onChanged, onEditRates }: {
 
 // ── New (draft) campaign row ────────────────────────────────────────────────────
 function DraftCampaignRow({ onActivate, onSaved }: { onActivate: () => void; onSaved: () => void }) {
-  const [code,   setCode]   = useState('')
-  const [status, setStatus] = useState('active')
-  const [busy,   setBusy]   = useState(false)
+  const [code,     setCode]     = useState('')
+  const [status,   setStatus]   = useState('active')
+  const [answered, setAnswered] = useState('')
+  const [missed,   setMissed]   = useState('')
+  const [counted,  setCounted]  = useState('')
+  const [cost,     setCost]     = useState('')
+  const [busy,     setBusy]     = useState(false)
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
 
+  const countedNum = Number(counted) || 0
+  const avgRate = countedNum > 0 ? (Number(cost) || 0) / countedNum : 0
   const complete = code.trim() !== ''
   const onCode = (v: string) => { setCode(v); if (v.trim()) onActivate() }
 
@@ -162,7 +183,10 @@ function DraftCampaignRow({ onActivate, onSaved }: { onActivate: () => void; onS
     if (saving.current || !complete) return
     saving.current = true; setBusy(true)
     try {
-      await api.createCampaign({ code: code.trim(), status })
+      await api.createCampaign({
+        code: code.trim(), status,
+        answered: Number(answered) || 0, missed: Number(missed) || 0, counted: countedNum, cost: Number(cost) || 0,
+      })
       onSaved()
     } catch (e) { alert((e as Error).message); saving.current = false; setBusy(false) }
   }
@@ -173,11 +197,11 @@ function DraftCampaignRow({ onActivate, onSaved }: { onActivate: () => void; onS
   return (
     <tr ref={rowRef} onBlur={onRowBlur} className="bg-amber-50/50 text-[#0f172a]">
       <td className={td}><Input value={code} onChange={(e) => onCode(e.target.value)} placeholder="New code" /></td>
-      <td className={cx(td, 'text-center text-slate-300')}>—</td>
-      <td className={cx(td, 'text-center text-slate-300')}>—</td>
-      <td className={cx(td, 'text-center text-slate-300')}>—</td>
-      <td className={cx(td, 'text-center text-slate-300')}>—</td>
-      <td className={cx(td, 'text-center text-slate-300')}>—</td>
+      <td className={td}><Input type="number" min="0" value={answered} onChange={(e) => setAnswered(e.target.value)} placeholder="0" className="text-right" /></td>
+      <td className={td}><Input type="number" min="0" value={missed} onChange={(e) => setMissed(e.target.value)} placeholder="0" className="text-right" /></td>
+      <td className={td}><Input type="number" min="0" value={counted} onChange={(e) => setCounted(e.target.value)} placeholder="0" className="text-right" /></td>
+      <td className={roCell}>{countedNum > 0 ? money2(avgRate) : <span className="text-slate-300">—</span>}</td>
+      <td className={td}><Input type="number" min="0" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="0.00" className="text-right" /></td>
       <td className={td}><StatusSelect value={status} onChange={setStatus} /></td>
       <td className={cx(td, 'text-center')}>
         {busy ? <Spinner className="h-4 w-4" /> : (

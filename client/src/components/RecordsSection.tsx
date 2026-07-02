@@ -476,6 +476,7 @@ export default function RecordsSection({
                 {!isBuyer && <col className="w-[13%]" />}{/* Source */}
                 <col className="w-[13%]" />{/* Answered */}
                 <col className="w-[11%]" />{/* Missed */}
+                {isBuyer && <col className="w-[11%]" />}{/* Replacement */}
                 <col className="w-[13%]" />{/* Counted */}
                 <col className="w-[13%]" />{/* Rate */}
                 <col className="w-[18%]" />{/* Total */}
@@ -489,6 +490,7 @@ export default function RecordsSection({
                   {!isBuyer && <th className="px-4 py-3 font-medium">Destination</th>}
                   <ThNum onClick={() => set({ sort: 'answered',   dir: nextDir(filters, 'answered')   })} active={filters.sort === 'answered'}   dir={filters.dir}>Answered</ThNum>
                   <ThNum onClick={() => set({ sort: 'missed',     dir: nextDir(filters, 'missed')     })} active={filters.sort === 'missed'}     dir={filters.dir}>Missed</ThNum>
+                  {isBuyer && <th className="px-4 py-3 text-center font-medium">Replacement</th>}
                   <ThNum onClick={() => set({ sort: 'counted',    dir: nextDir(filters, 'counted')    })} active={filters.sort === 'counted'}    dir={filters.dir}>Counted</ThNum>
                   <ThNum onClick={() => set({ sort: 'rate',       dir: nextDir(filters, 'rate')       })} active={filters.sort === 'rate'}       dir={filters.dir}>Rate</ThNum>
                   <ThNum onClick={() => set({ sort: 'total_bill', dir: nextDir(filters, 'total_bill') })} active={filters.sort === 'total_bill'} dir={filters.dir}>Total</ThNum>
@@ -509,6 +511,7 @@ export default function RecordsSection({
                     {!isBuyer && <td className="py-3 pl-10 pr-2 text-center text-slate-600"><Box w="w-20" align="left">{r.source ?? '—'}</Box></td>}
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(r.answered)}</Box></td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-10">{num(r.missed)}</Box></td>
+                    {isBuyer && <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-12">{num(r.replacement)}</Box></td>}
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(r.counted)}</Box></td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-16">{money2(r.rate)}</Box></td>
                     <td className="py-3 pl-10 pr-2 text-center font-semibold tabular-nums text-slate-900"><Box w="w-28">{money2(r.total_bill)}</Box></td>
@@ -531,6 +534,7 @@ export default function RecordsSection({
                     {!isBuyer && <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-20" align="left">{num(new Set(allRecords.data?.data?.map(r => r.source).filter(Boolean) ?? []).size)}</Box></td>}
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-12">{num(totals.answered)}</Box></td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-10">{num(totals.missed)}</Box></td>
+                    {isBuyer && <td className={cx('py-3 pl-10 pr-2 text-center tabular-nums', navy ? 'text-white/50' : 'text-slate-400')}><Box w="w-12">—</Box></td>}
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-12">{num(totals.counted)}</Box></td>
                     <td className={cx('py-3 pl-10 pr-2 text-center tabular-nums', navy ? 'text-white/90' : 'text-blue-700')} title="Average rate = Total ÷ Counted"><Box w="w-16">{totals.counted > 0 ? money2(totals.total_bill / totals.counted) : '—'}</Box></td>
                     <td className={cx('py-3 pl-10 pr-2 text-center tabular-nums', navy ? 'text-white' : 'text-blue-700')}><Box w="w-28">{money2(totals.total_bill)}</Box></td>

@@ -3,18 +3,15 @@ import { api } from '../api/client'
 import { DateRangeControl, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
 import { Protected } from '../components/PasswordGate'
-import RecordsSection from '../components/RecordsSection'
+// import RecordsSection from '../components/RecordsSection'  // Revenue billing section retired (see below)
 import BuyersSheet from '../components/BuyersSheet'
 import {
-  Button,
   Card,
   Input,
-  Modal,
-  Select,
   Spinner,
 } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
-import type { Buyer } from '../types'
+// import type { Buyer } from '../types'  // only used by the retired Add-buyer modal
 
 export default function Buyers() {
   return (
@@ -27,13 +24,14 @@ export default function Buyers() {
 function BuyersPage() {
   const [search, setSearch] = useState('')
   const [range, setRange] = useState<Range>({ from: '', to: '' })
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState<Buyer | null>(null)
+  // Add-buyer modal retired — add buyers inline on the Monthly Sheet's bottom row.
+  // const [modalOpen, setModalOpen] = useState(false)
+  // const [editing, setEditing] = useState<Buyer | null>(null)
 
   const buyers = useAsync(() => api.buyers(search, range), [search, range.from, range.to])
 
-  const openNew = () => { setEditing(null); setModalOpen(true) }
-  const onSaved = () => { setModalOpen(false); buyers.reload() }
+  // const openNew = () => { setEditing(null); setModalOpen(true) }
+  // const onSaved = () => { setModalOpen(false); buyers.reload() }
 
   // Sort by rate high → low, matching the report tables.
   const list = (buyers.data ?? []).slice().sort((a, b) => b.rate - a.rate)
@@ -45,10 +43,12 @@ function BuyersPage() {
         <div className="w-full sm:w-auto">
           <Input placeholder="Search by name…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full sm:w-48" />
         </div>
+        {/* Add-buyer button retired — buyers are added inline on the Monthly Sheet's bottom row.
         <Button onClick={openNew}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
           Add buyer
         </Button>
+        */}
       </PageHeader>
 
       {buyers.loading ? (
@@ -65,16 +65,20 @@ function BuyersPage() {
 
       {buyers.error && <p className="mt-4 text-sm text-red-600">{buyers.error}</p>}
 
-      {/* Buyer billing sheet — buyer call records only (no campaign / profit) */}
+      {/* Revenue billing section retired — it duplicates the Leads Records page.
       <RecordsSection type="buyer" title="Revenue billing" subtitle="Buyer call records — billing sheet" compact theme="navy" onChange={() => buyers.reload()} />
+      */}
 
+      {/* Add-buyer modal retired — see BuyerForm below (also commented out).
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? `Edit ${editing.code}` : 'Add buyer'}>
         <BuyerForm editing={editing} onSaved={onSaved} onCancel={() => setModalOpen(false)} />
       </Modal>
+      */}
     </div>
   )
 }
 
+/* Add-buyer modal form retired — buyers are added inline on the Monthly Sheet.
 function BuyerForm({ editing, onSaved, onCancel }: { editing: Buyer | null; onSaved: () => void; onCancel: () => void }) {
   const [code, setCode] = useState(editing?.code ?? '')
   const [name, setName] = useState(editing?.name ?? '')
@@ -124,3 +128,4 @@ function BuyerForm({ editing, onSaved, onCancel }: { editing: Buyer | null; onSa
     </form>
   )
 }
+*/

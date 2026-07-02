@@ -41,6 +41,10 @@ CREATE TABLE buyers (
     status      TEXT        NOT NULL DEFAULT 'active', -- active | inactive
     notes       TEXT,
     rate        NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (rate >= 0), -- $ per counted call
+    -- Monthly Sheet totals, keyed in directly (independent of call_records). Total Bill = rate * counted.
+    answered    INTEGER     NOT NULL DEFAULT 0 CHECK (answered >= 0),
+    missed      INTEGER     NOT NULL DEFAULT 0 CHECK (missed   >= 0),
+    counted     INTEGER     NOT NULL DEFAULT 0 CHECK (counted  >= 0),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -53,6 +57,12 @@ CREATE TABLE campaigns (
     name        TEXT,
     status      TEXT        NOT NULL DEFAULT 'active',
     notes       TEXT,
+    -- Monthly Sheet totals, keyed in directly (independent of call_records).
+    -- `cost` is the typed Total Bill; Avg Rate is derived as cost / counted.
+    answered    INTEGER     NOT NULL DEFAULT 0 CHECK (answered >= 0),
+    missed      INTEGER     NOT NULL DEFAULT 0 CHECK (missed   >= 0),
+    counted     INTEGER     NOT NULL DEFAULT 0 CHECK (counted  >= 0),
+    cost        NUMERIC(14, 2) NOT NULL DEFAULT 0 CHECK (cost >= 0),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -68,6 +78,7 @@ CREATE TABLE call_records (
     source       TEXT,                                 -- traffic source for campaign rows (e.g. "AdsTerra")
     answered     INTEGER     NOT NULL DEFAULT 0 CHECK (answered >= 0),
     missed       INTEGER     NOT NULL DEFAULT 0 CHECK (missed   >= 0),
+    replacement  INTEGER     NOT NULL DEFAULT 0 CHECK (replacement >= 0), -- display only; NOT part of total_bill
     counted      INTEGER     NOT NULL DEFAULT 0 CHECK (counted  >= 0),
     rate         NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (rate  >= 0), -- buyer rows: the buyer's rate; campaign rows: the source/destination's rate
     total_bill   NUMERIC(14, 2) GENERATED ALWAYS AS (counted * rate) STORED,

@@ -10,7 +10,6 @@ import {
   Card,
   Input,
   Modal,
-  Select,
   Spinner,
 } from '../components/ui'
 import { num } from '../lib/format'
@@ -27,8 +26,9 @@ export default function Campaigns() {
 
 function CampaignsPage() {
   const [search, setSearch] = useState('')
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState<Campaign | null>(null)
+  // Add-campaign modal retired — add campaigns inline on the Monthly Sheet's bottom row.
+  // const [modalOpen, setModalOpen] = useState(false)
+  // const [editing, setEditing] = useState<Campaign | null>(null)
   const [ratesFor, setRatesFor] = useState<Campaign | null>(null)
 
   // Single page-level date filter — applies to every section below.
@@ -37,8 +37,8 @@ function CampaignsPage() {
 
   const campaigns = useAsync(() => api.campaigns(search, { from, to }), [search, from, to])
 
-  const openNew = () => { setEditing(null); setModalOpen(true) }
-  const onSaved = () => { setModalOpen(false); campaigns.reload() }
+  // const openNew = () => { setEditing(null); setModalOpen(true) }
+  // const onSaved = () => { setModalOpen(false); campaigns.reload() }
   const onRatesSaved = () => { setRatesFor(null); campaigns.reload() }
 
   // Sort by avg rate (cost ÷ counted) high → low, matching the report tables.
@@ -55,10 +55,12 @@ function CampaignsPage() {
         <div className="w-full sm:w-auto">
           <Input placeholder="Search by name…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full sm:w-48" />
         </div>
+        {/* Add-campaign button retired — campaigns are added inline on the Monthly Sheet's bottom row.
         <Button onClick={openNew}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
           Add campaign
         </Button>
+        */}
       </PageHeader>
 
       {campaigns.loading ? (
@@ -85,9 +87,11 @@ function CampaignsPage() {
         onChange={() => campaigns.reload()}
       />
 
+      {/* Add-campaign modal retired — see CampaignForm below (also commented out).
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? `Edit ${editing.code}` : 'Add campaign'}>
         <CampaignForm editing={editing} onSaved={onSaved} onCancel={() => setModalOpen(false)} />
       </Modal>
+      */}
 
       <Modal open={!!ratesFor} onClose={() => setRatesFor(null)} title={ratesFor ? `Source rates — ${ratesFor.code}` : 'Source rates'}>
         {ratesFor && <CampaignRatesForm campaign={ratesFor} onSaved={onRatesSaved} onCancel={() => setRatesFor(null)} />}
@@ -216,6 +220,7 @@ function CampaignRatesForm({ campaign, onSaved, onCancel }: { campaign: Campaign
   )
 }
 
+/* Add-campaign modal form retired — campaigns are added inline on the Monthly Sheet.
 function CampaignForm({ editing, onSaved, onCancel }: { editing: Campaign | null; onSaved: () => void; onCancel: () => void }) {
   const [code, setCode] = useState(editing?.code ?? '')
   const [name, setName] = useState(editing?.name ?? '')
@@ -261,3 +266,4 @@ function CampaignForm({ editing, onSaved, onCancel }: { editing: Campaign | null
     </form>
   )
 }
+*/

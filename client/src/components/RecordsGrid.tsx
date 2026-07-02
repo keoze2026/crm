@@ -59,6 +59,7 @@ export default function RecordsGrid({
             {!isBuyer && <th className={headCls}>Source</th>}
             <th className={headCls}>Answered</th>
             <th className={headCls}>Missed</th>
+            {isBuyer && <th className={headCls}>Replacement</th>}
             <th className={headCls}>Counted</th>
             <th className={headCls}>Rate</th>
             <th className={headCls}>Total</th>
@@ -89,6 +90,7 @@ export default function RecordsGrid({
             </td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.answered)}</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.missed)}</td>
+            {isBuyer && <td className={cx('px-3 py-2.5 text-center', navy ? 'text-white/50' : 'text-slate-400')}>—</td>}
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.counted)}</td>
             <td className={cx('px-3 py-2.5 text-center tabular-nums', navy ? 'text-white/90' : 'text-blue-700')} title="Average rate = Total ÷ Counted">{totals.counted > 0 ? money2(totals.total / totals.counted) : '—'}</td>
             <td className={cx('px-3 py-2.5 text-center tabular-nums', navy ? 'text-white' : 'text-blue-700')}>{money2(totals.total)}</td>
@@ -119,6 +121,9 @@ function ExistingRow({ record, isBuyer, navy, onChanged }: {
 }) {
   const [answered, setAnswered] = useState(String(record.answered))
   const [missed,   setMissed]   = useState(String(record.missed))
+  // Replacement is keyed in like Counted but is display-only — it never feeds the
+  // per-row total or the column totals. Buyer rows only.
+  const [replacement, setReplacement] = useState(String(record.replacement))
   // Counted is keyed in manually so both buyer categories work: "Yes" adds missed
   // to answered, "No / Non-Missed" excludes them. It no longer auto-derives here.
   const [counted,  setCounted]  = useState(String(record.counted))
@@ -133,6 +138,7 @@ function ExistingRow({ record, isBuyer, navy, onChanged }: {
   const dirty =
     Number(answered) !== record.answered ||
     Number(missed)   !== record.missed ||
+    (Number(replacement) || 0) !== record.replacement ||
     countedNum       !== record.counted ||
     (Number(rate) || 0) !== record.rate ||
     (!isBuyer && (source ?? '') !== (record.source ?? ''))
@@ -142,7 +148,8 @@ function ExistingRow({ record, isBuyer, navy, onChanged }: {
     saving.current = true; setBusy(true)
     try {
       const payload: Record<string, unknown> = {
-        answered: Number(answered) || 0, missed: Number(missed) || 0, counted: countedNum, rate: Number(rate) || 0,
+        answered: Number(answered) || 0, missed: Number(missed) || 0,
+        replacement: Number(replacement) || 0, counted: countedNum, rate: Number(rate) || 0,
       }
       if (!isBuyer) payload.source = source
       await api.updateRecord(record.id, payload)
@@ -163,6 +170,7 @@ function ExistingRow({ record, isBuyer, navy, onChanged }: {
       {!isBuyer && <td className={cellCls}><Input value={source} onChange={(e) => setSource(e.target.value)} /></td>}
       <td className={cellCls}><Input type="number" min="0" value={answered} onChange={(e) => setAnswered(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" value={missed} onChange={(e) => setMissed(e.target.value)} className={numInput} /></td>
+      {isBuyer && <td className={cellCls}><Input type="number" min="0" value={replacement} onChange={(e) => setReplacement(e.target.value)} className={numInput} /></td>}
       <td className={cellCls}><Input type="number" min="0" value={counted} onChange={(e) => setCounted(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} className={numInput} /></td>
       <td className={cx(cellCls, 'text-center font-semibold tabular-nums text-slate-900')}>{money2(total)}</td>
@@ -186,6 +194,7 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
   const [source,   setSource]   = useState('')   // source/destination, typed directly (campaigns)
   const [answered, setAnswered] = useState('')
   const [missed,   setMissed]   = useState('')
+  const [replacement, setReplacement] = useState('')   // display-only (buyer rows); not in totals
   const [counted,  setCounted]  = useState('')
   const [rate,     setRate]     = useState('')
   const [busy,     setBusy]     = useState(false)
@@ -239,7 +248,8 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
       const payload: Record<string, unknown> = {
         record_type: isBuyer ? 'buyer' : 'campaign',
         record_date: date,
-        answered: Number(answered) || 0, missed: Number(missed) || 0, counted: countedNum, rate: Number(rate) || 0,
+        answered: Number(answered) || 0, missed: Number(missed) || 0,
+        replacement: Number(replacement) || 0, counted: countedNum, rate: Number(rate) || 0,
       }
       // The typed code find-or-creates the buyer/campaign; a typed source is created
       // and linked (with its rate) on the server when the record is saved.
@@ -277,6 +287,7 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
       )}
       <td className={cellCls}><Input type="number" min="0" value={answered} onChange={(e) => onAnswered(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" value={missed} onChange={(e) => onMissed(e.target.value)} className={numInput} /></td>
+      {isBuyer && <td className={cellCls}><Input type="number" min="0" value={replacement} onChange={(e) => setReplacement(e.target.value)} className={numInput} /></td>}
       <td className={cellCls}><Input type="number" min="0" value={counted} onChange={(e) => onCounted(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" step="0.01" value={rate} onChange={(e) => onRate(e.target.value)} className={numInput} /></td>
       <td className={cx(cellCls, 'text-center font-semibold tabular-nums text-slate-900')}>{money2(total)}</td>
