@@ -33,8 +33,8 @@ function BuyersPage() {
   // const openNew = () => { setEditing(null); setModalOpen(true) }
   // const onSaved = () => { setModalOpen(false); buyers.reload() }
 
-  // Sort by Total Calls Bought high → low, matching the client's monthly sheet.
-  const list = (buyers.data ?? []).slice().sort((a, b) => b.counted - a.counted)
+  // Always sort by rate high → low.
+  const list = (buyers.data ?? []).slice().sort((a, b) => b.rate - a.rate)
 
   return (
     <div>

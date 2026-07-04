@@ -47,6 +47,8 @@ export default function RecordsGrid({
   const entityCount = isBuyer
     ? new Set(records.map((r) => r.buyer_id)).size
     : new Set(records.map((r) => r.source).filter(Boolean)).size
+  // Always show existing rows highest-rate first.
+  const sortedRecords = [...records].sort((a, b) => b.rate - a.rate)
 
   const headCls = cx('px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide', navy ? 'bg-[#1a3654] text-white' : 'bg-blue-600 text-blue-50')
 
@@ -67,7 +69,7 @@ export default function RecordsGrid({
           </tr>
         </thead>
         <tbody>
-          {records.map((r) => (
+          {sortedRecords.map((r) => (
             <ExistingRow key={r.id} record={r} isBuyer={isBuyer} navy={navy} onChanged={onChanged} />
           ))}
           {draftKeys.map((key) => (
