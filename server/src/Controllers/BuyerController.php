@@ -21,7 +21,11 @@ final class BuyerController
         // the SUM of counted within the selected date range — so it changes as the date
         // range changes. record_days = how many days that buyer has records in the range,
         // used for the Average Calls a Day column (N/A when 0). The range scopes the join.
-        $join = 'LEFT JOIN call_records r ON r.buyer_id = b.id';
+        //
+        // Weekends (Sat/Sun) are NOT working days, so they are excluded entirely: no
+        // weekend record contributes to the totals, and weekend dates don't count toward
+        // record_days. Postgres EXTRACT(DOW) is 0=Sun .. 6=Sat, so 1..5 = Mon..Fri.
+        $join = 'LEFT JOIN call_records r ON r.buyer_id = b.id AND EXTRACT(DOW FROM r.record_date) BETWEEN 1 AND 5';
         if ($from) { $join .= ' AND r.record_date >= :from'; $params[':from'] = $from; }
         if ($to)   { $join .= ' AND r.record_date <= :to';   $params[':to']   = $to; }
 

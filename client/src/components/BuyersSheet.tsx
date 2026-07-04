@@ -11,9 +11,11 @@ import { Input, cx } from './ui'
  * "Total Calls Bought" always auto-populates from the Daily Sheet (the SUM of counted
  * calls in the selected date range), so it changes as the date range changes — it's
  * read-only here. The buyer code and Rates stay editable. Average Calls a Day (= total ÷
- * the buyer's days with records, N/A when none) and Amount Received (= rate × total) are
- * auto-calculated. New buyers show up here once they're used on the Daily Sheet page, so
- * there is no add row. Rows auto-save on blur. Colors match the Daily Sheet.
+ * the buyer's working days with records, N/A when none) and Amount Received (= rate × total)
+ * are auto-calculated. Weekends (Sat/Sun) are excluded from every total on this sheet — the
+ * server only aggregates weekday (Mon–Fri) records. New buyers show up here once they're
+ * used on the Daily Sheet page, so there is no add row. Rows auto-save on blur. Colors match
+ * the Daily Sheet.
  */
 export default function BuyersSheet({ buyers, onChanged }: { buyers: Buyer[]; onChanged: () => void }) {
   const totals = buyers.reduce(
