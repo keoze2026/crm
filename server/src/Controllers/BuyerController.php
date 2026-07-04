@@ -17,21 +17,22 @@ final class BuyerController
         $to     = Http::query('to');
         $params = [];
 
-        // Answered/Missed/Counted are now keyed in directly on the Monthly Sheet and
-        // stored on the buyer, so they come straight off the row (independent of call
-        // records). The call_records join only feeds the records count / last activity;
-        // the date range still scopes those.
+        // "Total Calls Bought" (counted) always auto-populates from the leads records —
+        // the SUM of counted within the selected date range — so it changes as the date
+        // range changes. record_days = how many days that buyer has records in the range,
+        // used for the Average Calls a Day column (N/A when 0). The range scopes the join.
         $join = 'LEFT JOIN call_records r ON r.buyer_id = b.id';
         if ($from) { $join .= ' AND r.record_date >= :from'; $params[':from'] = $from; }
         if ($to)   { $join .= ' AND r.record_date <= :to';   $params[':to']   = $to; }
 
-        // Revenue is the buyer's definite rate * its stored counted calls.
+        $counted = 'COALESCE(SUM(r.counted), 0)';
         $sql = "
             SELECT b.id, b.code, b.name, b.status, b.notes, b.rate, b.created_at,
-                   b.rate * b.counted                        AS revenue,
-                   b.counted                                 AS counted,
-                   b.answered                                AS answered,
-                   b.missed                                  AS missed,
+                   {$counted}                                AS counted,
+                   b.rate * {$counted}                       AS revenue,
+                   COALESCE(SUM(r.answered), 0)              AS answered,
+                   COALESCE(SUM(r.missed), 0)                AS missed,
+                   COUNT(DISTINCT r.record_date)             AS record_days,
                    COUNT(r.id)                               AS records,
                    MAX(r.record_date)                        AS last_activity
             FROM buyers b
@@ -41,7 +42,7 @@ final class BuyerController
             $sql .= " WHERE b.code ILIKE :s OR b.name ILIKE :s";
             $params[':s'] = "%{$search}%";
         }
-        $sql .= " GROUP BY b.id ORDER BY revenue DESC";
+        $sql .= " GROUP BY b.id ORDER BY counted DESC";
 
         $stmt = Database::connection()->prepare($sql);
         $stmt->execute($params);
@@ -56,19 +57,16 @@ final class BuyerController
             Http::error('Buyer code is required', 422);
         }
         $stmt = Database::connection()->prepare(
-            'INSERT INTO buyers (code, name, status, notes, rate, answered, missed, counted)
-             VALUES (:code, :name, :status, :notes, :rate, :answered, :missed, :counted) RETURNING *'
+            'INSERT INTO buyers (code, name, status, notes, rate)
+             VALUES (:code, :name, :status, :notes, :rate) RETURNING *'
         );
         try {
             $stmt->execute([
-                ':code'     => $code,
-                ':name'     => $body['name']   ?? null,
-                ':status'   => $body['status'] ?? 'active',
-                ':notes'    => $body['notes']  ?? null,
-                ':rate'     => isset($body['rate']) ? (float) $body['rate'] : 0,
-                ':answered' => (int) ($body['answered'] ?? 0),
-                ':missed'   => (int) ($body['missed']   ?? 0),
-                ':counted'  => (int) ($body['counted']  ?? 0),
+                ':code'   => $code,
+                ':name'   => $body['name']   ?? null,
+                ':status' => $body['status'] ?? 'active',
+                ':notes'  => $body['notes']  ?? null,
+                ':rate'   => isset($body['rate']) ? (float) $body['rate'] : 0,
             ]);
         } catch (\PDOException $e) {
             Http::error('A buyer with that code already exists', 409);
@@ -88,23 +86,17 @@ final class BuyerController
                 code = COALESCE(:code, code),
                 name = :name,
                 status = COALESCE(:status, status),
-                notes = :notes,
-                rate = COALESCE(:rate, rate),
-                answered = COALESCE(:answered, answered),
-                missed = COALESCE(:missed, missed),
-                counted = COALESCE(:counted, counted)
+                notes = COALESCE(:notes, notes),
+                rate = COALESCE(:rate, rate)
              WHERE id = :id RETURNING *'
         );
         $stmt->execute([
-            ':id'       => $id,
-            ':code'     => $body['code']   ?? null,
-            ':name'     => $body['name']   ?? null,
-            ':status'   => $body['status'] ?? null,
-            ':notes'    => $body['notes']  ?? null,
-            ':rate'     => $rate,
-            ':answered' => isset($body['answered']) ? (int) $body['answered'] : null,
-            ':missed'   => isset($body['missed'])   ? (int) $body['missed']   : null,
-            ':counted'  => isset($body['counted'])  ? (int) $body['counted']  : null,
+            ':id'     => $id,
+            ':code'   => $body['code']   ?? null,
+            ':name'   => $body['name']   ?? null,
+            ':status' => $body['status'] ?? null,
+            ':notes'  => $body['notes']  ?? null,
+            ':rate'   => $rate,
         ]);
         $row = $stmt->fetch();
         if (!$row) {
@@ -134,7 +126,7 @@ final class BuyerController
             if (!$r) {
                 continue;
             }
-            foreach (['revenue', 'counted', 'answered', 'missed', 'records', 'rate'] as $k) {
+            foreach (['revenue', 'counted', 'answered', 'missed', 'record_days', 'records', 'rate'] as $k) {
                 if (array_key_exists($k, $r)) {
                     $r[$k] = (float) $r[$k];
                 }

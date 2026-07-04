@@ -33,8 +33,8 @@ function BuyersPage() {
   // const openNew = () => { setEditing(null); setModalOpen(true) }
   // const onSaved = () => { setModalOpen(false); buyers.reload() }
 
-  // Sort by rate high → low, matching the report tables.
-  const list = (buyers.data ?? []).slice().sort((a, b) => b.rate - a.rate)
+  // Sort by Total Calls Bought high → low, matching the client's monthly sheet.
+  const list = (buyers.data ?? []).slice().sort((a, b) => b.counted - a.counted)
 
   return (
     <div>
@@ -57,7 +57,7 @@ function BuyersPage() {
         <Card className="overflow-hidden">
           <div className="border-b border-white/50 px-5 py-4">
             <h2 className="font-semibold text-slate-900">Monthly Sheet</h2>
-            <p className="mt-0.5 text-sm text-slate-500">Edit any cell to update a buyer; fill the bottom row (or press +) to add one; the trash icon deletes.</p>
+            <p className="mt-0.5 text-sm text-slate-500">Total Calls Bought auto-populates from the Daily Sheet for the selected date range; edit a buyer code or Rate inline (Total, Average &amp; Amount auto-calculate). New buyers appear here once used on the Daily Sheet.</p>
           </div>
           <BuyersSheet buyers={list} onChanged={() => buyers.reload()} />
         </Card>

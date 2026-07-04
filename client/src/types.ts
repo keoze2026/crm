@@ -124,6 +124,7 @@ export interface Buyer {
   counted: number
   answered: number
   missed: number
+  record_days: number
   records: number
   last_activity: string | null
 }

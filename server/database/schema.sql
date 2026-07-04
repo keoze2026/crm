@@ -41,10 +41,8 @@ CREATE TABLE buyers (
     status      TEXT        NOT NULL DEFAULT 'active', -- active | inactive
     notes       TEXT,
     rate        NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (rate >= 0), -- $ per counted call
-    -- Monthly Sheet totals, keyed in directly (independent of call_records). Total Bill = rate * counted.
-    answered    INTEGER     NOT NULL DEFAULT 0 CHECK (answered >= 0),
-    missed      INTEGER     NOT NULL DEFAULT 0 CHECK (missed   >= 0),
-    counted     INTEGER     NOT NULL DEFAULT 0 CHECK (counted  >= 0),
+    -- Monthly Sheet "Total Calls Bought" auto-derives from call_records (SUM of counted
+    -- in the selected range), so there is no stored total column on buyers.
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
