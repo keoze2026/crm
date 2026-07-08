@@ -50,3 +50,23 @@ body {
 .recharts-default-tooltip {
   border-radius: 0.75rem !important;
 }
+
+/*
+ * Global table styling (every page).
+ * These rules live outside any @layer, so they win over Tailwind's per-cell
+ * utilities (px-*, py-*, text-center/right) without needing !important.
+ *  - Cell padding is roughly halved for a more compact grid.
+ *  - Content is left-aligned, but offset inward with a left padding so it
+ *    reads as starting toward the centre rather than hugging the edge.
+ */
+table td,
+table th {
+  padding-block: 0.25rem;
+  padding-inline: 1rem 0.4rem;
+  text-align: left;
+}
+
+/* Let inputs/selects inside a compact cell fill it and align with the text. */
+table td :where(input, select, textarea) {
+  text-align: left;
+}
