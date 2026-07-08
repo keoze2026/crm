@@ -57,8 +57,8 @@ export default function RecordsGrid({
       <table className={cx('w-full text-sm', navy && 'border-collapse [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white')}>
         <thead>
           <tr>
-            <th className={headCls}>{isBuyer ? 'Destination' : 'Campaign'}</th>
-            {!isBuyer && <th className={headCls}>Source</th>}
+            <th className={headCls}>{isBuyer ? 'Destination' : 'Camp'}</th>
+            {!isBuyer && <th className={headCls}>Traffic Source</th>}
             <th className={headCls}>Answered</th>
             <th className={headCls}>Missed</th>
             {isBuyer && <th className={headCls}>Replacement</th>}

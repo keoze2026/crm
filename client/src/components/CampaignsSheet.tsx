@@ -38,7 +38,7 @@ export default function CampaignsSheet({ campaigns, onChanged, onEditRates }: {
       <table className="w-full border-collapse text-sm [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white">
         <thead>
           <tr>
-            <th className={headCls}>Destination</th>
+            <th className={headCls}>Camp</th>
             <th className={headCls}>Answered</th>
             <th className={headCls}>Missed</th>
             <th className={headCls}>Counted</th>
