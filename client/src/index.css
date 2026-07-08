@@ -52,21 +52,34 @@ body {
 }
 
 /*
- * Global table styling (every page).
+ * Global table styling (every page) — compact, Excel-like density.
  * These rules live outside any @layer, so they win over Tailwind's per-cell
- * utilities (px-*, py-*, text-center/right) without needing !important.
- *  - Cell padding is roughly halved for a more compact grid.
- *  - Content is left-aligned, but offset inward with a left padding so it
- *    reads as starting toward the centre rather than hugging the edge.
+ * utilities (px-*, py-*, text-*, rounded-*) without needing !important.
+ *  - Tight cell padding and line-height pack more rows into the same height.
+ *  - A slightly smaller base font keeps wide grids readable without wrapping.
+ *  - Content is left-aligned with a small inset so it starts just off the edge.
  */
+table {
+  font-size: 0.8125rem;   /* 13px base for table text */
+}
 table td,
 table th {
-  padding-block: 0.25rem;
-  padding-inline: 1rem 0.4rem;
+  padding-block: 0.15rem;
+  padding-inline: 0.45rem;
+  line-height: 1.25;
   text-align: left;
 }
 
-/* Let inputs/selects inside a compact cell fill it and align with the text. */
+/*
+ * Cell editors (inputs / selects / textareas) are the biggest row-height cost:
+ * their default px-3 py-2 rounded-xl makes each editable row ~36px tall. Shrink
+ * them to the cell for an Excel-like grid (~22px rows).
+ */
 table td :where(input, select, textarea) {
+  padding-block: 0.1rem;
+  padding-inline: 0.35rem;
+  border-radius: 0.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.2;
   text-align: left;
 }
