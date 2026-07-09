@@ -32,7 +32,7 @@ export default function BuyersSheet({ buyers, onChanged }: { buyers: Buyer[]; on
 
   return (
     <div className="overflow-x-auto rounded-t-2xl">
-      <table className="w-full border-collapse text-sm [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white">
+      <table className="w-1/2 min-w-100 border-collapse text-sm [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white">
         <thead>
           <tr>
             <th className={headCls}>Sr. No.</th>
