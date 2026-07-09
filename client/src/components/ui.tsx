@@ -142,21 +142,24 @@ export function Modal({
   onClose,
   title,
   children,
+  size = 'lg',
 }: {
   open: boolean
   onClose: () => void
   title: ReactNode
   children: ReactNode
+  size?: 'sm' | 'lg'
 }) {
   if (!open) return null
+  const maxW = size === 'sm' ? 'max-w-md' : 'max-w-lg'
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/30 p-4 backdrop-blur-sm sm:p-8"
       onClick={onClose}
     >
-      <div className="glass-strong w-full max-w-lg rounded-2xl shadow-2xl shadow-slate-900/20" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-white/50 px-5 py-4">
-          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+      <div className={cx('glass-strong w-full rounded-2xl shadow-2xl shadow-slate-900/20', maxW)} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-white/50 px-4 py-3">
+          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
           <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6 6 18M6 6l12 12" />

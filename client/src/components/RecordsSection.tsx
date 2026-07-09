@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import { api } from '../api/client'
 import { formatDate, money2, num, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
-import type { CallRecord, Destination, RecordFilters, RecordType } from '../types'
+import type { CallRecord, Campaign, Destination, RecordFilters, RecordType } from '../types'
 import { DateRangeFilter } from './DateRange'
 import RecordsGrid from './RecordsGrid'
 import { Button, Card, EmptyState, Input, Modal, Select, Spinner, cx } from './ui'
@@ -180,6 +180,10 @@ export default function RecordsSection({
   // Fetch destinations list for campaign records
   const destinations = useAsync(() => api.destinations(), [])
 
+  // Full campaign objects (status + stored fields) for the cost grid's Status
+  // column and per-campaign source-rates button. Buyers don't need this.
+  const campaignList = useAsync<Campaign[]>(() => (isBuyer ? Promise.resolve([]) : api.campaigns()), [type])
+
   // Fetch all records matching the current filters (no pagination) for totals row
   const allRecords = useAsync(
     () => api.records({ ...filters, page: 1, per_page: 9999 }),
@@ -224,7 +228,7 @@ export default function RecordsSection({
 
   const onSaved = () => { setModalOpen(false); records.reload(); entities.reload(); onChange?.() }
   // After an inline grid edit/add/delete, refresh everything the grid depends on.
-  const gridChanged = () => { records.reload(); allRecords.reload(); entities.reload(); destinations.reload(); onChange?.() }
+  const gridChanged = () => { records.reload(); allRecords.reload(); entities.reload(); destinations.reload(); campaignList.reload(); onChange?.() }
   const onDelete = async (r: CallRecord) => {
     if (!confirm(`Delete this record from ${formatDate(r.record_date)}?`)) return
     await api.deleteRecord(r.id); records.reload(); onChange?.()
@@ -410,8 +414,8 @@ export default function RecordsSection({
       )}
 
       {/* Filters */}
-      <Card className="mb-4 p-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+      <Card className="filters mb-3 p-2.5">
+        <div className="flex flex-wrap items-end justify-between gap-2">
           <Input label="Search" placeholder={`${entityLabel} code…`} value={filters.search} onChange={(e) => set({ search: e.target.value })} />
           <div className="flex flex-wrap items-end gap-3">
             {dateControl && (
@@ -437,7 +441,7 @@ export default function RecordsSection({
       </Card>
 
       {/* Table */}
-      <Card>
+      <Card className={cx(!isBuyer && 'overflow-hidden rounded-md!')}>
         {!isFiltered ? (
           <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
@@ -458,6 +462,7 @@ export default function RecordsSection({
               records={allRecords.data?.data ?? []}
               entities={entities.data ?? []}
               destinations={destinations.data ?? []}
+              campaigns={campaignList.data ?? []}
               navy={navy}
               onChanged={gridChanged}
             />

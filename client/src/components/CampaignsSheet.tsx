@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import { money, money2, num } from '../lib/format'
 import type { Campaign } from '../types'
 import { Input, Select, Spinner, cx } from './ui'
+import { CampaignRatesPopover } from './CampaignRatesPopover'
 
 /**
  * Editable "Monthly Sheet" of campaigns (cost side): Destination · Answered ·
@@ -11,8 +12,8 @@ import { Input, Select, Spinner, cx } from './ui'
  * is that product, so Rate loads back as cost ÷ counted. Destination/Status are
  * edited in place; the bottom row (or +) adds a campaign; the trash deletes one.
  */
-export default function CampaignsSheet({ campaigns, onChanged, onEditRates }: {
-  campaigns: Campaign[]; onChanged: () => void; onEditRates: (c: Campaign) => void
+export default function CampaignsSheet({ campaigns, onChanged }: {
+  campaigns: Campaign[]; onChanged: () => void
 }) {
   const [draftKeys, setDraftKeys] = useState<number[]>([0])
   const nextKey = useRef(1)
@@ -49,7 +50,7 @@ export default function CampaignsSheet({ campaigns, onChanged, onEditRates }: {
           </tr>
         </thead>
         <tbody>
-          {campaigns.map((c) => <CampaignRow key={c.id} campaign={c} onChanged={onChanged} onEditRates={onEditRates} />)}
+          {campaigns.map((c) => <CampaignRow key={c.id} campaign={c} onChanged={onChanged} />)}
           {draftKeys.map((key) => (
             <DraftCampaignRow key={`d-${key}`} onActivate={() => requestNewRow(key)} onSaved={() => { dropDraft(key); onChanged() }} />
           ))}
@@ -81,7 +82,6 @@ const rateFromCost = (cost: number, counted: number) =>
 const PlusIcon  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
 const CheckIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
 const TrashIcon = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
-const RatesIcon = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
 
 function StatusSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const active = value === 'active'
@@ -100,8 +100,8 @@ function StatusSelect({ value, onChange }: { value: string; onChange: (v: string
 }
 
 // ── Existing campaign row ───────────────────────────────────────────────────────
-function CampaignRow({ campaign, onChanged, onEditRates }: {
-  campaign: Campaign; onChanged: () => void; onEditRates: (c: Campaign) => void
+function CampaignRow({ campaign, onChanged }: {
+  campaign: Campaign; onChanged: () => void
 }) {
   const [code,     setCode]     = useState(campaign.code)
   const [status,   setStatus]   = useState(campaign.status)
@@ -154,7 +154,7 @@ function CampaignRow({ campaign, onChanged, onEditRates }: {
       <td className={td}><StatusSelect value={status} onChange={setStatus} /></td>
       <td className={cx(td, 'text-center')}>
         <div className="flex items-center justify-center gap-1">
-          <button type="button" onClick={() => onEditRates(campaign)} title="Edit source rates" className="rounded p-1 text-amber-600 hover:bg-amber-100"><RatesIcon /></button>
+          <CampaignRatesPopover campaign={campaign} onSaved={onChanged} />
           {busy ? <Spinner className="h-4 w-4" /> : dirty
             ? <button type="button" onClick={save} title="Save changes" className="rounded p-1 text-green-600 hover:bg-green-100"><CheckIcon /></button>
             : <button type="button" onClick={del} title="Delete campaign" className="rounded p-1 text-slate-500 hover:bg-red-100 hover:text-red-600"><TrashIcon /></button>}

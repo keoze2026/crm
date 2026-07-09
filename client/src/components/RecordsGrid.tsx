@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { money2, num } from '../lib/format'
-import type { CallRecord, Destination, RecordType } from '../types'
-import { Input, Spinner, cx } from './ui'
+import type { CallRecord, Campaign, Destination, RecordType } from '../types'
+import { Input, Select, Spinner, cx } from './ui'
+import { CampaignRatesPopover } from './CampaignRatesPopover'
 
 interface Entity { id: number; code: string; rate: number }
 
@@ -14,13 +15,15 @@ interface Entity { id: number; code: string; rate: number }
  * - counted, per-row totals, and the column totals all auto-calculate.
  */
 export default function RecordsGrid({
-  type, date, records, entities, destinations, navy, onChanged,
+  type, date, records, entities, destinations, campaigns = [], navy, onChanged,
 }: {
   type: RecordType
   date: string
   records: CallRecord[]
   entities: Entity[]
   destinations: Destination[]
+  /** Full campaign objects (cost side) — powers the Status column & rates popover. */
+  campaigns?: Campaign[]
   navy: boolean
   onChanged: () => void
 }) {
@@ -54,7 +57,7 @@ export default function RecordsGrid({
 
   return (
     <div className="overflow-x-auto rounded-t-2xl">
-      <table className={cx('w-full text-sm', navy && 'border-collapse [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white')}>
+      <table className={cx('w-full text-sm', !isBuyer && 'table-fixed', navy && 'border-collapse [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white')}>
         <thead>
           <tr>
             <th className={headCls}>{isBuyer ? 'Destination' : 'Camp'}</th>
@@ -65,12 +68,20 @@ export default function RecordsGrid({
             <th className={headCls}>Counted</th>
             <th className={headCls}>Rate</th>
             <th className={headCls}>Total</th>
+            {!isBuyer && <th className={headCls}>Status</th>}
             <th className={headCls} />
           </tr>
         </thead>
         <tbody>
           {sortedRecords.map((r) => (
-            <ExistingRow key={r.id} record={r} isBuyer={isBuyer} navy={navy} onChanged={onChanged} />
+            <ExistingRow
+              key={r.id}
+              record={r}
+              isBuyer={isBuyer}
+              navy={navy}
+              onChanged={onChanged}
+              campaign={isBuyer ? undefined : (campaigns.find((c) => c.id === r.campaign_id) ?? fallbackCampaign(r))}
+            />
           ))}
           {draftKeys.map((key) => (
             <DraftRow
@@ -96,6 +107,7 @@ export default function RecordsGrid({
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.counted)}</td>
             <td className={cx('px-3 py-2.5 text-center tabular-nums', navy ? 'text-white/90' : 'text-blue-700')} title="Average rate = Total ÷ Counted">{totals.counted > 0 ? money2(totals.total / totals.counted) : '—'}</td>
             <td className={cx('px-3 py-2.5 text-center tabular-nums', navy ? 'text-white' : 'text-blue-700')}>{money2(totals.total)}</td>
+            {!isBuyer && <td className="px-3 py-2.5" />}
             <td className="px-2 py-2.5 text-center">
               <button type="button" onClick={addRow} title="Add row"
                 className={cx('rounded p-1', navy ? 'text-white hover:bg-white/20' : 'text-blue-600 hover:bg-blue-100')}>
@@ -109,6 +121,19 @@ export default function RecordsGrid({
   )
 }
 
+// A campaign record always has a campaign_id, so we can show the Status dropdown
+// and rates/delete icons the moment a row exists — even before the full campaigns
+// list has (re)loaded. Editing sends only the changed field (see changeStatus /
+// saveCode), so the campaign's stored totals are never touched by this stub.
+function fallbackCampaign(r: CallRecord): Campaign | undefined {
+  if (r.campaign_id == null) return undefined
+  return {
+    id: r.campaign_id, code: r.campaign_code ?? '', name: null, status: 'active',
+    notes: null, created_at: '', cost: 0, counted: 0, answered: 0, missed: 0,
+    records: 0, sources: 0, last_activity: null,
+  }
+}
+
 const rowCls = (navy: boolean, extra = '') =>
   cx(navy ? 'bg-[#d4e9f2] text-[#0f172a]' : 'border-b border-slate-100/70 hover:bg-blue-50/40', extra)
 const cellCls = 'px-2 py-1'
@@ -117,9 +142,27 @@ const numInput = 'text-right'
 const TrashIcon = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
 const CheckIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
 
+// Coloured Active/Inactive dropdown — matches the Monthly Sheet's Status cell.
+function StatusSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const active = value === 'active'
+  return (
+    <div className={cx('rounded-xl', active ? 'bg-emerald-200/80' : 'bg-red-200/80')}>
+      <Select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={cx('border-transparent! bg-transparent! font-semibold', active ? 'text-emerald-800' : 'text-red-700')}
+      >
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+      </Select>
+    </div>
+  )
+}
+
 // ── Existing record row (edit in place) ─────────────────────────────────────────
-function ExistingRow({ record, isBuyer, navy, onChanged }: {
+function ExistingRow({ record, isBuyer, navy, onChanged, campaign }: {
   record: CallRecord; isBuyer: boolean; navy: boolean; onChanged: () => void
+  campaign?: Campaign
 }) {
   const [answered, setAnswered] = useState(String(record.answered))
   const [missed,   setMissed]   = useState(String(record.missed))
@@ -131,9 +174,15 @@ function ExistingRow({ record, isBuyer, navy, onChanged }: {
   const [counted,  setCounted]  = useState(String(record.counted))
   const [source,   setSource]   = useState(record.source ?? '')
   const [rate,     setRate]     = useState(String(record.rate))
+  // Camp code is campaign-level (cost side); editing it renames the campaign.
+  const [code,     setCode]     = useState(campaign?.code ?? record.campaign_code ?? '')
   const [busy,     setBusy]     = useState(false)
   const rowRef   = useRef<HTMLTableRowElement>(null)
   const saving   = useRef(false)
+
+  // Keep the Camp field in sync when the campaign is renamed elsewhere (another
+  // source row for the same campaign, or a reload), so it never reverts a rename.
+  useEffect(() => { setCode(campaign?.code ?? record.campaign_code ?? '') }, [campaign?.code, record.campaign_code])
 
   const countedNum = Number(counted) || 0
   const total   = countedNum * (Number(rate) || 0)
@@ -158,17 +207,46 @@ function ExistingRow({ record, isBuyer, navy, onChanged }: {
       onChanged()
     } finally { saving.current = false; setBusy(false) }
   }
+  // Camp code edits the campaign itself (rename), mirroring the Monthly Sheet.
+  // Only code + name/notes are sent — the stored totals are COALESCE-preserved
+  // server-side, so they're never overwritten from here.
+  const saveCode = async () => {
+    if (!campaign) return
+    const trimmed = code.trim()
+    if (trimmed === '' || trimmed === campaign.code) return
+    try {
+      await api.updateCampaign(campaign.id, { code: trimmed, name: campaign.name, notes: campaign.notes })
+      onChanged()
+    } catch (e) { alert((e as Error).message) }
+  }
   const onRowBlur = () => setTimeout(() => {
-    if (rowRef.current && !rowRef.current.contains(document.activeElement)) save()
+    if (rowRef.current && !rowRef.current.contains(document.activeElement)) { save(); saveCode() }
   }, 0)
   const del = async () => {
     if (!confirm('Delete this record?')) return
     await api.deleteRecord(record.id); onChanged()
   }
+  // Status lives on the campaign (cost side), so flipping it updates the campaign,
+  // resending its stored fields unchanged alongside the new status.
+  const changeStatus = async (status: string) => {
+    if (!campaign || status === campaign.status) return
+    try {
+      await api.updateCampaign(campaign.id, { status, name: campaign.name, notes: campaign.notes })
+      onChanged()
+    } catch (e) { alert((e as Error).message) }
+  }
 
   return (
     <tr ref={rowRef} onBlur={onRowBlur} className={rowCls(navy)}>
-      <td className={cx(cellCls, 'text-center font-medium text-slate-800')}>{(isBuyer ? record.buyer_code : record.campaign_code) ?? '—'}</td>
+      {isBuyer ? (
+        <td className={cx(cellCls, 'text-center font-medium text-slate-800')}>{record.buyer_code ?? '—'}</td>
+      ) : (
+        <td className={cellCls}>
+          {campaign
+            ? <Input value={code} onChange={(e) => setCode(e.target.value)} />
+            : <span className="font-medium text-slate-800">{record.campaign_code ?? '—'}</span>}
+        </td>
+      )}
       {!isBuyer && <td className={cellCls}><Input value={source} onChange={(e) => setSource(e.target.value)} /></td>}
       <td className={cellCls}><Input type="number" min="0" value={answered} onChange={(e) => setAnswered(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" value={missed} onChange={(e) => setMissed(e.target.value)} className={numInput} /></td>
@@ -176,8 +254,14 @@ function ExistingRow({ record, isBuyer, navy, onChanged }: {
       <td className={cellCls}><Input type="number" min="0" value={counted} onChange={(e) => setCounted(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} className={numInput} /></td>
       <td className={cx(cellCls, 'text-center font-semibold tabular-nums text-slate-900')}>{money2(total)}</td>
+      {!isBuyer && (
+        <td className={cellCls}>
+          {campaign ? <StatusSelect value={campaign.status} onChange={changeStatus} /> : <span className="text-slate-300">—</span>}
+        </td>
+      )}
       <td className={cx(cellCls, 'text-center')}>
         <div className="flex items-center justify-center gap-1">
+          {!isBuyer && campaign && <CampaignRatesPopover campaign={campaign} onSaved={onChanged} />}
           {busy ? <Spinner className="h-4 w-4" /> : dirty
             ? <button type="button" onClick={save} title="Save changes" className="rounded p-1 text-green-600 hover:bg-green-50"><CheckIcon /></button>
             : <button type="button" onClick={del} title="Delete" className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"><TrashIcon /></button>}
@@ -202,9 +286,9 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
   const [busy,     setBusy]     = useState(false)
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
-  // Counted is keyed in manually. As a convenience it auto-fills to answered +
-  // missed while untouched, but once the user edits it directly we stop overriding
-  // so the "No / Non-Missed" category (answered − missed, or any value) can be set.
+  // Counted is manual entry. On the buyer sheet it auto-fills to answered + missed
+  // as a convenience (until edited); on the campaign (cost) sheet it's fully manual —
+  // only the per-row Total (counted × rate) is auto-calculated.
   const countedTouched = useRef(false)
   // Rate auto-fills from the matched destination while untouched; once keyed in
   // manually we stop overriding it.
@@ -215,8 +299,8 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
   const countedNum = Number(counted) || 0
   const total   = countedNum * (Number(rate) || 0)
 
-  const onAnswered = (v: string) => { setAnswered(v); if (!countedTouched.current) setCounted(String((Number(v) || 0) + (Number(missed) || 0))) }
-  const onMissed   = (v: string) => { setMissed(v);   if (!countedTouched.current) setCounted(String((Number(answered) || 0) + (Number(v) || 0))) }
+  const onAnswered = (v: string) => { setAnswered(v); if (isBuyer && !countedTouched.current) setCounted(String((Number(v) || 0) + (Number(missed) || 0))) }
+  const onMissed   = (v: string) => { setMissed(v);   if (isBuyer && !countedTouched.current) setCounted(String((Number(answered) || 0) + (Number(v) || 0))) }
   const onCounted  = (v: string) => { countedTouched.current = true; setCounted(v) }
   const onRate     = (v: string) => { rateTouched.current = true; setRate(v) }
 
@@ -241,7 +325,11 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
   }
 
   const entityChosen = typedCode !== ''
-  const complete = entityChosen && countedNum > 0 && (isBuyer || destName !== '')
+  // Buyers still need a volume to log a leads record. Campaigns only need a code —
+  // typing a new one registers the campaign (find-or-create) so the Cost Billing
+  // sheet fully replaces the Campaigns Monthly Sheet for adding campaigns; the
+  // source / counted / rate can be filled in on the row afterwards.
+  const complete = isBuyer ? (entityChosen && countedNum > 0) : entityChosen
 
   const save = async () => {
     if (saving.current || !complete) return
@@ -256,7 +344,7 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
       // The typed code find-or-creates the buyer/campaign; a typed source is created
       // and linked (with its rate) on the server when the record is saved.
       payload[isBuyer ? 'buyer_code' : 'campaign_code'] = typedCode
-      if (!isBuyer) payload.source = destName
+      if (!isBuyer && destName) payload.source = destName
       await api.createRecord(payload)
       onSaved()
     } finally { saving.current = false; setBusy(false) }
@@ -293,6 +381,7 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
       <td className={cellCls}><Input type="number" min="0" value={counted} onChange={(e) => onCounted(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" step="0.01" value={rate} onChange={(e) => onRate(e.target.value)} className={numInput} /></td>
       <td className={cx(cellCls, 'text-center font-semibold tabular-nums text-slate-900')}>{money2(total)}</td>
+      {!isBuyer && <td className={cellCls} />}
       <td className={cx(cellCls, 'text-center')}>
         {busy ? <Spinner className="h-4 w-4" /> : (
           <button type="button" onClick={save} disabled={!complete} title="Save row"

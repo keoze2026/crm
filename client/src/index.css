@@ -62,24 +62,43 @@ body {
 table {
   font-size: 0.8125rem;   /* 13px base for table text */
 }
+/*
+ * Narrow columns (~50% less horizontal padding) and a tight vertical rhythm so
+ * every table row lands at the same compact height as the Buyers Monthly Sheet.
+ */
 table td,
 table th {
-  padding-block: 0.15rem;
-  padding-inline: 0.45rem;
-  line-height: 1.25;
+  padding-block: 0.1rem;
+  padding-inline: 0.25rem;
+  line-height: 1.2;
   text-align: left;
 }
 
 /*
  * Cell editors (inputs / selects / textareas) are the biggest row-height cost:
  * their default px-3 py-2 rounded-xl makes each editable row ~36px tall. Shrink
- * them to the cell for an Excel-like grid (~22px rows).
+ * them to the cell for an Excel-like grid.
  */
 table td :where(input, select, textarea) {
-  padding-block: 0.1rem;
-  padding-inline: 0.35rem;
+  padding-block: 0.05rem;
+  padding-inline: 0.3rem;
   border-radius: 0.25rem;
   font-size: 0.8125rem;
   line-height: 1.2;
   text-align: left;
+}
+
+/*
+ * Compact filtering sections — smaller controls, labels and radius so the
+ * filter bars take far less vertical space. Add `filters` to the wrapper.
+ */
+.filters :where(input, select, button) {
+  padding-block: 0.25rem;
+  padding-inline: 0.5rem;
+  font-size: 0.8125rem;
+  border-radius: 0.5rem;
+}
+.filters label > span {
+  margin-bottom: 0.1rem;
+  font-size: 0.7rem;
 }
