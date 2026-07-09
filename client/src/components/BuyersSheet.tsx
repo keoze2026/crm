@@ -32,17 +32,17 @@ export default function BuyersSheet({ buyers, onChanged }: { buyers: Buyer[]; on
 
   return (
     <div className="overflow-x-auto rounded-t-2xl">
-      <table className="mx-auto w-[74.48%] min-w-149 table-fixed border-collapse text-sm [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white">
-        {/* Buyers & Rates are −25%; the others keep their size, so the table just
-            gets narrower (no redistribution). Widths are the equal-share ratio
-            with Buyers/Rates at 0.75, normalised to 100%. */}
+      <table className="mx-auto w-[69.06%] min-w-138 table-fixed border-collapse text-sm [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white">
+        {/* No redistribution — reduced columns just shrink the table. Widths are
+            the equal-share ratio (Sr No 0.6, Buyers/Rates 0.75, others 1.0),
+            normalised to 100%. */}
         <colgroup>
-          <col style={{ width: '18.18%' }} />{/* Sr. No. */}
-          <col style={{ width: '13.64%' }} />{/* Buyers — −25% */}
-          <col style={{ width: '18.18%' }} />{/* Total Calls Bought */}
-          <col style={{ width: '18.18%' }} />{/* Average Calls a Day */}
-          <col style={{ width: '13.64%' }} />{/* Rates — −25% */}
-          <col style={{ width: '18.18%' }} />{/* Amount Received */}
+          <col style={{ width: '11.76%' }} />{/* Sr. No. — −40% */}
+          <col style={{ width: '14.71%' }} />{/* Buyers — −25% */}
+          <col style={{ width: '19.61%' }} />{/* Total Calls Bought */}
+          <col style={{ width: '19.61%' }} />{/* Average Calls a Day */}
+          <col style={{ width: '14.71%' }} />{/* Rates — −25% */}
+          <col style={{ width: '19.60%' }} />{/* Amount Received */}
         </colgroup>
         <thead>
           <tr>
