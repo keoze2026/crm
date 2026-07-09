@@ -69,7 +69,8 @@ table {
 table td,
 table th {
   padding-block: 0.1rem;
-  padding-inline: 0.25rem;
+  /* Left-aligned, but a large left inset pushes content well toward the cell centre. */
+  padding-inline: 1.5rem 0.25rem;
   line-height: 1.2;
   text-align: left;
 }
@@ -77,15 +78,20 @@ table th {
 /*
  * Cell editors (inputs / selects / textareas) are the biggest row-height cost:
  * their default px-3 py-2 rounded-xl makes each editable row ~36px tall. Shrink
- * them to the cell for an Excel-like grid.
+ * them to the cell for an Excel-like grid — and drop the box background/border so
+ * editable cells read exactly like regular (read-only) cells.
  */
 table td :where(input, select, textarea) {
   padding-block: 0.05rem;
-  padding-inline: 0.3rem;
+  padding-inline: 0;
   border-radius: 0.25rem;
   font-size: 0.8125rem;
   line-height: 1.2;
   text-align: left;
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 /*
