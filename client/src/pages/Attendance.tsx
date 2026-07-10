@@ -12,7 +12,7 @@ import { api, fmtAttendanceTime } from '../api/client'
 import { useAsync } from '../lib/useAsync'
 import type { AttendanceDay, AttendanceStaff } from '../types'
 import { PageHeader } from '../components/Layout'
-import { Button, Card, CardHeader, Spinner, cx } from '../components/ui'
+import { Button, Card, CardHeader, SegmentedTabs, Spinner, cx } from '../components/ui'
 import type { Range } from '../components/DateRange'
 import { fileDateRange } from '../lib/format'
 import { saveXlsx } from '../lib/xlsx'
@@ -242,22 +242,8 @@ export default function Attendance() {
       </PageHeader>
 
       {/* Sub-menu */}
-      <div className="mb-6 inline-flex rounded-xl glass-input border border-white/70 p-0.5">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={cx(
-              'flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors sm:px-4',
-              tab === t.id
-                ? 'bg-linear-to-b from-blue-500 to-blue-600 text-white shadow'
-                : 'text-slate-600 hover:bg-white/60',
-            )}
-          >
-            {t.icon}
-            {t.label}
-          </button>
-        ))}
+      <div className="mb-6">
+        <SegmentedTabs tabs={TABS} value={tab} onChange={setTab} />
       </div>
 
       {tab === 'roster' ? <RosterView /> : tab === 'summary' ? <StaffSummaryView /> : <BreakReportsView />}
@@ -1058,10 +1044,11 @@ function BreakReportsView() {
             <button
               key={p.label}
               onClick={() => setRange(p.get())}
+              style={activePreset?.label === p.label ? { backgroundColor: '#34eb92', color: '#0f172a' } : undefined}
               className={cx(
                 'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
                 activePreset?.label === p.label
-                  ? 'bg-linear-to-b from-blue-500 to-blue-600 text-white shadow'
+                  ? 'shadow'
                   : 'glass-input border border-white/70 text-slate-600 hover:bg-white/80',
               )}
             >

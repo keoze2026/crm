@@ -2,7 +2,6 @@ import { useState, type ReactNode } from 'react'
 import { api } from '../api/client'
 import { DateRangeControl, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
-import { Protected } from '../components/PasswordGate'
 import {
   SectionTable, SectionHeading, rangeText,
   buyerCols, campCols, buyerTableData, campTableData,
@@ -15,11 +14,7 @@ import type { CompleteReport } from '../types'
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function CompleteReportPage() {
-  return (
-    <Protected pageTitle="Complete Report" password="admin-2026" storageKey="lock-complete-report">
-      <CompleteReportView />
-    </Protected>
-  )
+  return <CompleteReportView />
 }
 
 function CompleteReportView() {

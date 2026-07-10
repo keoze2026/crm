@@ -44,6 +44,51 @@ body {
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
   }
+  /* Dark frosted sidebar — deep navy/indigo gradient over the light backdrop. */
+  .sidebar-dark {
+    background:
+      radial-gradient(26rem 20rem at 10% -5%, rgba(59, 130, 246, 0.28), transparent 60%),
+      linear-gradient(180deg, #131b31 0%, #0d1424 55%, #0a0f1d 100%);
+    backdrop-filter: blur(22px) saturate(160%);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  /* Dark glass panel (e.g. login card frame on the grid backdrop). */
+  .glass-dark {
+    background-color: rgba(17, 24, 39, 0.65);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+}
+
+/* ── Subtle motion ─────────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes expandRow {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+.animate-fade-in    { animation: fadeIn 0.25s ease both; }
+.animate-fade-in-up { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-expand     { animation: expandRow 0.22s ease both; }
+
+/* A gentle, consistent easing on interactive surfaces across the app. */
+a, button, .nav-item, .glass, .glass-strong {
+  transition-property: background-color, border-color, color, box-shadow, transform, opacity;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in, .animate-fade-in-up, .animate-expand { animation: none; }
+  a, button, .nav-item, .glass, .glass-strong { transition-duration: 0ms; }
 }
 
 /* Recharts: keep tooltips/cursors tidy on glass */

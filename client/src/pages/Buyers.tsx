@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { api } from '../api/client'
 import { DateRangeControl, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
-import { Protected } from '../components/PasswordGate'
 // import RecordsSection from '../components/RecordsSection'  // Revenue billing section retired (see below)
 import BuyersSheet from '../components/BuyersSheet'
 import {
@@ -14,11 +13,7 @@ import { useAsync } from '../lib/useAsync'
 // import type { Buyer } from '../types'  // only used by the retired Add-buyer modal
 
 export default function Buyers() {
-  return (
-    <Protected pageTitle="Buyers" password="buyers-2026" storageKey="lock-buyers">
-      <BuyersPage />
-    </Protected>
-  )
+  return <BuyersPage />
 }
 
 function BuyersPage() {

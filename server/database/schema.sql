@@ -5,14 +5,68 @@
 -- Users / operators. This is the one table the 40-day data-retention job never
 -- touches (see database/cleanup.php). Created but deliberately NOT dropped on
 -- reseed so accounts survive a schema reload.
+--
+-- The auth-related columns (username .. updated_at) are added by migration
+-- 007_auth_totp_users.sql and power the passwordless Google-Authenticator (TOTP)
+-- login. They sit dormant until the AUTH_ENABLED env flag is turned on. password_hash
+-- is retained but unused by the current passwordless flow.
 CREATE TABLE IF NOT EXISTS users (
-    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    email         TEXT        NOT NULL UNIQUE,
-    name          TEXT,
-    password_hash TEXT,
-    role          TEXT        NOT NULL DEFAULT 'member',
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    id                BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    email             TEXT        NOT NULL UNIQUE,
+    name              TEXT,
+    password_hash     TEXT,
+    role              TEXT        NOT NULL DEFAULT 'member',
+    username          TEXT UNIQUE,
+    totp_secret       TEXT,          -- base32; NULL until enrolled
+    totp_confirmed_at TIMESTAMPTZ,   -- non-null => enrolled
+    enroll_token_hash TEXT,          -- sha256 of the one-time enrol token
+    enroll_expires_at TIMESTAMPTZ,
+    is_active         BOOLEAN     NOT NULL DEFAULT true,
+    failed_attempts   INTEGER     NOT NULL DEFAULT 0,
+    locked_until      TIMESTAMPTZ,
+    last_login_at     TIMESTAMPTZ,
+    permissions       JSONB,         -- non-admin page allowlist (migration 010); NULL => default set
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT users_role_chk CHECK (role IN ('admin','member','user'))
 );
+
+-- Server-side session store (migration 008). Only a hash of the cookie token is stored.
+-- Like users, kept out of the reseed DROP block so sessions/accounts survive a reload.
+CREATE TABLE IF NOT EXISTS sessions (
+    id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id      BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash   TEXT        NOT NULL UNIQUE,
+    mfa_pending  BOOLEAN     NOT NULL DEFAULT true,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at   TIMESTAMPTZ NOT NULL,
+    ip           TEXT,
+    user_agent   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user    ON sessions (user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions (expires_at);
+
+-- Audit trail (migration 009): who did what, when. Never pruned by the 40-day job.
+CREATE TABLE IF NOT EXISTS audit_log (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id     BIGINT      REFERENCES users(id) ON DELETE SET NULL,
+    user_email  TEXT,
+    action      TEXT        NOT NULL,
+    method      TEXT,
+    path        TEXT,
+    entity_type TEXT,
+    entity_id   BIGINT,
+    details     JSONB,
+    status_code INTEGER,
+    ip          TEXT,
+    user_agent  TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_user    ON audit_log (user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_entity  ON audit_log (entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_action  ON audit_log (action);
 
 -- Standalone destination directory (managed via DestinationController). Like
 -- users, kept out of the reseed DROP block so the list survives a schema reload.

@@ -17,6 +17,13 @@ import type {
   AttendanceDay,
   AttendanceBreaks,
   AttendanceExceptions,
+  AuthUser,
+  EnrollInfo,
+  EnrollLink,
+  ManagedUser,
+  AuditPage,
+  AuditFilters,
+  Role,
 } from '../types'
 
 const BASE = '/api'
@@ -30,12 +37,23 @@ function qs(params: object): string {
   return s ? `?${s}` : ''
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+// When a request unexpectedly returns 401 (session expired mid-use), the AuthProvider
+// registers a handler here to clear its state so the route guards redirect to /login.
+// Auth-flow endpoints opt out via the `silent401` flag so they can surface 401s themselves.
+let onUnauthorized: (() => void) | null = null
+export function setUnauthorizedHandler(fn: (() => void) | null) {
+  onUnauthorized = fn
+}
+
+async function request<T>(path: string, options?: RequestInit & { silent401?: boolean }): Promise<T> {
+  const { silent401, ...init } = options ?? {}
   const res = await fetch(`${BASE}${path}`, {
+    credentials: 'include', // send the httpOnly session cookie
     headers: { 'Content-Type': 'application/json' },
-    ...options,
+    ...init,
   })
   if (!res.ok) {
+    if (res.status === 401 && !silent401) onUnauthorized?.()
     let message = `Request failed (${res.status})`
     try {
       const body = await res.json()
@@ -130,6 +148,56 @@ export const api = {
     request<AttendanceBreaks>(`/attendance/breaks${qs({ user_id: userId, date })}`),
   attendanceExceptions: (type: 'missing_logout' | 'over_break' | 'late', from?: string, to?: string) =>
     request<AttendanceExceptions>(`/attendance/exceptions${qs({ type, from, to })}`),
+
+  // Auth
+  authStatus: () =>
+    request<{ auth_enabled: boolean }>('/auth/status', { silent401: true }),
+  me: () =>
+    request<{ user: AuthUser }>('/auth/me', { silent401: true }),
+  login: (identifier: string) =>
+    request<{ mfa_required: boolean }>('/auth/login', {
+      method: 'POST', body: JSON.stringify({ identifier }), silent401: true,
+    }),
+  verifyTotp: (code: string) =>
+    request<{ user: AuthUser }>('/auth/verify-totp', {
+      method: 'POST', body: JSON.stringify({ code }), silent401: true,
+    }),
+  enrollStart: (token: string) =>
+    request<EnrollInfo>('/auth/enroll/start', {
+      method: 'POST', body: JSON.stringify({ token }), silent401: true,
+    }),
+  enrollConfirm: (token: string, code: string) =>
+    request<{ user: AuthUser }>('/auth/enroll/confirm', {
+      method: 'POST', body: JSON.stringify({ token, code }), silent401: true,
+    }),
+  logout: () =>
+    request<void>('/auth/logout', { method: 'POST', silent401: true }),
+
+  // Audit (admin)
+  auditLogs: (filters: AuditFilters) =>
+    request<AuditPage>(`/audit-logs${qs(filters as Record<string, unknown>)}`),
+  auditActions: () =>
+    request<string[]>('/audit-logs/actions'),
+  auditExportUrl: (filters: AuditFilters) =>
+    `${BASE}/audit-logs/export${qs(filters as Record<string, unknown>)}`,
+  deleteAuditLog: (id: number) =>
+    request<{ deleted: boolean }>(`/audit-logs/${id}`, { method: 'DELETE' }),
+  clearAuditLogs: (filters: AuditFilters) =>
+    request<{ deleted: number }>(`/audit-logs${qs(filters as Record<string, unknown>)}`, { method: 'DELETE' }),
+
+  // Users (admin)
+  users: () =>
+    request<ManagedUser[]>('/admin/users'),
+  createUser: (data: { email: string; name?: string; username?: string; role: Role; permissions?: string[] }) =>
+    request<ManagedUser & { enroll: EnrollLink }>('/admin/users', {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+  updateUser: (id: number, data: { name?: string; email?: string; username?: string; role?: Role; permissions?: string[]; is_active?: boolean }) =>
+    request<ManagedUser>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  resetUserTotp: (id: number) =>
+    request<{ reset: boolean; enroll: EnrollLink }>(`/admin/users/${id}/reset-totp`, { method: 'POST' }),
+  deleteUser: (id: number) =>
+    request<{ deleted: boolean }>(`/admin/users/${id}`, { method: 'DELETE' }),
 }
 
 // Format a UTC timestamp to org timezone display

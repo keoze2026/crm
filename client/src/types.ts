@@ -257,3 +257,76 @@ export interface AttendanceExceptions {
   to: string
   rows: AttendanceException[]
 }
+
+// ─── Auth ───────────────────────────────────────────────────────────────────
+
+export type Role = 'admin' | 'member' | 'user'
+
+export interface AuthUser {
+  id: number
+  email: string
+  name: string | null
+  role: Role
+  username: string | null
+  totp_enabled: boolean
+  permissions: string[] | null
+}
+
+export interface EnrollInfo {
+  otpauth_uri: string
+  secret: string
+  email: string
+}
+
+export interface EnrollLink {
+  token: string
+  path: string
+  expires_at: string
+}
+
+export interface ManagedUser {
+  id: number
+  email: string
+  name: string | null
+  username: string | null
+  role: Role
+  is_active: boolean
+  totp_enabled: boolean
+  permissions: string[] | null
+  last_login_at: string | null
+  created_at: string
+}
+
+export interface AuditLog {
+  id: number
+  user_id: number | null
+  user_email: string | null
+  action: string
+  method: string | null
+  path: string | null
+  entity_type: string | null
+  entity_id: number | null
+  details: Record<string, unknown> | null
+  status_code: number | null
+  ip: string | null
+  user_agent: string | null
+  created_at: string
+}
+
+export interface AuditPage {
+  rows: AuditLog[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface AuditFilters {
+  user_id?: number
+  action?: string
+  entity_type?: string
+  from?: string
+  to?: string
+  q?: string
+  limit?: number
+  offset?: number
+}

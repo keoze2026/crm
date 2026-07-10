@@ -6,6 +6,7 @@ import type {
 } from 'react'
 
 type Cx = (string | false | null | undefined)[]
+// eslint-disable-next-line react-refresh/only-export-components
 export const cx = (...c: Cx) => c.filter(Boolean).join(' ')
 
 export function Card({
@@ -113,6 +114,56 @@ export function Select({
         {children}
       </select>
     </label>
+  )
+}
+
+/**
+ * Segmented pill tab bar — a dark rounded container with a raised active segment, matching
+ * the app's sidebar language. Generic over the tab id type.
+ */
+export function SegmentedTabs<T extends string>({ tabs, value, onChange, className }: {
+  tabs: { id: T; label: string; icon?: ReactNode }[]
+  value: T
+  onChange: (id: T) => void
+  className?: string
+}) {
+  return (
+    <div className={cx('inline-flex items-center gap-1 rounded-2xl bg-linear-to-b from-[#131b31] to-[#0d1424] p-1 shadow-lg shadow-slate-900/25 ring-1 ring-white/10 backdrop-blur', className)}>
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          onClick={() => onChange(t.id)}
+          className={cx(
+            'flex items-center gap-2 rounded-xl px-4 py-1.5 text-sm font-medium transition-all',
+            value === t.id
+              ? 'bg-white text-slate-900 shadow-sm'
+              : 'text-slate-300 hover:bg-white/10 hover:text-white',
+          )}
+        >
+          {t.icon}
+          {t.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/** Compact KPI scorecard for the top of a page. */
+export function StatTile({ label, value, hint, icon }: {
+  label: string
+  value: ReactNode
+  hint?: ReactNode
+  icon?: ReactNode
+}) {
+  return (
+    <div className="glass rounded-2xl p-4 shadow-lg shadow-slate-900/5 transition-transform hover:-translate-y-0.5">
+      <div className="flex items-start justify-between gap-3">
+        <span className="text-xs font-medium text-slate-500">{label}</span>
+        {icon && <div className="shrink-0 text-blue-900">{icon}</div>}
+      </div>
+      <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900">{value}</div>
+      {hint && <div className="mt-0.5 text-xs text-slate-400">{hint}</div>}
+    </div>
   )
 }
 

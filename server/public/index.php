@@ -2,12 +2,19 @@
 
 declare(strict_types=1);
 
+use App\Audit;
+use App\Auth\Auth;
+use App\Auth\AuthMiddleware;
+use App\Auth\Config;
 use App\Controllers\AnalyticsController;
 use App\Controllers\AttendanceController;
+use App\Controllers\AuditController;
+use App\Controllers\AuthController;
 use App\Controllers\BuyerController;
 use App\Controllers\CampaignController;
 use App\Controllers\DestinationController;
 use App\Controllers\RecordController;
+use App\Controllers\UserController;
 use App\Database;
 use App\Http;
 use App\Router;
@@ -17,9 +24,18 @@ require __DIR__ . '/../vendor/autoload.php';
 
 Dotenv::createImmutable(__DIR__ . '/..')->safeLoad();
 
-// CORS (dev-friendly).
-$origin = $_ENV['CORS_ORIGIN'] ?? '*';
-header("Access-Control-Allow-Origin: {$origin}");
+// Master toggle: when off, the app behaves exactly as it did before auth existed.
+$authEnabled = Config::enabled();
+
+// CORS. Cookies require a concrete origin + credentials, so the header set depends on the
+// toggle: locked-down when auth is on, wide-open (as before) when it is off.
+if ($authEnabled) {
+    header('Access-Control-Allow-Origin: ' . ($_ENV['CORS_ORIGIN'] ?? 'http://localhost:5173'));
+    header('Access-Control-Allow-Credentials: true');
+    header('Vary: Origin');
+} else {
+    header('Access-Control-Allow-Origin: ' . ($_ENV['CORS_ORIGIN'] ?? '*'));
+}
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
@@ -91,6 +107,43 @@ $router->get('/attendance/days',       fn () => $attendance->days());
 $router->get('/attendance/summary',    fn () => $attendance->summary());
 $router->get('/attendance/breaks',     fn () => $attendance->breaks());
 $router->get('/attendance/exceptions', fn () => $attendance->exceptions());
+
+// Auth status is always available so the frontend can discover whether auth is enforced.
+$auth = new AuthController();
+$router->get('/auth/status', fn () => $auth->status());
+
+// The rest of the auth/audit/admin surface only exists when auth is enabled; otherwise these
+// routes 404 exactly as they did before the feature was added.
+if ($authEnabled) {
+    $router->post('/auth/login',          fn () => $auth->login());
+    $router->post('/auth/verify-totp',    fn () => $auth->verifyTotp());
+    $router->post('/auth/enroll/start',   fn () => $auth->enrollStart());
+    $router->post('/auth/enroll/confirm', fn () => $auth->enrollConfirm());
+    $router->post('/auth/logout',         fn () => $auth->logout());
+    $router->get('/auth/me',              fn () => $auth->me());
+
+    $auditCtrl = new AuditController();
+    $router->get('/audit-logs/actions', fn () => $auditCtrl->actions());
+    $router->get('/audit-logs/export',  fn () => $auditCtrl->export());
+    $router->get('/audit-logs',         fn () => $auditCtrl->index());
+    $router->delete('/audit-logs/{id}', fn ($p) => $auditCtrl->destroy($p));
+    $router->delete('/audit-logs',      fn () => $auditCtrl->clear());
+
+    $users = new UserController();
+    $router->get('/admin/users',                  fn () => $users->index());
+    $router->post('/admin/users',                 fn () => $users->store());
+    $router->patch('/admin/users/{id}',           fn ($p) => $users->update($p));
+    $router->post('/admin/users/{id}/reset-totp', fn ($p) => $users->resetTotp($p));
+    $router->delete('/admin/users/{id}',          fn ($p) => $users->destroy($p));
+
+    // Authenticate the request and enforce access before dispatch. The audit trail is
+    // written from a shutdown hook so it captures the final HTTP status even though the
+    // response helpers call exit().
+    Auth::attempt();
+    AuthMiddleware::guard($method, $path);
+    Audit::begin($method, $path, Http::body());
+    register_shutdown_function([Audit::class, 'flush']);
+}
 
 try {
     $router->dispatch($method, $path);

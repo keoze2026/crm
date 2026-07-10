@@ -8,6 +8,9 @@ The difference between the two is the **gross margin**.
 - **client/** — React + TypeScript + Tailwind CSS + Recharts (Vite)
 - **server/** — PHP REST API + PostgreSQL (PDO)
 - Theme: blue-600 / white
+- **Auth (optional):** passwordless Google-Authenticator (TOTP) login, admin/user
+  roles, per-user page access, and an audit log — all behind the `AUTH_ENABLED`
+  flag (off by default). See [Authentication](#authentication-optional).
 
 ## Features
 
@@ -21,6 +24,11 @@ The difference between the two is the **gross margin**.
   rate, record counts and last activity; create / edit / delete.
 - **Reports** — monthly breakdown, top buyers / campaigns / sources, and
   downloadable CSV reports.
+- **Authentication & access control (optional)** — passwordless login via the
+  Google Authenticator app (TOTP), httpOnly cookie sessions, `admin` / `user`
+  roles, admin-managed accounts with QR enrolment links, per-user page
+  visibility, and a filterable/exportable **audit log** of who did what and when.
+  Entirely gated by `AUTH_ENABLED` (default off).
 
 ## Data model
 
@@ -103,6 +111,44 @@ npm run dev                # serves http://localhost:5173
 
 The Vite dev server proxies `/api/*` to the PHP server on port 8000.
 
+## Authentication (optional)
+
+Off by default. To turn it on:
+
+1. **Apply the auth migrations** (idempotent; safe on an existing DB):
+   ```bash
+   cd server
+   for m in 007_auth_totp_users 008_sessions 009_audit_log 010_user_permissions; do
+     psql -U postgres -d crm -f database/migrations/${m}.sql
+   done
+   ```
+   A fresh `schema.sql` load already includes these tables/columns; you only need the
+   migrations when adding auth to a database created from an older `dump.sql`.
+
+2. **Set env keys** in `server/.env`:
+   ```ini
+   APP_ENV=production        # or development locally — controls the Secure cookie flag
+   AUTH_ENABLED=true
+   CORS_ORIGIN=http://localhost:5173     # your frontend origin (exact, no *)
+   CLIENT_URL=http://localhost:5173      # base URL used to build enrolment links
+   ```
+
+3. **Create the first admin** and enrol:
+   ```bash
+   ADMIN_EMAIL=you@example.com ADMIN_NAME="Your Name" php database/seed_admin.php
+   ```
+   Open the printed `…/enroll?token=…` link, scan the QR into **Google Authenticator**,
+   enter the 6-digit code. Thereafter sign in with email + code.
+
+**How it works:** admins manage accounts under **Users** (create → QR enrolment link,
+edit, promote/demote, per-page access, reset authenticator, deactivate/delete). Every
+mutation and login is recorded in **System Logs** (admin-only). Sessions are opaque
+tokens in an httpOnly cookie; only their hash is stored. Full ops guide: `MAINTENANCE.md`
+§6b. Kill switch: set `AUTH_ENABLED=false` and reload PHP — the app reverts to fully open.
+
+Dependencies (`spomky-labs/otphp` server-side, `qrcode.react` client-side) install
+automatically with `composer install` / `npm install`.
+
 ## API reference
 
 ```
@@ -125,6 +171,26 @@ GET    /api/records/export?...   -> CSV (filtered records)
 POST   /api/records              PUT /api/records/{id}   DELETE /api/records/{id}
 ```
 
+### Auth endpoints (only when `AUTH_ENABLED=true`)
+
+```
+GET    /api/auth/status                       -> { auth_enabled } (always available)
+POST   /api/auth/login {identifier}           -> { mfa_required }  (start login)
+POST   /api/auth/verify-totp {code}           -> { user }          (complete login)
+POST   /api/auth/enroll/start {token}         -> { otpauth_uri, secret }
+POST   /api/auth/enroll/confirm {token, code} -> { user }
+POST   /api/auth/logout            GET /api/auth/me
+
+# admin only (or a user granted the matching page)
+GET    /api/audit-logs?user_id&action&entity_type&from&to&q&limit&offset
+GET    /api/audit-logs/export?...  -> CSV       GET /api/audit-logs/actions
+DELETE /api/audit-logs/{id}        DELETE /api/audit-logs        (clear filtered)
+
+GET    /api/admin/users            POST /api/admin/users         (-> enrolment link)
+PATCH  /api/admin/users/{id}       DELETE /api/admin/users/{id}  (hard delete)
+POST   /api/admin/users/{id}/reset-totp
+```
+
 ## Project layout
 
 ```
@@ -132,16 +198,21 @@ CRM/
 ├── client/
 │   └── src/
 │       ├── api/client.ts        # typed API wrapper
+│       ├── auth/                # AuthContext, RequireAuth/RequirePage, pages.ts
 │       ├── components/          # Layout, ui kit, DateRange
 │       ├── lib/                 # format helpers, useAsync hook
-│       ├── pages/               # Dashboard, Records, Buyers, Campaigns, Reports
+│       ├── pages/               # Dashboard, Records, Buyers, Campaigns, Reports,
+│       │                        #   Login, Enroll, Users, SystemLogs
 │       └── types.ts
 └── server/
-    ├── public/index.php         # entry point + router wiring
+    ├── public/index.php         # entry point + router wiring + auth guard/audit hook
     ├── src/
-    │   ├── Controllers/         # Buyer, Campaign, Record, Analytics
-    │   ├── Database.php  Http.php  Router.php  RecordFilter.php
+    │   ├── Auth/                # Config, Totp, Session, Auth, AuthMiddleware, Pages
+    │   ├── Controllers/         # Buyer, Campaign, Record, Analytics, Auth, User, Audit
+    │   ├── Audit.php  Database.php  Http.php  Router.php  RecordFilter.php
     └── database/
         ├── schema.sql
-        └── seed.php
+        ├── migrations/          # 001–010 (007–010 = auth stack)
+        ├── seed.php             # demo data
+        └── seed_admin.php       # bootstrap the first admin (auth)
 ```
