@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { QRCodeSVG } from 'qrcode.react'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { DEFAULT_USER_PAGES, PAGES } from '../auth/pages'
@@ -438,12 +437,12 @@ function EnrollLinkPopup({ info, onClose }: { info: { email: string; enroll: Enr
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4" onClick={onClose}>
       <div
-        className="animate-fade-in-up w-full max-w-xs rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-900/25"
+        className="animate-fade-in-up w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-900/25"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900">Enrolment link ready</h3>
+            <h3 className="text-sm font-semibold text-slate-900">User added — send them this link</h3>
             <p className="mt-0.5 truncate text-xs text-slate-500">{info.email}</p>
           </div>
           <button onClick={onClose} aria-label="Close" className="-mr-1 -mt-1 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
@@ -451,22 +450,26 @@ function EnrollLinkPopup({ info, onClose }: { info: { email: string; enroll: Enr
           </button>
         </div>
 
-        <div className="flex flex-col items-center gap-1.5">
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
-            <QRCodeSVG value={url} size={150} />
-          </div>
-          <p className="text-center text-[11px] text-slate-400">Scan to open setup on a phone · valid until {expires}</p>
-        </div>
+        <ol className="mb-3 list-decimal space-y-1 pl-4 text-xs text-slate-600 marker:text-slate-400">
+          <li>Send this link to the user (it's one-time, valid until {expires}).</li>
+          <li>They open it — the <span className="font-medium">Set up sign-in</span> page appears.</li>
+          <li>On that page they scan the QR with any authenticator app (Google Authenticator,
+            Authy, Microsoft…) or type the key, then enter the 6-digit code.</li>
+        </ol>
 
-        <div className="mt-3 flex gap-2">
+        <div className="flex gap-2">
           <input
             readOnly
             value={url}
             onFocus={(e) => e.currentTarget.select()}
             className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-[11px] text-slate-700"
           />
-          <Button type="button" variant="secondary" onClick={copy}>{copied ? '✓' : 'Copy'}</Button>
+          <Button type="button" variant="secondary" onClick={copy}>{copied ? 'Copied' : 'Copy'}</Button>
         </div>
+
+        <p className="mt-2 text-[11px] text-slate-400">
+          Tip: the QR to scan with an authenticator app is on the setup page the link opens — not here.
+        </p>
       </div>
     </div>
   )
