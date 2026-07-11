@@ -64,7 +64,7 @@ export default function Enroll() {
         <div className="space-y-4">
           <div className="flex flex-col items-center gap-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-3">
-              <QRCodeSVG value={info.otpauth_uri} size={176} />
+              <QRCodeSVG value={info.otpauth_uri} size={176} level="M" marginSize={4} />
             </div>
             <p className="text-center text-xs text-slate-400">
               Can’t scan? Enter this key manually:

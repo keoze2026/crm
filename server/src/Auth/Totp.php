@@ -30,14 +30,28 @@ final class Totp
         return OtpTotp::generate(new InternalClock(), self::SECRET_BYTES)->getSecret();
     }
 
-    /** Build the otpauth://totp/... URI the authenticator app scans. */
+    /**
+     * Build the otpauth://totp/... URI the authenticator app scans.
+     *
+     * Written by hand (rather than otphp's getProvisioningUri) for maximum app
+     * compatibility: a LITERAL ':' between issuer and account — some apps (Authy,
+     * Microsoft, FreeOTP, Aegis) reject the "%3A" that generic encoders emit and report
+     * "invalid QR / cannot interpret" — plus the standard SHA1/6-digit/30s parameters
+     * spelled out explicitly so nothing is left to a stricter parser's defaults.
+     */
     public static function provisioningUri(string $secret, string $accountLabel): string
     {
-        $totp = self::make($secret);
-        $totp->setLabel($accountLabel);
-        $totp->setIssuer(self::ISSUER);
+        $issuer  = rawurlencode(self::ISSUER);
+        $account = rawurlencode($accountLabel);
+        $query   = http_build_query([
+            'secret'    => $secret,
+            'issuer'    => self::ISSUER,
+            'algorithm' => 'SHA1',
+            'digits'    => 6,
+            'period'    => 30,
+        ], '', '&', PHP_QUERY_RFC3986);
 
-        return $totp->getProvisioningUri();
+        return "otpauth://totp/{$issuer}:{$account}?{$query}";
     }
 
     /** Constant-time verification of a submitted 6-digit code against the secret. */
