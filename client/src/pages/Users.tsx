@@ -452,8 +452,8 @@ function EnrollLinkPopup({ info, onClose }: { info: { email: string; enroll: Enr
         </div>
 
         <div className="flex flex-col items-center gap-1.5">
-          <div className="rounded-xl border border-slate-200 bg-white p-2.5">
-            <QRCodeSVG value={url} size={140} level="M" marginSize={4} />
+          <div className="rounded-xl border border-slate-200 bg-white p-3">
+            <QRCodeSVG value={url} size={150} />
           </div>
           <p className="text-center text-[11px] text-slate-400">Scan to open setup on a phone · valid until {expires}</p>
         </div>
