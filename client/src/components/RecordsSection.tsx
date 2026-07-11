@@ -473,7 +473,7 @@ export default function RecordsSection({
           <EmptyState message="No records match these filters." />
         ) : (
           <div className="overflow-x-auto rounded-t-2xl">
-            <table className={cx('w-full table-fixed text-sm', navy && 'border-collapse [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white')}>
+            <table className={cx('w-full min-w-[820px] table-fixed text-sm', navy && 'border-collapse [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white')}>
               <colgroup>
                 {showSerial && <col className="w-[6%]" />}{/* # */}
                 {showDate && <col className="w-[12%]" />}{/* Date */}

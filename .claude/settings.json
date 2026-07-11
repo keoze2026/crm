@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(export PGPASSWORD='Rocky544#')",
+      "Bash(psql -U postgres -d crm -h localhost -tc \"select \\(select count\\(*\\) from buyers\\) as buyers, \\(select count\\(*\\) from campaigns\\) as campaigns, \\(select count\\(*\\) from call_records\\) as records;\")",
+      "Bash(export PGPASSWORD='keoze')",
+      "Bash(psql -U postgres -d crm -h localhost -tc \"select \\(select count\\(*\\) from buyers\\) buyers, \\(select count\\(*\\) from campaigns\\) campaigns, \\(select count\\(*\\) from call_records\\) records;\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173)",
+      "Bash(curl -s \"http://localhost:8000/api/analytics/summary\")",
+      "Bash(node shoot.js)",
+      "Bash(awk '{print $5, $9}')",
+      "Bash(psql -U postgres -d crm -h localhost -tc \"select min\\(record_date\\), max\\(record_date\\) from call_records;\")",
+      "Bash(rm -f \"c:/Users/hp 290 g4/Desktop/Dev Projects/CRM/docs/user-manual/images/raw/\"*modal*.png \"c:/Users/hp 290 g4/Desktop/Dev Projects/CRM/docs/user-manual/images/raw/dashboard-daterange.png\")",
+      "Bash(node -e ' *)",
+      "Bash(node boxes.js)",
+      "Bash(node process.js)",
+      "Bash(xargs -n1 basename)",
+      "Bash(awk '{print $5\" bytes  \"$9}')"
+    ]
+  }
+}

@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Platform-CRM — User Manual</title>
+<style>
+  :root{
+    --blue:#2563eb; --blue-700:#1d4ed8; --navy:#0f172a; --navy-2:#1e293b;
+    --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f8fafc; --card:#ffffff;
+    --green:#16a34a; --red:#dc2626; --amber:#d97706;
+    --radius:16px; --shadow:0 1px 2px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.06);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       color:var(--ink);background:var(--bg);line-height:1.6;-webkit-font-smoothing:antialiased}
+  .layout{display:grid;grid-template-columns:270px 1fr;gap:0;max-width:1400px;margin:0 auto}
+
+  /* Sidebar TOC */
+  aside{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;
+        background:linear-gradient(180deg,#0f172a,#111c33);color:#cbd5e1;padding:26px 20px}
+  aside .brand{display:flex;align-items:center;gap:10px;color:#fff;font-weight:700;font-size:18px;margin-bottom:4px}
+  aside .brand svg{stroke:#fff}
+  aside .tag{font-size:12px;color:#7c8aa5;margin:0 0 22px 32px}
+  aside nav a{display:block;color:#cbd5e1;text-decoration:none;font-size:14px;padding:7px 10px;border-radius:9px;margin:2px 0}
+  aside nav a:hover{background:rgba(255,255,255,.08);color:#fff}
+  aside nav a.section{margin-top:16px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#64748b;padding-left:10px}
+  aside .foot{margin-top:26px;padding-top:16px;border-top:1px solid rgba(255,255,255,.1);font-size:12px;color:#7c8aa5}
+
+  main{padding:48px 56px;min-width:0}
+  .hero{margin-bottom:14px}
+  .hero .kicker{color:var(--blue);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:12px}
+  h1{font-size:38px;line-height:1.15;margin:6px 0 10px;letter-spacing:-.02em}
+  .lede{font-size:18px;color:var(--muted);max-width:70ch}
+  h2{font-size:26px;margin:52px 0 6px;letter-spacing:-.01em;scroll-margin-top:20px}
+  h3{font-size:18px;margin:26px 0 8px}
+  p{margin:10px 0}
+  section{border-top:1px solid var(--line);padding-top:8px}
+  section:first-of-type{border-top:none}
+  a{color:var(--blue-700)}
+
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 8px}
+  .pill{font-size:12px;font-weight:600;color:var(--navy-2);background:#eef2ff;border:1px solid #e0e7ff;border-radius:999px;padding:5px 12px}
+
+  figure{margin:22px 0;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--card);box-shadow:var(--shadow)}
+  figure img{display:block;width:100%;height:auto}
+  figcaption{font-size:13px;color:var(--muted);padding:10px 14px;border-top:1px solid var(--line);background:#fbfdff}
+
+  .legend{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:10px}
+  .legend li{display:grid;grid-template-columns:32px 1fr;gap:12px;align-items:start}
+  .badge{width:28px;height:28px;border-radius:50%;background:var(--blue);color:#fff;font-weight:700;font-size:14px;
+         display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 4px #fff,0 0 0 5px var(--blue)}
+  .legend li b{color:var(--ink)}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
+  .card h3{margin-top:0}
+  .card p{margin:6px 0;font-size:14.5px}
+
+  .callout{border-left:4px solid var(--blue);background:#eff6ff;border-radius:8px;padding:12px 16px;margin:18px 0}
+  .callout.warn{border-color:var(--amber);background:#fffbeb}
+  .callout.note{border-color:var(--muted);background:#f1f5f9}
+  .callout p{margin:4px 0}
+  .callout .h{font-weight:700;display:block;margin-bottom:2px}
+
+  table.def{width:100%;border-collapse:collapse;margin:14px 0;font-size:14.5px}
+  table.def th,table.def td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  table.def th{background:#f1f5f9;font-size:12px;letter-spacing:.03em;text-transform:uppercase;color:var(--navy-2)}
+  table.def td code{background:#eef2ff;padding:1px 6px;border-radius:5px;font-size:13px}
+
+  .steps{counter-reset:step;list-style:none;padding:0;margin:14px 0}
+  .steps li{position:relative;padding:6px 0 6px 40px;margin:6px 0}
+  .steps li::before{counter-increment:step;content:counter(step);position:absolute;left:0;top:4px;
+        width:26px;height:26px;border-radius:50%;background:var(--navy);color:#fff;font-size:13px;font-weight:700;
+        display:flex;align-items:center;justify-content:center}
+
+  kbd{background:#0f172a;color:#fff;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600}
+  .tag-green{color:var(--green);font-weight:700}
+  .tag-red{color:var(--red);font-weight:700}
+
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+
+  @media (max-width:960px){
+    .layout{grid-template-columns:1fr}
+    aside{position:static;height:auto;overflow:visible}
+    aside nav{columns:2}
+    main{padding:28px 20px}
+    .grid2{grid-template-columns:1fr}
+    h1{font-size:30px}
+  }
+  @media print{
+    aside{display:none}.layout{grid-template-columns:1fr;max-width:none}
+    main{padding:0}figure{break-inside:avoid}section{break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V6l8 6 8-6v13"/></svg>
+      Platform-CRM
+    </div>
+    <p class="tag">User Manual</p>
+    <nav>
+      <a href="#intro">Overview</a>
+      <a href="#concepts">Key concepts</a>
+      <a href="#navigation">Getting around</a>
+      <a href="#controls">Shared controls</a>
+      <a class="section">Pages</a>
+      <a href="#dashboard">Dashboard</a>
+      <a href="#daily-sheet">Daily Sheet</a>
+      <a href="#buyers">Buyers</a>
+      <a href="#campaigns">Campaigns</a>
+      <a href="#complete-report">Complete Report</a>
+      <a href="#attendance">Attendance</a>
+      <a class="section">Reference</a>
+      <a href="#auth">Accounts &amp; access</a>
+      <a href="#faq">Tips &amp; FAQ</a>
+    </nav>
+    <div class="foot">Revised 11 Jul 2026<br>Screens use sample data.</div>
+  </aside>
+
+  <main>
+    <div class="hero" id="intro">
+      <div class="kicker">Platform-CRM</div>
+      <h1>User Manual</h1>
+      <p class="lede">Platform-CRM is a pay-per-call / call-forwarding CRM. Your team records the daily
+      call volumes for <b>buyers</b> (the revenue side — calls sold and forwarded to customers) and
+      <b>campaigns</b> (the cost side — the media buying that sources those calls). The gap between the
+      two is your <b>profit</b>. This guide walks through every page and the controls you'll use daily.</p>
+      <div class="meta">
+        <span class="pill">6 working pages</span>
+        <span class="pill">Revenue &amp; cost tracking</span>
+        <span class="pill">Live dashboard</span>
+        <span class="pill">CSV / PDF reports</span>
+      </div>
+    </div>
+
+    <!-- CONCEPTS -->
+    <section id="concepts">
+      <h2>Key concepts</h2>
+      <p>A few terms recur across every page. Understanding them makes the whole app read at a glance.</p>
+      <table class="def">
+        <thead><tr><th>Term</th><th>What it means</th></tr></thead>
+        <tbody>
+          <tr><td><b>Buyer</b></td><td>A customer who <i>buys</i> forwarded calls from you — the <b>revenue</b> side. Buyers have a short code such as <code>RTG 04</code> or <code>L48</code>.</td></tr>
+          <tr><td><b>Campaign</b></td><td>A media-buying campaign that <i>sources</i> calls — the <b>cost</b> side. Campaigns have codes like <code>C-05</code> and a traffic <b>destination / source</b> such as <code>XXD</code>.</td></tr>
+          <tr><td><b>Answered / Missed</b></td><td>Calls that connected vs. calls that rang out, for a single day and destination.</td></tr>
+          <tr><td><b>Counted</b></td><td>The billable number of calls for that row (answered plus any counted replacements).</td></tr>
+          <tr><td><b>Rate</b></td><td>The price per counted call, in dollars.</td></tr>
+          <tr><td><b>Total&nbsp;bill</b></td><td>Calculated automatically as <code>Counted × Rate</code>. You never type this — it updates as you edit.</td></tr>
+          <tr><td><b>Profit / Margin</b></td><td>Revenue (from buyers) minus Cost (from campaigns). A negative number is shown in <span class="tag-red">red</span>.</td></tr>
+        </tbody>
+      </table>
+      <div class="callout note"><span class="h">The golden rule</span>
+        <p>Everything you enter lives on the <b>Daily Sheet</b> (revenue) and the <b>Campaigns</b> sheet (cost).
+        The Dashboard, Buyers, and Complete Report pages are all <i>views</i> that summarise those two sheets — you rarely edit them directly.</p>
+      </div>
+    </section>
+
+    <!-- NAVIGATION -->
+    <section id="navigation">
+      <h2>Getting around</h2>
+      <p>The dark sidebar on the left is always visible on desktop. It's how you move between pages; the
+      highlighted item is the page you're on. On a phone, tap the <kbd>☰</kbd> menu icon in the top bar to open it.</p>
+      <div class="grid2">
+        <div class="card">
+          <h3>The six pages</h3>
+          <p><b>Dashboard</b> — the at-a-glance performance overview.</p>
+          <p><b>Daily Sheet</b> — enter and review buyer (revenue) call records.</p>
+          <p><b>Buyers</b> — a per-buyer monthly summary with editable rates.</p>
+          <p><b>Campaigns</b> — enter and review campaign (cost) call records.</p>
+          <p><b>Complete Report</b> — revenue, cost and profit side by side.</p>
+          <p><b>Attendance</b> — team check-in / check-out tracking.</p>
+        </div>
+        <div class="card">
+          <h3>Reading a page</h3>
+          <p>Every page opens with a <b>title</b> and short subtitle at the top-left, and its main
+          <b>controls</b> (date range, search, filters) at the top-right.</p>
+          <p>Money is shown in dollars; large counts use thousands separators. Positive changes are
+          <span class="tag-green">green</span>, drops are <span class="tag-red">red</span>.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SHARED CONTROLS -->
+    <section id="controls">
+      <h2>Shared controls</h2>
+      <h3>The date-range picker</h3>
+      <p>Most pages carry a date-range button at the top-right (for example
+      <code>2026-04-13 ~ 2026-07-11</code>). Every figure on the page is calculated <i>for that period</i>,
+      so this is the single most important control in the app.</p>
+      <ol class="steps">
+        <li>Click the date button to open the picker.</li>
+        <li>Pick a quick <b>preset</b> — Today, Yesterday, Last 7 / 30 / 90 days, or This month — or click two days on the calendar for a custom span.</li>
+        <li>Press <b>Apply</b>. The whole page reloads for the new period.</li>
+      </ol>
+      <h3>Searching, filtering &amp; sorting</h3>
+      <p>On the sheet pages you can type in the <b>Search</b> box to match a buyer or campaign code,
+      use the <b>destination / campaign</b> dropdown to narrow to one entity, and click a
+      <b>column header</b> to sort. Long lists are paged 35 rows at a time.</p>
+      <h3>Editing data</h3>
+      <p>Data is edited <b>inline</b>. On the Daily Sheet and Campaigns sheet each row has a
+      <b>pencil</b> (edit) and <b>trash</b> (delete) button. On the Buyers sheet you edit the buyer
+      code and rate directly in the cell; totals recalculate instantly.</p>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section id="dashboard">
+      <h2>Dashboard</h2>
+      <p>The landing page. It answers "how are we doing this period?" in one screen — headline numbers up
+      top, trends and rankings below. Change the date range to re-scope everything.</p>
+      <figure>
+        <img src="./images/dashboard.png" alt="Dashboard with numbered callouts" />
+        <figcaption>The Dashboard, scoped to the last 90 days of sample data.</figcaption>
+      </figure>
+      <ul class="legend">
+        <li><span class="badge">1</span><div><b>Navigation sidebar</b> — jump to any page; the current page is highlighted.</div></li>
+        <li><span class="badge">2</span><div><b>Date range</b> — sets the reporting period for every card and chart on the page.</div></li>
+        <li><span class="badge">3</span><div><b>KPI cards</b> — Revenue (billed), Running Fee, Profit and Counted Calls, plus Answer Rate, Profit Margin, Active Buyers and Active Campaigns. Each headline shows the change <i>vs. the previous period</i>.</div></li>
+        <li><span class="badge">4</span><div><b>Revenue, running fee &amp; profit over time</b> — the income trend. Toggle <b>Daily / 4 Days / Weekly</b> at the top-right to change the grouping.</div></li>
+        <li><span class="badge">5</span><div><b>Most active buyers</b> — your buyers ranked by revenue for the period.</div></li>
+        <li><span class="badge">6</span><div><b>Answered vs missed calls</b> — call-quality trend on the buyer side; a healthy chart hugs the top (answered) line.</div></li>
+        <li><span class="badge">7</span><div><b>Top traffic sources</b> — campaign spend broken down by traffic source.</div></li>
+      </ul>
+      <div class="callout"><span class="h">Reading the KPIs</span>
+        <p>A red <b>Profit</b> or negative <b>Profit Margin</b> means cost outran revenue for the selected
+        window — open the <a href="#complete-report">Complete Report</a> to see exactly which destinations drove it.</p>
+      </div>
+    </section>
+
+    <!-- DAILY SHEET -->
+    <section id="daily-sheet">
+      <h2>Daily Sheet</h2>
+      <p>Your day-to-day workhorse for the <b>revenue</b> side. Each row is one destination's calls for one
+      day. The <b>Total</b> column and the navy totals bar update automatically from Counted × Rate.</p>
+      <figure>
+        <img src="./images/daily-sheet.png" alt="Daily Sheet with numbered callouts" />
+        <figcaption>The Daily Sheet — buyer call records for the selected period.</figcaption>
+      </figure>
+      <ul class="legend">
+        <li><span class="badge">1</span><div><b>Search</b> — filter rows by destination code (e.g. type <code>RTG</code>).</div></li>
+        <li><span class="badge">2</span><div><b>Date</b> — the reporting period, shared with the rest of the app.</div></li>
+        <li><span class="badge">3</span><div><b>Destination</b> — narrow the sheet to a single destination, or leave on <i>All destinations</i>.</div></li>
+        <li><span class="badge">4</span><div><b>Column headers</b> — Date, Destination, Answered, Missed, Replacement, Counted, Rate, Total. Click a header (e.g. <b>Rate ↓</b>) to sort by it.</div></li>
+        <li><span class="badge">5</span><div><b>Row actions</b> — the <b>pencil</b> edits a record; the <b>trash</b> deletes it (with a confirm).</div></li>
+        <li><span class="badge">6</span><div><b>Totals &amp; pagination</b> — the navy <b>TOTAL</b> bar sums the filtered set; use <b>Prev / Next</b> to page through 35 rows at a time.</div></li>
+      </ul>
+      <div class="callout"><span class="h">Entering a day's numbers</span>
+        <p>Add or correct records inline on the sheet, then move on — the buyer's Total and every summary
+        that references it (Dashboard, Buyers, Complete Report) update the next time you open them.</p>
+      </div>
+    </section>
+
+    <!-- BUYERS -->
+    <section id="buyers">
+      <h2>Buyers</h2>
+      <p>A rolled-up <b>monthly sheet</b>, one row per buyer, for the selected date range. It's the quickest
+      way to see how much each customer bought and to keep their <b>rate</b> current.</p>
+      <figure>
+        <img src="./images/buyers.png" alt="Buyers monthly sheet" />
+        <figcaption>Buyers — per-buyer totals with inline-editable rates.</figcaption>
+      </figure>
+      <table class="def">
+        <thead><tr><th>Column</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><b>Buyers</b></td><td>The buyer code. Editable — rename a buyer inline.</td></tr>
+          <tr><td><b>Total Calls Bought</b></td><td>Auto-summed from the Daily Sheet for the chosen date range.</td></tr>
+          <tr><td><b>Average Calls a Day</b></td><td>Total calls divided by the active days in the period.</td></tr>
+          <tr><td><b>Rates</b></td><td>Price per call. <b>Editable</b> — click the cell and type a new value.</td></tr>
+          <tr><td><b>Amount Received</b></td><td>Calculated automatically (calls × rate).</td></tr>
+        </tbody>
+      </table>
+      <div class="callout note"><span class="h">Where do new buyers come from?</span>
+        <p>A buyer appears here automatically the first time its code is used on the Daily Sheet — there's no
+        separate "add buyer" step. Use the <b>Search by name</b> box to find one quickly.</p>
+      </div>
+    </section>
+
+    <!-- CAMPAIGNS -->
+    <section id="campaigns">
+      <h2>Campaigns</h2>
+      <p>The mirror image of the Daily Sheet, for the <b>cost</b> side. Each row is a campaign's calls for one
+      day at a given traffic destination. This is where your media-buying spend is recorded.</p>
+      <figure>
+        <img src="./images/campaigns.png" alt="Campaigns sheet" />
+        <figcaption>Campaigns — campaign call records (the cost / billing sheet).</figcaption>
+      </figure>
+      <p>The controls match the Daily Sheet: <b>Search</b> by campaign code, a <b>Date</b> range, a
+      <b>Campaign</b> dropdown, sortable headers, per-row edit / delete, a navy <b>TOTAL</b> bar and paging.
+      The extra <b>Destination</b> column names the traffic source the campaign was buying.</p>
+      <div class="callout"><span class="h">Revenue vs. cost at a glance</span>
+        <p>Daily Sheet totals are your money <i>in</i>; Campaigns totals are your money <i>out</i>. The
+        <a href="#complete-report">Complete Report</a> subtracts one from the other for you.</p>
+      </div>
+    </section>
+
+    <!-- COMPLETE REPORT -->
+    <section id="complete-report">
+      <h2>Complete Report</h2>
+      <p>The bottom line. Three stacked sections for the selected period: <b>Revenue</b> by buyer destination,
+      <b>Cost</b> by campaign destination, and a <b>Complete</b> summary that does the subtraction.</p>
+      <figure>
+        <img src="./images/complete-report.png" alt="Complete Report page" />
+        <figcaption>Complete Report — revenue and cost combined into profit.</figcaption>
+      </figure>
+      <p>Read it top to bottom, following the three labelled bands on the page:</p>
+      <table class="def">
+        <thead><tr><th>Section</th><th>What it shows</th></tr></thead>
+        <tbody>
+          <tr><td><b>REVENUE</b><br><span style="color:var(--muted)">buyer destinations</span></td><td>Every buyer's answered, missed, counted and total bill, ending in a navy total row.</td></tr>
+          <tr><td><b>COST</b><br><span style="color:var(--muted)">campaign destinations</span></td><td>The same breakdown for your campaigns — money spent to source the calls.</td></tr>
+          <tr><td><b>COMPLETE</b><br><span style="color:var(--muted)">revenue − cost = profit</span></td><td>Three summary cards. When cost exceeds revenue the Profit card turns <span class="tag-red">red</span> and shows a negative figure.</td></tr>
+        </tbody>
+      </table>
+      <p>Use the date range at the top-right to run the report for any month, quarter or custom window.</p>
+    </section>
+
+    <!-- ATTENDANCE -->
+    <section id="attendance">
+      <h2>Attendance</h2>
+      <p>Tracks team <b>check-in / check-out</b>, fed by a Telegram bot. Staff clock in and out from Telegram;
+      this page turns that into daily rosters and per-member reports.</p>
+      <figure>
+        <img src="./images/attendance.png" alt="Attendance page" />
+        <figcaption>Attendance — the Daily Roster tab with its summary cards.</figcaption>
+      </figure>
+      <h3>Three tabs</h3>
+      <div class="grid2">
+        <div class="card"><h3>Daily Roster</h3><p>Who's online now, plus cards for <b>Present Today</b>, <b>Still Checked In</b>, <b>Avg Hours Worked</b>, <b>Absent</b> and <b>Break Overages</b>, and a searchable table of the day's check-ins.</p></div>
+        <div class="card"><h3>Staff Summary &amp; Reports</h3><p>Per-member hours over a period, with <b>XLSX</b> and <b>PDF</b> export buttons for a team sheet, an all-members report, or a single member's daily breakdown.</p></div>
+      </div>
+      <div class="callout warn"><span class="h">Needs the attendance service</span>
+        <p>Attendance data is supplied by the external Telegram check-in bot. On an install where that bot and
+        its tables aren't set up yet, the roster reads <i>"Nobody checked in yet today"</i> and the counts stay
+        at zero — the check-in and summary features light up once the bot is connected.</p>
+      </div>
+    </section>
+
+    <!-- AUTH -->
+    <section id="auth">
+      <h2>Accounts &amp; access (optional)</h2>
+      <p>Platform-CRM can run fully open (no login) or with authentication switched on. When it's enabled you
+      sign in with your email and a 6-digit code from the <b>Google Authenticator</b> app — there's no password
+      to remember or leak.</p>
+      <div class="grid2">
+        <div class="card"><h3>Signing in</h3><p>Enter your email, then the current 6-digit code from your authenticator app. First-time users scan a QR enrolment link an admin sends them.</p></div>
+        <div class="card"><h3>Admin extras</h3><p>Admins get two more sidebar items — <b>Users</b> (create accounts, set per-page access, reset authenticators) and <b>System Logs</b> (a searchable audit trail of who did what).</p></div>
+      </div>
+      <div class="callout note"><p>These items only appear when authentication is enabled and you have the rights to see them. If you don't see <b>Users</b> or <b>System Logs</b>, your install is either open or your account isn't an admin — that's expected.</p></div>
+    </section>
+
+    <!-- FAQ -->
+    <section id="faq">
+      <h2>Tips &amp; FAQ</h2>
+      <h3>My numbers look tiny / empty</h3>
+      <p>Almost always the <b>date range</b>. The default window can be a single quiet day — widen it (try
+      <b>Last 90 days</b>) and the charts and totals fill in.</p>
+      <h3>I changed a rate but the Dashboard didn't move</h3>
+      <p>Summary pages load their figures when you open them. Revisit the Dashboard or Complete Report after an
+      edit and it will reflect the new numbers.</p>
+      <h3>A total looks wrong</h3>
+      <p>Totals are always <code>Counted × Rate</code> summed across the <i>filtered</i> rows. Check that your
+      search box and destination filter aren't hiding rows, and that the date range is what you expect.</p>
+      <h3>How do I remove a record?</h3>
+      <p>On the Daily Sheet or Campaigns sheet, click the <b>trash</b> icon at the end of the row and confirm.</p>
+    </section>
+
+    <footer>
+      Platform-CRM User Manual · Screens captured from sample data on 11 Jul 2026.<br>
+      A pay-per-call / call-forwarding CRM — Dashboard, Daily Sheet, Buyers, Campaigns, Complete Report &amp; Attendance.
+    </footer>
+  </main>
+</div>
+</body>
+</html>

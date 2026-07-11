@@ -57,7 +57,10 @@ export default function RecordsGrid({
 
   return (
     <div className="overflow-x-auto rounded-t-2xl">
-      <table className={cx('w-full text-sm', !isBuyer && 'table-fixed', navy && 'border-collapse [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white')}>
+      {/* min-w keeps columns from crushing on small screens; the wrapper scrolls
+          horizontally instead (matching Users / System Logs). Campaigns carry an
+          extra Source column + Status select, so they need a wider floor. */}
+      <table className={cx('w-full text-sm', isBuyer ? 'min-w-[760px]' : 'min-w-[920px] table-fixed', navy && 'border-collapse [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white')}>
         <thead>
           <tr>
             <th className={headCls}>{isBuyer ? 'Destination' : 'Camp'}</th>
