@@ -24,7 +24,13 @@
       "Bash(cd \"c:/Users/hp 290 g4/Desktop/Dev Projects/CRM/docs/user-manual/images/raw\" && rm -f _v_*.png && echo \"temp cleaned\")",
       "Bash(curl -s -o /dev/null -w \"vite:%{http_code} php:\" http://localhost:5173)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8000/api/health)",
-      "Bash(cd \"c:/Users/hp 290 g4/Desktop/Dev Projects/CRM/docs/user-manual/images/raw\" && rm -f _r_*.png && echo cleaned)"
+      "Bash(cd \"c:/Users/hp 290 g4/Desktop/Dev Projects/CRM/docs/user-manual/images/raw\" && rm -f _r_*.png && echo cleaned)",
+      "Bash(node optimize.js)",
+      "Bash(node restyle.js)",
+      "Bash(grep -o '/manual-images/dashboard.webp[^\\\\\\\\]*loading' \"c:/Users/hp 290 g4/Desktop/Dev Projects/CRM/client/src/pages/UserManual.tsx\")",
+      "Bash(grep -c 'loading=\\\\\\\\\"lazy\\\\\\\\\"' src/pages/UserManual.tsx)",
+      "Bash(curl -s -D - -o /dev/null \"http://localhost:5173/manual-images/dashboard.webp\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:5173/manual-images/dashboard.png\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\hp 290 g4\\Desktop\\Dev Projects\\CRM\\client"
