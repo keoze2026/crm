@@ -16,6 +16,7 @@ import Login from './pages/Login'
 import Enroll from './pages/Enroll'
 import SystemLogs from './pages/SystemLogs'
 import Users from './pages/Users'
+import UserManual from './pages/UserManual'
 
 const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
@@ -24,6 +25,8 @@ const router = createBrowserRouter([
     // Everything below requires a session (a no-op when auth is disabled).
     element: <RequireAuth />,
     children: [
+      // Full-screen standalone help page (own layout, no app sidebar).
+      { path: '/manual', element: <UserManual /> },
       {
         path: '/',
         element: <Layout />,

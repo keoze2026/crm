@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useEffect, useState, type ReactNode } from 'react'
 import { cx } from './ui'
 import { useAuth } from '../auth/AuthContext'
@@ -50,6 +50,20 @@ function BrandMark({ light = false }: { light?: boolean }) {
         </svg>
       </span>
       <span className={cx('font-semibold tracking-tight', light ? 'text-white' : 'text-slate-900')}>Platform-CRM</span>
+      <Link
+        to="/manual"
+        title="User manual"
+        aria-label="Open user manual"
+        onClick={(e) => e.stopPropagation()}
+        className={cx(
+          'ml-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold leading-none transition-colors',
+          light
+            ? 'border-white/40 text-white/90 hover:bg-white/15 hover:text-white'
+            : 'border-slate-300 text-slate-500 hover:bg-slate-100 hover:text-slate-700',
+        )}
+      >
+        ?
+      </Link>
     </div>
   )
 }
