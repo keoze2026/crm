@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
+import { standardizeCampaignCode } from '../lib/bundle'
 import { money2, num } from '../lib/format'
 import type { CallRecord, Campaign, Destination, RecordType } from '../types'
 import { Input, Select, Spinner, cx } from './ui'
@@ -40,12 +41,13 @@ export default function RecordsGrid({
 
   const totals = records.reduce(
     (a, r) => ({
-      answered: a.answered + Number(r.answered),
-      missed:   a.missed   + Number(r.missed),
-      counted:  a.counted  + Number(r.counted),
-      total:    a.total    + Number(r.total_bill),
+      answered:    a.answered    + Number(r.answered),
+      missed:      a.missed      + Number(r.missed),
+      replacement: a.replacement + Number(r.replacement),
+      counted:     a.counted     + Number(r.counted),
+      total:       a.total       + Number(r.total_bill),
     }),
-    { answered: 0, missed: 0, counted: 0, total: 0 },
+    { answered: 0, missed: 0, replacement: 0, counted: 0, total: 0 },
   )
   const entityCount = isBuyer
     ? new Set(records.map((r) => r.buyer_id)).size
@@ -54,20 +56,24 @@ export default function RecordsGrid({
   const sortedRecords = [...records].sort((a, b) => b.rate - a.rate)
 
   const headCls = cx('px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide', navy ? 'bg-[#1a3654] text-white' : 'bg-blue-600 text-blue-50')
+  // "REPLACEMENT" is the longest header; in the fixed-width campaign grid it clips
+  // against the column edge, so this variant tightens the padding, drops the wide
+  // letter-spacing and shrinks the font a notch so the whole word fits.
+  const headClsReplacement = cx('px-1 py-2.5 text-center text-[10px] font-semibold uppercase tracking-tight whitespace-nowrap', navy ? 'bg-[#1a3654] text-white' : 'bg-blue-600 text-blue-50')
 
   return (
     <div className="overflow-x-auto rounded-t-2xl">
       {/* min-w keeps columns from crushing on small screens; the wrapper scrolls
           horizontally instead (matching Users / System Logs). Campaigns carry an
           extra Source column + Status select, so they need a wider floor. */}
-      <table className={cx('w-full text-sm', isBuyer ? 'min-w-[760px]' : 'min-w-[920px] table-fixed', navy && 'border-collapse [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white')}>
+      <table className={cx('w-full text-sm', isBuyer ? 'min-w-[760px]' : 'min-w-[1020px] table-fixed', navy && 'border-collapse [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white')}>
         <thead>
           <tr>
             <th className={headCls}>{isBuyer ? 'Destination' : 'Camp'}</th>
             {!isBuyer && <th className={headCls}>Traffic Source</th>}
             <th className={headCls}>Answered</th>
             <th className={headCls}>Missed</th>
-            {isBuyer && <th className={headCls}>Replacement</th>}
+            <th className={headClsReplacement}>Replacement</th>
             <th className={headCls}>Counted</th>
             <th className={headCls}>Rate</th>
             <th className={headCls}>Total</th>
@@ -106,7 +112,7 @@ export default function RecordsGrid({
             </td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.answered)}</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.missed)}</td>
-            {isBuyer && <td className={cx('px-3 py-2.5 text-center', navy ? 'text-white/50' : 'text-slate-400')}>—</td>}
+            <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.replacement)}</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.counted)}</td>
             <td className={cx('px-3 py-2.5 text-center tabular-nums', navy ? 'text-white/90' : 'text-blue-700')} title="Average rate = Total ÷ Counted">{totals.counted > 0 ? money2(totals.total / totals.counted) : '—'}</td>
             <td className={cx('px-3 py-2.5 text-center tabular-nums', navy ? 'text-white' : 'text-blue-700')}>{money2(totals.total)}</td>
@@ -169,8 +175,9 @@ function ExistingRow({ record, isBuyer, navy, onChanged, campaign }: {
 }) {
   const [answered, setAnswered] = useState(String(record.answered))
   const [missed,   setMissed]   = useState(String(record.missed))
-  // Replacement is keyed in like Counted but is display-only — it never feeds the
-  // per-row total or the column totals. Buyer rows only.
+  // Replacement is keyed in like Counted (manual entry) on both the buyer and the
+  // campaign sheet. It never feeds the per-row Total (counted × rate), but it IS
+  // summed into the Replacement column total in the footer.
   const [replacement, setReplacement] = useState(String(record.replacement))
   // Counted is keyed in manually so both buyer categories work: "Yes" adds missed
   // to answered, "No / Non-Missed" excludes them. It no longer auto-derives here.
@@ -215,10 +222,16 @@ function ExistingRow({ record, isBuyer, navy, onChanged, campaign }: {
   // server-side, so they're never overwritten from here.
   const saveCode = async () => {
     if (!campaign) return
-    const trimmed = code.trim()
-    if (trimmed === '' || trimmed === campaign.code) return
+    const raw = code.trim()
+    // Skip when empty or left exactly as stored, so merely focusing a row never
+    // renames it — only an actual edit triggers standardization.
+    if (raw === '' || raw === campaign.code) return
+    const standardized = standardizeCampaignCode(raw)
+    // A cosmetic reformat of the same campaign (e.g. "C-3" for "C-03"): snap the
+    // field back to canonical without firing a needless rename request.
+    if (standardized === campaign.code) { setCode(campaign.code); return }
     try {
-      await api.updateCampaign(campaign.id, { code: trimmed, name: campaign.name, notes: campaign.notes })
+      await api.updateCampaign(campaign.id, { code: standardized, name: campaign.name, notes: campaign.notes })
       onChanged()
     } catch (e) { alert((e as Error).message) }
   }
@@ -253,7 +266,7 @@ function ExistingRow({ record, isBuyer, navy, onChanged, campaign }: {
       {!isBuyer && <td className={cellCls}><Input value={source} onChange={(e) => setSource(e.target.value)} /></td>}
       <td className={cellCls}><Input type="number" min="0" value={answered} onChange={(e) => setAnswered(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" value={missed} onChange={(e) => setMissed(e.target.value)} className={numInput} /></td>
-      {isBuyer && <td className={cellCls}><Input type="number" min="0" value={replacement} onChange={(e) => setReplacement(e.target.value)} className={numInput} /></td>}
+      <td className={cellCls}><Input type="number" min="0" value={replacement} onChange={(e) => setReplacement(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" value={counted} onChange={(e) => setCounted(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} className={numInput} /></td>
       <td className={cx(cellCls, 'text-center font-semibold tabular-nums text-slate-900')}>{money2(total)}</td>
@@ -283,7 +296,7 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
   const [source,   setSource]   = useState('')   // source/destination, typed directly (campaigns)
   const [answered, setAnswered] = useState('')
   const [missed,   setMissed]   = useState('')
-  const [replacement, setReplacement] = useState('')   // display-only (buyer rows); not in totals
+  const [replacement, setReplacement] = useState('')   // manual entry (buyer + campaign); summed in the footer, not the row total
   const [counted,  setCounted]  = useState('')
   const [rate,     setRate]     = useState('')
   const [busy,     setBusy]     = useState(false)
@@ -345,8 +358,9 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
         replacement: Number(replacement) || 0, counted: countedNum, rate: Number(rate) || 0,
       }
       // The typed code find-or-creates the buyer/campaign; a typed source is created
-      // and linked (with its rate) on the server when the record is saved.
-      payload[isBuyer ? 'buyer_code' : 'campaign_code'] = typedCode
+      // and linked (with its rate) on the server when the record is saved. Campaign
+      // codes are standardized to the "C-03" house format first.
+      payload[isBuyer ? 'buyer_code' : 'campaign_code'] = isBuyer ? typedCode : standardizeCampaignCode(typedCode)
       if (!isBuyer && destName) payload.source = destName
       await api.createRecord(payload)
       onSaved()
@@ -365,7 +379,9 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
                 {entities.map((x) => <option key={x.id} value={x.id}>{x.code}</option>)}
                 <option value="__new__">+ New…</option>
               </Select> */}
-        <Input placeholder={isBuyer ? 'Destination' : 'Campaign'} value={newCode} onChange={(e) => onEntityType(e.target.value)} />
+        <Input placeholder={isBuyer ? 'Destination' : 'Campaign'} value={newCode}
+          onChange={(e) => onEntityType(e.target.value)}
+          onBlur={() => { if (!isBuyer && newCode.trim()) setNewCode(standardizeCampaignCode(newCode)) }} />
       </td>
       {!isBuyer && (
         <td className={cellCls}>
@@ -380,7 +396,7 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
       )}
       <td className={cellCls}><Input type="number" min="0" value={answered} onChange={(e) => onAnswered(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" value={missed} onChange={(e) => onMissed(e.target.value)} className={numInput} /></td>
-      {isBuyer && <td className={cellCls}><Input type="number" min="0" value={replacement} onChange={(e) => setReplacement(e.target.value)} className={numInput} /></td>}
+      <td className={cellCls}><Input type="number" min="0" value={replacement} onChange={(e) => setReplacement(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" value={counted} onChange={(e) => onCounted(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" step="0.01" value={rate} onChange={(e) => onRate(e.target.value)} className={numInput} /></td>
       <td className={cx(cellCls, 'text-center font-semibold tabular-nums text-slate-900')}>{money2(total)}</td>

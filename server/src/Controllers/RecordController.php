@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\CampaignCode;
 use App\Database;
 use App\Http;
 use App\RecordFilter;
@@ -197,6 +198,11 @@ final class RecordController
         $code = trim((string) ($code ?? ''));
         if ($code === '') {
             return null;
+        }
+        // Campaign codes are canonicalized to the "C-03" house format so typo/spacing
+        // variants find-or-create the same campaign (buyers keep their codes verbatim).
+        if ($table === 'campaigns') {
+            $code = CampaignCode::standardize($code);
         }
         $find = $pdo->prepare("SELECT id FROM {$table} WHERE code = :code");
         $find->execute([':code' => $code]);

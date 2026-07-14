@@ -61,6 +61,7 @@ export interface CompleteReportBuyerRow {
   code: string
   answered: number
   missed: number
+  replacement: number
   counted: number
   rate: number
   total_bill: number
@@ -71,6 +72,7 @@ export interface CompleteReportCampaignRow {
   destination: string
   answered: number
   missed: number
+  replacement: number
   counted: number
   rate: number
   total_bill: number
@@ -85,6 +87,7 @@ export interface CompleteReport {
     destinations: number
     answered: number
     missed: number
+    replacement: number
     counted: number
     rate: number
     total_bill: number
@@ -94,6 +97,7 @@ export interface CompleteReport {
     destinations: number
     answered: number
     missed: number
+    replacement: number
     counted: number
     rate: number
     total_bill: number

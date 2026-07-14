@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\CampaignCode;
 use App\Database;
 use App\Http;
 
@@ -90,7 +91,7 @@ final class CampaignController
     public function store(): void
     {
         $body = Http::body();
-        $code = trim((string) ($body['code'] ?? ''));
+        $code = CampaignCode::standardize((string) ($body['code'] ?? ''));
         if ($code === '') {
             Http::error('Campaign code is required', 422);
         }
@@ -130,17 +131,21 @@ final class CampaignController
                 cost = COALESCE(:cost, cost)
              WHERE id = :id RETURNING *'
         );
-        $stmt->execute([
-            ':id'       => (int) $params['id'],
-            ':code'     => $body['code']   ?? null,
-            ':name'     => $body['name']   ?? null,
-            ':status'   => $body['status'] ?? null,
-            ':notes'    => $body['notes']  ?? null,
-            ':answered' => isset($body['answered']) ? (int) $body['answered'] : null,
-            ':missed'   => isset($body['missed'])   ? (int) $body['missed']   : null,
-            ':counted'  => isset($body['counted'])  ? (int) $body['counted']  : null,
-            ':cost'     => isset($body['cost'])     ? (float) $body['cost']   : null,
-        ]);
+        try {
+            $stmt->execute([
+                ':id'       => (int) $params['id'],
+                ':code'     => isset($body['code']) ? CampaignCode::standardize((string) $body['code']) : null,
+                ':name'     => $body['name']   ?? null,
+                ':status'   => $body['status'] ?? null,
+                ':notes'    => $body['notes']  ?? null,
+                ':answered' => isset($body['answered']) ? (int) $body['answered'] : null,
+                ':missed'   => isset($body['missed'])   ? (int) $body['missed']   : null,
+                ':counted'  => isset($body['counted'])  ? (int) $body['counted']  : null,
+                ':cost'     => isset($body['cost'])     ? (float) $body['cost']   : null,
+            ]);
+        } catch (\PDOException $e) {
+            Http::error('A campaign with that code already exists', 409);
+        }
         $row = $stmt->fetch();
         $row ? Http::json($this->cast([$row])[0]) : Http::error('Campaign not found', 404);
     }

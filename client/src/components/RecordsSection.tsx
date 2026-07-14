@@ -3,6 +3,7 @@
 // import autoTable from 'jspdf-autotable'
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { api } from '../api/client'
+import { bundleCampaignRecords, normalizeCode } from '../lib/bundle'
 import { formatDate, money2, num, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { CallRecord, Campaign, Destination, RecordFilters, RecordType } from '../types'
@@ -193,15 +194,29 @@ export default function RecordsSection({
   const totals = useMemo(() => {
     const data = allRecords.data?.data ?? []
     if (data.length === 0) return null
-    const uniqueEntities = new Set(data.map((r) => isBuyer ? r.buyer_id : r.campaign_id)).size
+    // Campaigns are bundled by normalized code, so the entity count is the number
+    // of distinct normalized campaign codes (matching the bundled rows below).
+    const uniqueEntities = isBuyer
+      ? new Set(data.map((r) => r.buyer_id)).size
+      : new Set(data.map((r) => normalizeCode(r.campaign_code))).size
     return {
-      answered:   data.reduce((s, r) => s + Number(r.answered),   0),
-      missed:     data.reduce((s, r) => s + Number(r.missed),     0),
-      counted:    data.reduce((s, r) => s + Number(r.counted),    0),
-      total_bill: data.reduce((s, r) => s + Number(r.total_bill), 0),
-      count:      uniqueEntities,
+      answered:    data.reduce((s, r) => s + Number(r.answered),    0),
+      missed:      data.reduce((s, r) => s + Number(r.missed),      0),
+      replacement: data.reduce((s, r) => s + Number(r.replacement), 0),
+      counted:     data.reduce((s, r) => s + Number(r.counted),     0),
+      total_bill:  data.reduce((s, r) => s + Number(r.total_bill),  0),
+      count:       uniqueEntities,
     }
   }, [allRecords.data, isBuyer])
+
+  // Campaign (cost) records are bundled in the multi-day table view: rows sharing
+  // a campaign + traffic source (ignoring case / spaces / punctuation) merge into
+  // one summed row. Buyers are never bundled. The single-day editable grid above
+  // always shows raw per-record rows, so individual records stay editable there.
+  const bundledRows = useMemo(
+    () => (isBuyer ? [] : bundleCampaignRecords(allRecords.data?.data ?? [])),
+    [isBuyer, allRecords.data],
+  )
 
   // Notify parent whenever totals change (for profit badge)
   useEffect(() => { onTotalsChange?.(totals?.total_bill ?? null) }, [totals])
@@ -218,6 +233,9 @@ export default function RecordsSection({
   const set = (patch: Partial<RecordFilters>) => setFilters((f) => ({ ...f, page: 1, ...patch }))
   const isFiltered = !!(filters.from || filters.to)
   const isSingleDay = !!(filters.from && filters.to && filters.from === filters.to)
+  // Campaign multi-day view renders bundled (merged) rows from the full record set;
+  // buyers keep the server-paginated raw rows.
+  const bundled = !isBuyer
   // Single-day view: drop the redundant Date column (the date is in the filter)
   // and show serial numbers instead. Otherwise keep the existing Date column.
   const showSerial = !isFiltered || isSingleDay
@@ -467,24 +485,24 @@ export default function RecordsSection({
               onChanged={gridChanged}
             />
           )
-        ) : records.loading ? (
+        ) : (bundled ? allRecords.loading : records.loading) ? (
           <div className="flex justify-center py-16"><Spinner className="h-6 w-6" /></div>
-        ) : rows.length === 0 ? (
+        ) : (bundled ? bundledRows.length === 0 : rows.length === 0) ? (
           <EmptyState message="No records match these filters." />
         ) : (
           <div className="overflow-x-auto rounded-t-2xl">
-            <table className={cx('w-full min-w-[820px] table-fixed text-sm', navy && 'border-collapse [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white')}>
+            <table className={cx('w-full min-w-[900px] table-fixed text-sm', navy && 'border-collapse [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white')}>
               <colgroup>
                 {showSerial && <col className="w-[6%]" />}{/* # */}
-                {showDate && <col className="w-[12%]" />}{/* Date */}
-                <col className="w-[15%]" />{/* Destination / Campaign */}
-                {!isBuyer && <col className="w-[13%]" />}{/* Source */}
-                <col className="w-[13%]" />{/* Answered */}
-                <col className="w-[11%]" />{/* Missed */}
-                {isBuyer && <col className="w-[11%]" />}{/* Replacement */}
-                <col className="w-[13%]" />{/* Counted */}
-                <col className="w-[13%]" />{/* Rate */}
-                <col className="w-[18%]" />{/* Total */}
+                {showDate && <col className="w-[11%]" />}{/* Date */}
+                <col className="w-[14%]" />{/* Destination / Campaign */}
+                {!isBuyer && <col className="w-[12%]" />}{/* Source */}
+                <col className="w-[12%]" />{/* Answered */}
+                <col className="w-[10%]" />{/* Missed */}
+                <col className="w-[11%]" />{/* Replacement */}
+                <col className="w-[12%]" />{/* Counted */}
+                <col className="w-[12%]" />{/* Rate */}
+                <col className="w-[15%]" />{/* Total */}
                 <col className="w-[8%]" />{/* Actions */}
               </colgroup>
               <thead>
@@ -495,7 +513,7 @@ export default function RecordsSection({
                   {!isBuyer && <th className="px-4 py-3 font-medium">Destination</th>}
                   <ThNum onClick={() => set({ sort: 'answered',   dir: nextDir(filters, 'answered')   })} active={filters.sort === 'answered'}   dir={filters.dir}>Answered</ThNum>
                   <ThNum onClick={() => set({ sort: 'missed',     dir: nextDir(filters, 'missed')     })} active={filters.sort === 'missed'}     dir={filters.dir}>Missed</ThNum>
-                  {isBuyer && <th className="px-4 py-3 text-center font-medium">Replacement</th>}
+                  <th className="px-1 py-3 text-center text-[10px] font-medium tracking-tight whitespace-nowrap">Replacement</th>
                   <ThNum onClick={() => set({ sort: 'counted',    dir: nextDir(filters, 'counted')    })} active={filters.sort === 'counted'}    dir={filters.dir}>Counted</ThNum>
                   <ThNum onClick={() => set({ sort: 'rate',       dir: nextDir(filters, 'rate')       })} active={filters.sort === 'rate'}       dir={filters.dir}>Rate</ThNum>
                   <ThNum onClick={() => set({ sort: 'total_bill', dir: nextDir(filters, 'total_bill') })} active={filters.sort === 'total_bill'} dir={filters.dir}>Total</ThNum>
@@ -503,31 +521,52 @@ export default function RecordsSection({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
-                  <tr key={r.id} className={cx(navy ? 'bg-[#d4e9f2] text-[#0f172a]' : 'border-b border-slate-100/70 odd:bg-white/40 even:bg-blue-50/40 hover:bg-blue-100/50')}>
-                    {showSerial && <td className="px-4 py-3 text-center tabular-nums text-slate-400">{(meta ? (meta.page - 1) * meta.per_page : 0) + i + 1}</td>}
-                    {showDate && (isFiltered
-                      ? <td className="whitespace-nowrap px-4 py-3 text-center text-slate-600 font-medium">
-                          {i === 0 ? formatDate(r.record_date) : i === rows.length - 1 ? formatDate(r.record_date) : ''}
+                {bundled
+                  ? bundledRows.map((b, i) => (
+                    <tr key={b.key} className={cx(navy ? 'bg-[#d4e9f2] text-[#0f172a]' : 'border-b border-slate-100/70 odd:bg-white/40 even:bg-blue-50/40 hover:bg-blue-100/50')}>
+                      {showDate && (
+                        <td className="whitespace-nowrap px-4 py-3 text-center font-medium text-slate-600">
+                          {i === 0 ? formatDate(filters.from ?? null) : i === bundledRows.length - 1 ? formatDate(filters.to ?? null) : ''}
                         </td>
-                      : <td className="whitespace-nowrap px-4 py-3 text-center text-slate-600">{formatDate(r.record_date)}</td>
-                    )}
-                    <td className="py-3 pl-10 pr-2 text-center font-medium text-slate-800"><Box w="w-16" align="left">{(isBuyer ? r.buyer_code : r.campaign_code) ?? '—'}</Box></td>
-                    {!isBuyer && <td className="py-3 pl-10 pr-2 text-center text-slate-600"><Box w="w-20" align="left">{r.source ?? '—'}</Box></td>}
-                    <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(r.answered)}</Box></td>
-                    <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-10">{num(r.missed)}</Box></td>
-                    {isBuyer && <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-12">{num(r.replacement)}</Box></td>}
-                    <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(r.counted)}</Box></td>
-                    <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-16">{money2(r.rate)}</Box></td>
-                    <td className="py-3 pl-10 pr-2 text-center font-semibold tabular-nums text-slate-900"><Box w="w-28">{money2(r.total_bill)}</Box></td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-center gap-1">
-                        <button onClick={() => openEdit(r)} className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600" title="Edit"><EditIcon /></button>
-                        <button onClick={() => onDelete(r)} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete"><TrashIcon /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      )}
+                      <td className="py-3 pl-10 pr-2 text-center font-medium text-slate-800"><Box w="w-16" align="left">{b.camp}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center text-slate-600"><Box w="w-20" align="left">{b.source}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(b.answered)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-10">{num(b.missed)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-12">{num(b.replacement)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(b.counted)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-16">{money2(b.rate)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center font-semibold tabular-nums text-slate-900"><Box w="w-28">{money2(b.total_bill)}</Box></td>
+                      <td className="px-4 py-3 text-center">
+                        {b.count > 1 && <span className="text-xs tabular-nums text-slate-400" title={`${b.count} records merged into this row`}>{b.count}×</span>}
+                      </td>
+                    </tr>
+                  ))
+                  : rows.map((r, i) => (
+                    <tr key={r.id} className={cx(navy ? 'bg-[#d4e9f2] text-[#0f172a]' : 'border-b border-slate-100/70 odd:bg-white/40 even:bg-blue-50/40 hover:bg-blue-100/50')}>
+                      {showSerial && <td className="px-4 py-3 text-center tabular-nums text-slate-400">{(meta ? (meta.page - 1) * meta.per_page : 0) + i + 1}</td>}
+                      {showDate && (isFiltered
+                        ? <td className="whitespace-nowrap px-4 py-3 text-center text-slate-600 font-medium">
+                            {i === 0 ? formatDate(r.record_date) : i === rows.length - 1 ? formatDate(r.record_date) : ''}
+                          </td>
+                        : <td className="whitespace-nowrap px-4 py-3 text-center text-slate-600">{formatDate(r.record_date)}</td>
+                      )}
+                      <td className="py-3 pl-10 pr-2 text-center font-medium text-slate-800"><Box w="w-16" align="left">{(isBuyer ? r.buyer_code : r.campaign_code) ?? '—'}</Box></td>
+                      {!isBuyer && <td className="py-3 pl-10 pr-2 text-center text-slate-600"><Box w="w-20" align="left">{r.source ?? '—'}</Box></td>}
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(r.answered)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-10">{num(r.missed)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-12">{num(r.replacement)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(r.counted)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-16">{money2(r.rate)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center font-semibold tabular-nums text-slate-900"><Box w="w-28">{money2(r.total_bill)}</Box></td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-center gap-1">
+                          <button onClick={() => openEdit(r)} className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600" title="Edit"><EditIcon /></button>
+                          <button onClick={() => onDelete(r)} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete"><TrashIcon /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
               {totals && (
                 <tfoot>
@@ -536,10 +575,10 @@ export default function RecordsSection({
                       TOTAL
                     </td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-16" align="left">{num(totals.count)}</Box></td>
-                    {!isBuyer && <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-20" align="left">{num(new Set(allRecords.data?.data?.map(r => r.source).filter(Boolean) ?? []).size)}</Box></td>}
+                    {!isBuyer && <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-20" align="left">{num(new Set((allRecords.data?.data ?? []).map(r => normalizeCode(r.source)).filter(Boolean)).size)}</Box></td>}
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-12">{num(totals.answered)}</Box></td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-10">{num(totals.missed)}</Box></td>
-                    {isBuyer && <td className={cx('py-3 pl-10 pr-2 text-center tabular-nums', navy ? 'text-white/50' : 'text-slate-400')}><Box w="w-12">—</Box></td>}
+                    <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-12">{num(totals.replacement)}</Box></td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-12">{num(totals.counted)}</Box></td>
                     <td className={cx('py-3 pl-10 pr-2 text-center tabular-nums', navy ? 'text-white/90' : 'text-blue-700')} title="Average rate = Total ÷ Counted"><Box w="w-16">{totals.counted > 0 ? money2(totals.total_bill / totals.counted) : '—'}</Box></td>
                     <td className={cx('py-3 pl-10 pr-2 text-center tabular-nums', navy ? 'text-white' : 'text-blue-700')}><Box w="w-28">{money2(totals.total_bill)}</Box></td>
@@ -551,7 +590,9 @@ export default function RecordsSection({
           </div>
         )}
 
-        {isFiltered && !isSingleDay && meta && meta.total > 0 && (
+        {/* Buyer view is server-paginated. The bundled campaign view already collapses
+            the full record set into merged rows, so it shows a one-line summary instead. */}
+        {!bundled && isFiltered && !isSingleDay && meta && meta.total > 0 && (
           <div className="flex flex-col items-center justify-between gap-2 border-t border-slate-100 px-4 py-3 text-sm text-slate-500 sm:flex-row">
             <span>Showing {(meta.page - 1) * meta.per_page + 1}–{Math.min(meta.page * meta.per_page, meta.total)} of {num(meta.total)}</span>
             <div className="flex items-center gap-1">
@@ -559,6 +600,11 @@ export default function RecordsSection({
               <span className="px-2">Page {meta.page} / {meta.pages}</span>
               <Button variant="secondary" size="sm" disabled={meta.page >= meta.pages} onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) + 1 }))}>Next</Button>
             </div>
+          </div>
+        )}
+        {bundled && isFiltered && !isSingleDay && bundledRows.length > 0 && (
+          <div className="border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
+            {num(bundledRows.length)} bundled campaign {bundledRows.length === 1 ? 'row' : 'rows'} from {num(allRecords.data?.data?.length ?? 0)} records
           </div>
         )}
       </Card>

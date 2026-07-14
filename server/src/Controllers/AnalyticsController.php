@@ -203,13 +203,14 @@ final class AnalyticsController
         // Revenue side — one row per buyer (the "DESTINATION" in the revenue table).
         $buyerSql = "
             SELECT b.code,
-                   COALESCE(SUM(r.answered), 0)   AS answered,
-                   COALESCE(SUM(r.missed), 0)     AS missed,
-                   COALESCE(SUM(r.counted), 0)    AS counted,
-                   COALESCE(SUM(r.total_bill), 0) AS total_bill,
+                   COALESCE(SUM(r.answered), 0)     AS answered,
+                   COALESCE(SUM(r.missed), 0)       AS missed,
+                   COALESCE(SUM(r.replacement), 0)  AS replacement,
+                   COALESCE(SUM(r.counted), 0)      AS counted,
+                   COALESCE(SUM(r.total_bill), 0)   AS total_bill,
                    CASE WHEN COALESCE(SUM(r.counted), 0) > 0
                         THEN COALESCE(SUM(r.total_bill), 0) / SUM(r.counted)
-                        ELSE 0 END                AS rate
+                        ELSE 0 END                  AS rate
             FROM call_records r
             JOIN buyers b ON b.id = r.buyer_id
             WHERE r.record_type = 'buyer' {$where}
@@ -218,28 +219,33 @@ final class AnalyticsController
         ";
         $stmt = $pdo->prepare($buyerSql);
         $stmt->execute($params);
-        $buyers = $this->numerify($stmt->fetchAll(), ['answered', 'missed', 'counted', 'total_bill', 'rate']);
+        $buyers = $this->numerify($stmt->fetchAll(), ['answered', 'missed', 'replacement', 'counted', 'total_bill', 'rate']);
 
         // Cost side — one row per campaign + traffic source (the "DESTINATION").
+        // Similar campaign codes / sources are bundled together regardless of case,
+        // spaces or punctuation ("C 03" = "C-03" = "C03"), summing their metrics. The
+        // displayed label is the most-used raw variant within each bundle.
         $campSql = "
-            SELECT c.code AS camp,
-                   COALESCE(NULLIF(r.source, ''), '(none)') AS destination,
-                   COALESCE(SUM(r.answered), 0)   AS answered,
-                   COALESCE(SUM(r.missed), 0)     AS missed,
-                   COALESCE(SUM(r.counted), 0)    AS counted,
-                   COALESCE(SUM(r.total_bill), 0) AS total_bill,
+            SELECT mode() WITHIN GROUP (ORDER BY c.code)                       AS camp,
+                   COALESCE(mode() WITHIN GROUP (ORDER BY NULLIF(r.source, '')), '(none)') AS destination,
+                   COALESCE(SUM(r.answered), 0)     AS answered,
+                   COALESCE(SUM(r.missed), 0)       AS missed,
+                   COALESCE(SUM(r.replacement), 0)  AS replacement,
+                   COALESCE(SUM(r.counted), 0)      AS counted,
+                   COALESCE(SUM(r.total_bill), 0)   AS total_bill,
                    CASE WHEN COALESCE(SUM(r.counted), 0) > 0
                         THEN COALESCE(SUM(r.total_bill), 0) / SUM(r.counted)
-                        ELSE 0 END                AS rate
+                        ELSE 0 END                  AS rate
             FROM call_records r
             JOIN campaigns c ON c.id = r.campaign_id
             WHERE r.record_type = 'campaign' {$where}
-            GROUP BY c.id, c.code, r.source
-            ORDER BY rate DESC, total_bill DESC, c.code
+            GROUP BY upper(regexp_replace(c.code, '[^A-Za-z0-9]', '', 'g')),
+                     upper(regexp_replace(COALESCE(r.source, ''), '[^A-Za-z0-9]', '', 'g'))
+            ORDER BY rate DESC, total_bill DESC, camp
         ";
         $stmt = $pdo->prepare($campSql);
         $stmt->execute($params);
-        $campaigns = $this->numerify($stmt->fetchAll(), ['answered', 'missed', 'counted', 'total_bill', 'rate']);
+        $campaigns = $this->numerify($stmt->fetchAll(), ['answered', 'missed', 'replacement', 'counted', 'total_bill', 'rate']);
 
         // Actual date span covered by the returned data.
         [$spanWhere, $spanParams] = $this->dateWhere('WHERE');
@@ -276,6 +282,7 @@ final class AnalyticsController
             'destinations' => count($rows),
             'answered'     => array_sum(array_column($rows, 'answered')),
             'missed'       => array_sum(array_column($rows, 'missed')),
+            'replacement'  => array_sum(array_column($rows, 'replacement')),
             'counted'      => $counted,
             'total_bill'   => $bill,
             'rate'         => $counted > 0 ? $bill / $counted : 0.0,
@@ -287,15 +294,27 @@ final class AnalyticsController
     {
         $counted = array_sum(array_column($rows, 'counted'));
         $bill    = array_sum(array_column($rows, 'total_bill'));
+        // Rows are already bundled by normalized code/source, but the displayed
+        // labels are raw variants — re-normalize before counting distinct so the
+        // camp / destination counts match the bundling exactly.
+        $camps = array_unique(array_map([self::class, 'normKey'], array_column($rows, 'camp')));
+        $dests = array_unique(array_map([self::class, 'normKey'], array_column($rows, 'destination')));
         return [
-            'camps'        => count(array_unique(array_column($rows, 'camp'))),
-            'destinations' => count(array_unique(array_column($rows, 'destination'))),
+            'camps'        => count($camps),
+            'destinations' => count($dests),
             'answered'     => array_sum(array_column($rows, 'answered')),
             'missed'       => array_sum(array_column($rows, 'missed')),
+            'replacement'  => array_sum(array_column($rows, 'replacement')),
             'counted'      => $counted,
             'total_bill'   => $bill,
             'rate'         => $counted > 0 ? $bill / $counted : 0.0,
         ];
+    }
+
+    /** Canonical key for matching campaign codes / sources: upper-case, alnum only. */
+    private static function normKey(?string $s): string
+    {
+        return strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string) $s) ?? '');
     }
 
     private function aggregate(PDO $pdo, ?string $from, ?string $to): array

@@ -30,7 +30,15 @@
       "Bash(grep -o '/manual-images/dashboard.webp[^\\\\\\\\]*loading' \"c:/Users/hp 290 g4/Desktop/Dev Projects/CRM/client/src/pages/UserManual.tsx\")",
       "Bash(grep -c 'loading=\\\\\\\\\"lazy\\\\\\\\\"' src/pages/UserManual.tsx)",
       "Bash(curl -s -D - -o /dev/null \"http://localhost:5173/manual-images/dashboard.webp\")",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:5173/manual-images/dashboard.png\")"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:5173/manual-images/dashboard.png\")",
+      "Bash(git stash *)",
+      "Bash(curl -s \"http://localhost:8000/api/analytics/complete-report?from=2026-01-01&to=2026-12-31\")",
+      "Bash(python -c ' *)",
+      "Bash(grep -nA18 -i \"campaigns\")",
+      "Bash(php -l src/CampaignCode.php)",
+      "Bash(php -l src/Controllers/RecordController.php)",
+      "Bash(php -l src/Controllers/CampaignController.php)",
+      "Bash(php -r 'require '\\\\''src/CampaignCode.php'\\\\''; use App\\\\CampaignCode; foreach\\(['\\\\''c03'\\\\'','\\\\''c-3'\\\\'','\\\\''C-03'\\\\'','\\\\''C-3'\\\\'','\\\\''Co3'\\\\'','\\\\''CO3'\\\\'','\\\\''C 03'\\\\'','\\\\''C05'\\\\'','\\\\''c11'\\\\'','\\\\''C-11'\\\\'','\\\\''C100'\\\\'','\\\\''CO-05'\\\\'','\\\\''RTG 04'\\\\'','\\\\''GOOGLE'\\\\'','\\\\''BING'\\\\'','\\\\''c-007'\\\\'','\\\\'' c3 '\\\\''] as $c\\) echo str_pad\\(json_encode\\($c\\),12\\).'\\\\'' -> '\\\\''.CampaignCode::standardize\\($c\\).PHP_EOL;')"
     ],
     "additionalDirectories": [
       "C:\\Users\\hp 290 g4\\Desktop\\Dev Projects\\CRM\\client"

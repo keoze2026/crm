@@ -7,9 +7,6 @@ import type { CompleteReport } from '../types'
 
 export interface Col { label: string; w: string; box: string; kind: 'text' | 'num' | 'total' }
 
-/** Placeholder per-row replacement count (after Missed, before the final Counted). */
-export const REPLACEMENT = 1
-
 /** Human-readable date label: single day, range, or em-dash when unset. */
 export function rangeText(from: string | null, to: string | null): string {
   if (!from && !to) return '—'
@@ -42,11 +39,11 @@ export const campCols: Col[] = [
 export function buyerTableData(data: CompleteReport) {
   const sorted = [...data.buyers].sort((a, b) => b.rate - a.rate)
   const rows = sorted.map((b) => [
-    b.code, num(b.answered), num(b.missed), num(REPLACEMENT), num(b.counted), money2(b.rate), money2(b.total_bill),
+    b.code, num(b.answered), num(b.missed), num(b.replacement), num(b.counted), money2(b.rate), money2(b.total_bill),
   ])
   const bt = data.buyer_totals
   const totals = [
-    String(bt.destinations), num(bt.answered), num(bt.missed), num(REPLACEMENT * data.buyers.length), num(bt.counted), '—', money2(bt.total_bill),
+    String(bt.destinations), num(bt.answered), num(bt.missed), num(bt.replacement), num(bt.counted), '—', money2(bt.total_bill),
   ]
   return { rows, totals }
 }
@@ -55,11 +52,11 @@ export function buyerTableData(data: CompleteReport) {
 export function campTableData(data: CompleteReport) {
   const sorted = [...data.campaigns].sort((a, b) => b.rate - a.rate)
   const rows = sorted.map((c) => [
-    c.camp, c.destination, num(c.answered), num(c.missed), num(REPLACEMENT), num(c.counted), money2(c.rate), money2(c.total_bill),
+    c.camp, c.destination, num(c.answered), num(c.missed), num(c.replacement), num(c.counted), money2(c.rate), money2(c.total_bill),
   ])
   const ct = data.campaign_totals
   const totals = [
-    String(ct.camps), String(ct.destinations), num(ct.answered), num(ct.missed), num(REPLACEMENT * data.campaigns.length), num(ct.counted), '—', money2(ct.total_bill),
+    String(ct.camps), String(ct.destinations), num(ct.answered), num(ct.missed), num(ct.replacement), num(ct.counted), '—', money2(ct.total_bill),
   ]
   return { rows, totals }
 }
