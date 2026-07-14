@@ -38,7 +38,9 @@
       "Bash(php -l src/CampaignCode.php)",
       "Bash(php -l src/Controllers/RecordController.php)",
       "Bash(php -l src/Controllers/CampaignController.php)",
-      "Bash(php -r 'require '\\\\''src/CampaignCode.php'\\\\''; use App\\\\CampaignCode; foreach\\(['\\\\''c03'\\\\'','\\\\''c-3'\\\\'','\\\\''C-03'\\\\'','\\\\''C-3'\\\\'','\\\\''Co3'\\\\'','\\\\''CO3'\\\\'','\\\\''C 03'\\\\'','\\\\''C05'\\\\'','\\\\''c11'\\\\'','\\\\''C-11'\\\\'','\\\\''C100'\\\\'','\\\\''CO-05'\\\\'','\\\\''RTG 04'\\\\'','\\\\''GOOGLE'\\\\'','\\\\''BING'\\\\'','\\\\''c-007'\\\\'','\\\\'' c3 '\\\\''] as $c\\) echo str_pad\\(json_encode\\($c\\),12\\).'\\\\'' -> '\\\\''.CampaignCode::standardize\\($c\\).PHP_EOL;')"
+      "Bash(php -r 'require '\\\\''src/CampaignCode.php'\\\\''; use App\\\\CampaignCode; foreach\\(['\\\\''c03'\\\\'','\\\\''c-3'\\\\'','\\\\''C-03'\\\\'','\\\\''C-3'\\\\'','\\\\''Co3'\\\\'','\\\\''CO3'\\\\'','\\\\''C 03'\\\\'','\\\\''C05'\\\\'','\\\\''c11'\\\\'','\\\\''C-11'\\\\'','\\\\''C100'\\\\'','\\\\''CO-05'\\\\'','\\\\''RTG 04'\\\\'','\\\\''GOOGLE'\\\\'','\\\\''BING'\\\\'','\\\\''c-007'\\\\'','\\\\'' c3 '\\\\''] as $c\\) echo str_pad\\(json_encode\\($c\\),12\\).'\\\\'' -> '\\\\''.CampaignCode::standardize\\($c\\).PHP_EOL;')",
+      "Bash(php -l database/normalize_campaign_codes.php)",
+      "Bash(php database/normalize_campaign_codes.php)"
     ],
     "additionalDirectories": [
       "C:\\Users\\hp 290 g4\\Desktop\\Dev Projects\\CRM\\client"
