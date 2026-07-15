@@ -14,7 +14,11 @@ ROOT=/var/www/crm_dash/crm
 
 echo "==> Building frontend..."
 cd "$ROOT/client"
-npm ci                                   # clean, lockfile-exact install (incl. dev deps needed to build)
+# `npm install`, not `npm ci`: the lockfile is generated on Windows (dev box) and
+# omits Linux-only optional native deps (e.g. @emnapi/*, pulled in by Vite/rolldown),
+# which makes strict `npm ci` abort with "Missing ... from lock file". `npm install`
+# reconciles those on the Linux VPS instead of failing.
+npm install                              # tolerant, cross-platform-safe install (incl. dev deps needed to build)
 npm run build
 
 echo "==> Installing backend deps..."
