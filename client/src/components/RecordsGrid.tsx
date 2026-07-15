@@ -6,6 +6,25 @@ import type { CallRecord, Campaign, Destination, RecordType } from '../types'
 import { Input, Select, Spinner, cx } from './ui'
 import { CampaignRatesPopover } from './CampaignRatesPopover'
 
+// ── Replacement auto-fill (campaigns sheet) ───────────────────────────────────
+// On the campaigns (cost) sheet the Replacement column is auto-filled as
+// (Answered − Counted). Traffic sources listed here are the exception — their
+// Replacement stays manual entry. Edit this list to change which sources are
+// excluded (matching ignores case and surrounding whitespace).
+const REPLACEMENT_AUTOFILL_EXCLUDED_SOURCES = ['PDSO']
+
+/** True when a row's Replacement is entered by hand: all buyer rows, plus campaign
+ *  rows whose traffic source is in REPLACEMENT_AUTOFILL_EXCLUDED_SOURCES. */
+function replacementIsManual(source: string | null | undefined): boolean {
+  const s = (source ?? '').trim().toUpperCase()
+  return REPLACEMENT_AUTOFILL_EXCLUDED_SOURCES.some((x) => x.trim().toUpperCase() === s)
+}
+
+/** Auto-filled campaign Replacement = Answered − Counted (clamped at 0). */
+function autoReplacement(answered: number | string, counted: number | string): number {
+  return Math.max(0, (Number(answered) || 0) - (Number(counted) || 0))
+}
+
 interface Entity { id: number; code: string; rate: number }
 
 /**
@@ -43,7 +62,9 @@ export default function RecordsGrid({
     (a, r) => ({
       answered:    a.answered    + Number(r.answered),
       missed:      a.missed      + Number(r.missed),
-      replacement: a.replacement + Number(r.replacement),
+      replacement: a.replacement + (isBuyer || replacementIsManual(r.source)
+        ? Number(r.replacement)
+        : autoReplacement(r.answered, r.counted)),
       counted:     a.counted     + Number(r.counted),
       total:       a.total       + Number(r.total_bill),
     }),
@@ -175,9 +196,10 @@ function ExistingRow({ record, isBuyer, navy, onChanged, campaign }: {
 }) {
   const [answered, setAnswered] = useState(String(record.answered))
   const [missed,   setMissed]   = useState(String(record.missed))
-  // Replacement is keyed in like Counted (manual entry) on both the buyer and the
-  // campaign sheet. It never feeds the per-row Total (counted × rate), but it IS
-  // summed into the Replacement column total in the footer.
+  // Replacement: on the campaigns sheet it is auto-filled as (Answered − Counted)
+  // for every traffic source except the excluded ones (PDSO), which stay manual —
+  // as do all buyer rows. This state only backs the manual case. Replacement never
+  // feeds the per-row Total, but it IS summed into the footer's Replacement total.
   const [replacement, setReplacement] = useState(String(record.replacement))
   // Counted is keyed in manually so both buyer categories work: "Yes" adds missed
   // to answered, "No / Non-Missed" excludes them. It no longer auto-derives here.
@@ -196,10 +218,17 @@ function ExistingRow({ record, isBuyer, navy, onChanged, campaign }: {
 
   const countedNum = Number(counted) || 0
   const total   = countedNum * (Number(rate) || 0)
+  // Replacement is manual for buyers and excluded sources (PDSO); otherwise it is
+  // derived as (Answered − Counted). effRep is what gets saved and totalled. The
+  // derived value rides along with the Answered/Counted/Source dirty flags, so it is
+  // re-saved automatically whenever those change (no spurious "unsaved" state on load).
+  const manualRep = isBuyer || replacementIsManual(source)
+  const autoRep   = autoReplacement(answered, counted)
+  const effRep    = manualRep ? (Number(replacement) || 0) : autoRep
   const dirty =
     Number(answered) !== record.answered ||
     Number(missed)   !== record.missed ||
-    (Number(replacement) || 0) !== record.replacement ||
+    (manualRep && (Number(replacement) || 0) !== record.replacement) ||
     countedNum       !== record.counted ||
     (Number(rate) || 0) !== record.rate ||
     (!isBuyer && (source ?? '') !== (record.source ?? ''))
@@ -210,7 +239,7 @@ function ExistingRow({ record, isBuyer, navy, onChanged, campaign }: {
     try {
       const payload: Record<string, unknown> = {
         answered: Number(answered) || 0, missed: Number(missed) || 0,
-        replacement: Number(replacement) || 0, counted: countedNum, rate: Number(rate) || 0,
+        replacement: effRep, counted: countedNum, rate: Number(rate) || 0,
       }
       if (!isBuyer) payload.source = source
       await api.updateRecord(record.id, payload)
@@ -266,7 +295,11 @@ function ExistingRow({ record, isBuyer, navy, onChanged, campaign }: {
       {!isBuyer && <td className={cellCls}><Input value={source} onChange={(e) => setSource(e.target.value)} /></td>}
       <td className={cellCls}><Input type="number" min="0" value={answered} onChange={(e) => setAnswered(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" value={missed} onChange={(e) => setMissed(e.target.value)} className={numInput} /></td>
-      <td className={cellCls}><Input type="number" min="0" value={replacement} onChange={(e) => setReplacement(e.target.value)} className={numInput} /></td>
+      <td className={cellCls}>
+        {manualRep
+          ? <Input type="number" min="0" value={replacement} onChange={(e) => setReplacement(e.target.value)} className={numInput} />
+          : <Input type="number" value={autoRep} readOnly tabIndex={-1} title="Auto-filled: Answered − Counted" className={cx(numInput, 'cursor-not-allowed bg-slate-100 text-slate-500')} />}
+      </td>
       <td className={cellCls}><Input type="number" min="0" value={counted} onChange={(e) => setCounted(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} className={numInput} /></td>
       <td className={cx(cellCls, 'text-center font-semibold tabular-nums text-slate-900')}>{money2(total)}</td>
@@ -296,7 +329,7 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
   const [source,   setSource]   = useState('')   // source/destination, typed directly (campaigns)
   const [answered, setAnswered] = useState('')
   const [missed,   setMissed]   = useState('')
-  const [replacement, setReplacement] = useState('')   // manual entry (buyer + campaign); summed in the footer, not the row total
+  const [replacement, setReplacement] = useState('')   // backs the manual case only (buyer + excluded campaign sources); non-excluded campaigns auto-fill
   const [counted,  setCounted]  = useState('')
   const [rate,     setRate]     = useState('')
   const [busy,     setBusy]     = useState(false)
@@ -314,6 +347,10 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
   const destName  = source.trim()
   const countedNum = Number(counted) || 0
   const total   = countedNum * (Number(rate) || 0)
+  // Replacement auto-fill: manual for buyers and excluded sources (PDSO), else derived.
+  const manualRep = isBuyer || replacementIsManual(source)
+  const autoRep   = autoReplacement(answered, counted)
+  const effRep    = manualRep ? (Number(replacement) || 0) : autoRep
 
   const onAnswered = (v: string) => { setAnswered(v); if (isBuyer && !countedTouched.current) setCounted(String((Number(v) || 0) + (Number(missed) || 0))) }
   const onMissed   = (v: string) => { setMissed(v);   if (isBuyer && !countedTouched.current) setCounted(String((Number(answered) || 0) + (Number(v) || 0))) }
@@ -355,7 +392,7 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
         record_type: isBuyer ? 'buyer' : 'campaign',
         record_date: date,
         answered: Number(answered) || 0, missed: Number(missed) || 0,
-        replacement: Number(replacement) || 0, counted: countedNum, rate: Number(rate) || 0,
+        replacement: effRep, counted: countedNum, rate: Number(rate) || 0,
       }
       // The typed code find-or-creates the buyer/campaign; a typed source is created
       // and linked (with its rate) on the server when the record is saved. Campaign
@@ -396,7 +433,11 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
       )}
       <td className={cellCls}><Input type="number" min="0" value={answered} onChange={(e) => onAnswered(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" value={missed} onChange={(e) => onMissed(e.target.value)} className={numInput} /></td>
-      <td className={cellCls}><Input type="number" min="0" value={replacement} onChange={(e) => setReplacement(e.target.value)} className={numInput} /></td>
+      <td className={cellCls}>
+        {manualRep
+          ? <Input type="number" min="0" value={replacement} onChange={(e) => setReplacement(e.target.value)} className={numInput} />
+          : <Input type="number" value={autoRep} readOnly tabIndex={-1} title="Auto-filled: Answered − Counted" className={cx(numInput, 'cursor-not-allowed bg-slate-100 text-slate-500')} />}
+      </td>
       <td className={cellCls}><Input type="number" min="0" value={counted} onChange={(e) => onCounted(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" step="0.01" value={rate} onChange={(e) => onRate(e.target.value)} className={numInput} /></td>
       <td className={cx(cellCls, 'text-center font-semibold tabular-nums text-slate-900')}>{money2(total)}</td>
