@@ -1,29 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
-import { standardizeCampaignCode } from '../lib/bundle'
+import { autoReplacement, replacementIsManual, standardizeCampaignCode } from '../lib/bundle'
 import { money2, num } from '../lib/format'
 import type { CallRecord, Campaign, Destination, RecordType } from '../types'
 import { Input, Select, Spinner, cx } from './ui'
 import { CampaignRatesPopover } from './CampaignRatesPopover'
 
-// ── Replacement auto-fill (campaigns sheet) ───────────────────────────────────
-// On the campaigns (cost) sheet the Replacement column is auto-filled as
-// (Answered − Counted). Traffic sources listed here are the exception — their
-// Replacement stays manual entry. Edit this list to change which sources are
-// excluded (matching ignores case and surrounding whitespace).
-const REPLACEMENT_AUTOFILL_EXCLUDED_SOURCES = ['PDSO']
-
-/** True when a row's Replacement is entered by hand: all buyer rows, plus campaign
- *  rows whose traffic source is in REPLACEMENT_AUTOFILL_EXCLUDED_SOURCES. */
-function replacementIsManual(source: string | null | undefined): boolean {
-  const s = (source ?? '').trim().toUpperCase()
-  return REPLACEMENT_AUTOFILL_EXCLUDED_SOURCES.some((x) => x.trim().toUpperCase() === s)
-}
-
-/** Auto-filled campaign Replacement = Answered − Counted (clamped at 0). */
-function autoReplacement(answered: number | string, counted: number | string): number {
-  return Math.max(0, (Number(answered) || 0) - (Number(counted) || 0))
-}
+// The Replacement auto-fill rule (and its excluded-sources list) lives in
+// ../lib/bundle so the daily sheet, the date-range table and the Complete Report
+// all share one definition. Edit REPLACEMENT_AUTOFILL_EXCLUDED_SOURCES there.
 
 interface Entity { id: number; code: string; rate: number }
 

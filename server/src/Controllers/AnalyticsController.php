@@ -10,6 +10,14 @@ use PDO;
 
 final class AnalyticsController
 {
+    /**
+     * Traffic sources whose cost-side Replacement is entered by hand instead of being
+     * auto-filled as (Answered − Counted). Edit this list to change the exclusions
+     * (matching ignores case and surrounding whitespace). Keep it in sync with the
+     * client copy — REPLACEMENT_AUTOFILL_EXCLUDED_SOURCES in client/src/lib/bundle.ts.
+     */
+    private const REPLACEMENT_AUTOFILL_EXCLUDED_SOURCES = ['PDSO'];
+
     /** Headline KPIs with previous-period comparison. */
     public function summary(): void
     {
@@ -225,12 +233,27 @@ final class AnalyticsController
         // Similar campaign codes / sources are bundled together regardless of case,
         // spaces or punctuation ("C 03" = "C-03" = "C03"), summing their metrics. The
         // displayed label is the most-used raw variant within each bundle.
+        //
+        // Replacement mirrors the campaigns sheet: auto-filled per record as
+        // GREATEST(0, answered − counted), except for excluded traffic sources, which
+        // keep their hand-entered value. The excluded list is a hardcoded constant, so
+        // it is safe to inline (values are quote-escaped regardless).
+        $excludedList = implode(', ', array_map(
+            static fn ($s) => "'" . str_replace("'", "''", strtoupper((string) $s)) . "'",
+            self::REPLACEMENT_AUTOFILL_EXCLUDED_SOURCES
+        ));
+        $isExcludedSource = $excludedList !== ''
+            ? "upper(btrim(COALESCE(r.source, ''))) IN ({$excludedList})"
+            : 'FALSE';
+        $replacementSum = "SUM(CASE WHEN {$isExcludedSource} "
+            . "THEN r.replacement ELSE GREATEST(0, r.answered - r.counted) END)";
+
         $campSql = "
             SELECT mode() WITHIN GROUP (ORDER BY c.code)                       AS camp,
                    COALESCE(mode() WITHIN GROUP (ORDER BY NULLIF(r.source, '')), '(none)') AS destination,
                    COALESCE(SUM(r.answered), 0)     AS answered,
                    COALESCE(SUM(r.missed), 0)       AS missed,
-                   COALESCE(SUM(r.replacement), 0)  AS replacement,
+                   COALESCE({$replacementSum}, 0)   AS replacement,
                    COALESCE(SUM(r.counted), 0)      AS counted,
                    COALESCE(SUM(r.total_bill), 0)   AS total_bill,
                    CASE WHEN COALESCE(SUM(r.counted), 0) > 0
