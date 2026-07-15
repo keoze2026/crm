@@ -89,7 +89,7 @@ export function SectionTable({ dateLabel, cols, rows, totals }: { dateLabel: str
   const span = Math.max(rows.length, 1)
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-180 table-fixed border-collapse text-sm">
+      <table className="w-full min-w-180 table-fixed border-collapse text-sm [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
         <colgroup>
           <col style={{ width: '11%' }} />{/* Date */}
           {cols.map((c) => <col key={c.label} style={{ width: c.w }} />)}

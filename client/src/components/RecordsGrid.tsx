@@ -61,7 +61,7 @@ export default function RecordsGrid({
   // Always show existing rows highest-rate first.
   const sortedRecords = [...records].sort((a, b) => b.rate - a.rate)
 
-  const headCls = cx('px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide', navy ? 'bg-[#1a3654] text-white' : 'bg-blue-600 text-blue-50')
+  const headCls = cx('whitespace-nowrap px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide', navy ? 'bg-[#1a3654] text-white' : 'bg-blue-600 text-blue-50')
   // "REPLACEMENT" is the longest header; in the fixed-width campaign grid it clips
   // against the column edge, so this variant tightens the padding, drops the wide
   // letter-spacing and shrinks the font a notch so the whole word fits.
