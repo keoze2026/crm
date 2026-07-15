@@ -1,6 +1,3 @@
-// PDF/CSV export disabled — report downloads removed.
-// import { jsPDF } from 'jspdf'
-// import autoTable from 'jspdf-autotable'
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { api } from '../api/client'
 import { bundleCampaignRecords, effectiveCampaignReplacement, normalizeCode } from '../lib/bundle'
@@ -9,148 +6,44 @@ import { useAsync } from '../lib/useAsync'
 import type { CallRecord, Campaign, Destination, RecordFilters, RecordType } from '../types'
 import { DateRangeFilter } from './DateRange'
 import RecordsGrid from './RecordsGrid'
-import { Button, Card, EmptyState, FitText, Input, Modal, Select, Spinner, cx } from './ui'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Spinner } from '@/components/ui/spinner'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
+import { cn } from '@/lib/utils'
 
 interface Entity { id: number; code: string; rate: number }
 
-// const PlusIcon  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>  // "Add record" button retired
+const selectCls =
+  'w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:opacity-50'
+
 const EditIcon  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
 const TrashIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
 
-// ─── PDF (disabled — report downloads removed) ─────────────────────────────────
-/*
-interface PdfTotals { count: number; answered: number; missed: number; counted: number; total_bill: number; destCount?: number }
-
-function buildPdf(
-  title: string,
-  subtitle: string,
-  columns: string[],
-  rows: (string | number)[][],
-  numericFrom: number,
-  opts?: { singleDay?: string; dateFrom?: string; dateTo?: string; totals?: PdfTotals; entityLabel?: string; profit?: number | null },
-): jsPDF {
-  const { singleDay, dateFrom, dateTo, totals, entityLabel = 'Destination', profit: profitVal } = opts ?? {}
-  const isRange = !singleDay && !!(dateFrom || dateTo)
-  const NAVY: [number, number, number] = [26, 54, 84]
-  const CYAN: [number, number, number] = [212, 233, 242]
-  const CYAN_DATE: [number, number, number] = [191, 222, 235]
-  const WHITE: [number, number, number] = [255, 255, 255]
-  const INK: [number, number, number] = [15, 23, 42]
-
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
-  const pageW = doc.internal.pageSize.getWidth()
-  doc.setFontSize(13); doc.setTextColor(...NAVY); doc.setFont('helvetica', 'bold')
-  doc.text(title, 40, 46)
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139)
-  doc.text(subtitle, 40, 62)
-  doc.text(`Generated ${new Date().toLocaleString()}`, pageW - 40, 62, { align: 'right' })
-
-  // If single day: prepend DATE column and merge rows with rowSpan
-  let head = columns
-  let body: import('jspdf-autotable').RowInput[]
-  let colStyles: Record<number, Partial<import('jspdf-autotable').Styles>> = Object.fromEntries(
-    columns.flatMap((_, i) => (i >= numericFrom ? [[i, { halign: 'right' as const }]] : []))
+/** Labeled form control wrapper for the record modal. */
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block space-y-1.5">
+      <span className="block text-sm font-medium text-foreground">{label}</span>
+      {children}
+    </label>
   )
-  let foot: string[] | undefined
-
-  if (singleDay) {
-    head = ['DATE', ...columns]
-    // Print date on the middle row so it appears centered in the column visually
-    const midRow = Math.floor(rows.length / 2)
-    body = rows.map((r, i) => [(i === midRow ? singleDay : ''), ...r.map(String)])
-    colStyles = {
-      0: { fillColor: WHITE, halign: 'center', fontStyle: 'bold', valign: 'middle', cellWidth: 68 },
-      ...Object.fromEntries(columns.flatMap((_, i) => (i >= numericFrom ? [[i + 1, { halign: 'right' as const }]] : []))),
-    }
-    if (totals) {
-      const totalRow = totals.destCount !== undefined
-        ? ['TOTAL', String(totals.count), String(totals.destCount), num(totals.answered), num(totals.missed), num(totals.counted), '—', `$${totals.total_bill.toFixed(2)}`]
-        : ['TOTAL', String(totals.count), num(totals.answered), num(totals.missed), num(totals.counted), '—', `$${totals.total_bill.toFixed(2)}`]
-      body.push(totalRow)
-    }
-  } else if (isRange) {
-    // Range filter: prepend DATE column, show start on first row, end on last row
-    head = ['DATE', ...columns]
-    const startLabel = dateFrom ?? ''
-    const endLabel   = dateTo && dateTo !== dateFrom ? dateTo : ''
-    body = rows.map((r, i) => [
-      i === 0 ? startLabel : i === rows.length - 1 && endLabel ? endLabel : '',
-      ...r.map(String),
-    ])
-    colStyles = {
-      0: { fillColor: WHITE, halign: 'center', fontStyle: 'bold', valign: 'middle', cellWidth: 68 },
-      ...Object.fromEntries(columns.flatMap((_, i) => (i >= numericFrom ? [[i + 1, { halign: 'right' as const }]] : []))),
-    }
-    if (totals) {
-      const totalRow = totals.destCount !== undefined
-        ? ['TOTAL', String(totals.count), String(totals.destCount), num(totals.answered), num(totals.missed), num(totals.counted), '—', `$${totals.total_bill.toFixed(2)}`]
-        : ['TOTAL', String(totals.count), num(totals.answered), num(totals.missed), num(totals.counted), '—', `$${totals.total_bill.toFixed(2)}`]
-      body.push(totalRow)
-    }
-  } else {
-    body = rows.map((r) => r.map(String))
-    if (totals) {
-      const totalRow = totals.destCount !== undefined
-        ? ['TOTAL', String(totals.count), String(totals.destCount), num(totals.answered), num(totals.missed), num(totals.counted), '—', `$${totals.total_bill.toFixed(2)}`]
-        : ['TOTAL', String(totals.count), num(totals.answered), num(totals.missed), num(totals.counted), '—', `$${totals.total_bill.toFixed(2)}`]
-      body.push(totalRow)
-    }
-  }
-
-  const totalRowIndex = totals ? body.length - 1 : -1
-
-  autoTable(doc, {
-    startY: 78, theme: 'grid', head: [head], body,
-    styles: { fontSize: 8, cellPadding: 4, lineColor: WHITE, lineWidth: 1, textColor: INK, valign: 'middle' },
-    headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', halign: 'center', lineColor: NAVY, lineWidth: 1 },
-    bodyStyles: { fillColor: CYAN },
-    columnStyles: colStyles,
-    margin: { left: 40, right: 40 },
-    didParseCell: (data) => {
-      if (data.section === 'body' && data.row.index === totalRowIndex) {
-        data.cell.styles.fillColor = NAVY
-        data.cell.styles.textColor = WHITE
-        data.cell.styles.fontStyle = 'bold'
-        if (data.column.index >= (singleDay || isRange ? 2 : 1)) {
-          data.cell.styles.halign = 'right'
-        }
-      }
-      // Keep DATE column white even on CYAN body rows
-      if (data.section === 'body' && data.column.index === 0 && (singleDay || isRange) && data.row.index !== totalRowIndex) {
-        data.cell.styles.fillColor = WHITE
-      }
-    },
-  })
-  // Profit badge (buyer PDF only)
-  if (profitVal != null) {
-    const lastY = (doc as any).lastAutoTable?.finalY ?? 78
-    const NAVY2: [number,number,number] = [26,54,84]
-    const WHITE2: [number,number,number] = [255,255,255]
-    const bW = 160; const bH = 28
-    const bX = (doc.internal.pageSize.getWidth() - bW) / 2
-    const bY = lastY + 14
-    doc.setFillColor(...NAVY2)
-    doc.roundedRect(bX, bY, bW, bH, 5, 5, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(13)
-    doc.setTextColor(...WHITE2)
-    doc.text(`PROFIT  $${Math.round(profitVal).toLocaleString('en-US')}`, bX + bW / 2, bY + bH / 2, { align: 'center', baseline: 'middle' })
-  }
-
-  return doc
 }
-*/
 
 // ─── Section ──────────────────────────────────────────────────────────────────
 
 export default function RecordsSection({
   type, title, subtitle, compact = false, onChange, onTotalsChange, onDateChange,
-  from, to, hideDateFilter = false, theme = 'blue',
+  from, to, hideDateFilter = false, hideHeader = false, theme = 'blue',
 }: {
   type: RecordType; title: string; subtitle: string; compact?: boolean; onChange?: () => void; onTotalsChange?: (total_bill: number | null) => void; onDateChange?: (from: string, to: string) => void; profit?: number | null
   /** When provided, the parent controls the date range (e.g. a single page-level filter). */
   from?: string; to?: string; hideDateFilter?: boolean
-  /** 'navy' matches the Complete Report table (navy header, cyan body, white grid). */
+  /** Suppress the internal title/subtitle (the page frame supplies it instead). */
+  hideHeader?: boolean
+  /** 'navy' renders the bordered grid look that matches the Complete Report table. */
   theme?: 'blue' | 'navy'
 }) {
   const isBuyer    = type === 'buyer'
@@ -164,7 +57,6 @@ export default function RecordsSection({
   })
   const [modalOpen,  setModalOpen]  = useState(false)
   const [editing,    setEditing]    = useState<CallRecord | null>(null)
-  // const [pdfLoading, setPdfLoading] = useState(false)  // PDF export disabled
 
   const entities = useAsync<Entity[]>(async () => {
     // Buyers carry their own rate (revenue side). Campaigns don't — on the cost side
@@ -211,10 +103,7 @@ export default function RecordsSection({
     }
   }, [allRecords.data, isBuyer])
 
-  // Campaign (cost) records are bundled in the multi-day table view: rows sharing
-  // a campaign + traffic source (ignoring case / spaces / punctuation) merge into
-  // one summed row. Buyers are never bundled. The single-day editable grid above
-  // always shows raw per-record rows, so individual records stay editable there.
+  // Campaign (cost) records are bundled in the multi-day table view.
   const bundledRows = useMemo(
     () => (isBuyer ? [] : bundleCampaignRecords(allRecords.data?.data ?? [])),
     [isBuyer, allRecords.data],
@@ -235,15 +124,10 @@ export default function RecordsSection({
   const set = (patch: Partial<RecordFilters>) => setFilters((f) => ({ ...f, page: 1, ...patch }))
   const isFiltered = !!(filters.from || filters.to)
   const isSingleDay = !!(filters.from && filters.to && filters.from === filters.to)
-  // Campaign multi-day view renders bundled (merged) rows from the full record set;
-  // buyers keep the server-paginated raw rows.
   const bundled = !isBuyer
-  // Single-day view: drop the redundant Date column (the date is in the filter)
-  // and show serial numbers instead. Otherwise keep the existing Date column.
   const showSerial = !isFiltered || isSingleDay
   const showDate   = !isSingleDay
 
-  // const openNew  = () => { setEditing(null); setModalOpen(true) }  // "Add record" button retired
   const openEdit = (r: CallRecord) => { setEditing(r); setModalOpen(true) }
 
   const onSaved = () => { setModalOpen(false); records.reload(); entities.reload(); onChange?.() }
@@ -254,154 +138,8 @@ export default function RecordsSection({
     await api.deleteRecord(r.id); records.reload(); onChange?.()
   }
 
-  /* PDF/CSV export disabled — report downloads removed.
-  const filterLabel = useMemo(() => {
-    const parts: string[] = []
-    if (filters.from || filters.to) parts.push(`${filters.from || '…'} → ${filters.to || '…'}`)
-    if (filters.search) parts.push(`search: "${filters.search}"`)
-    return parts.length ? parts.join('  ·  ') : 'All records'
-  }, [filters])
-
-  const handlePdf = async () => {
-    setPdfLoading(true)
-    try {
-      const isSingleDayPdf = !!(filters.from && filters.to && filters.from === filters.to)
-
-      // Helper to build rows for a record set
-      const buildRows = (data: typeof result.data, buyer: boolean) =>
-        data.map((r) => {
-          const base: (string | number)[] = buyer
-            ? [r.buyer_code ?? '—', r.answered, r.missed, r.counted, `$${r.rate.toFixed(2)}`, `$${r.total_bill.toFixed(2)}`]
-            : [r.campaign_code ?? '—', r.source ?? '—', r.answered, r.missed, r.counted, `$${r.rate.toFixed(2)}`, `$${r.total_bill.toFixed(2)}`]
-          if (!isSingleDayPdf) base.unshift(formatDate(r.record_date))
-          return base
-        })
-
-      // Fetch buyer records
-      const result = await api.records({ ...filters, type: 'buyer', page: 1, per_page: 5000 })
-      const buyerRows = buildRows(result.data, true)
-      const buyerTotalBill = result.data.reduce((s, r) => s + Number(r.total_bill), 0)
-      const buyerCount = new Set(result.data.map(r => r.buyer_id)).size
-      const buyerTotals: PdfTotals = { count: buyerCount, answered: result.data.reduce((s,r)=>s+r.answered,0), missed: result.data.reduce((s,r)=>s+r.missed,0), counted: result.data.reduce((s,r)=>s+r.counted,0), total_bill: buyerTotalBill }
-
-      // Fetch campaign records
-      const campResult = await api.records({ ...filters, type: 'campaign', page: 1, per_page: 5000 })
-      const campRows = buildRows(campResult.data, false)
-      const campTotalBill = campResult.data.reduce((s, r) => s + Number(r.total_bill), 0)
-      const campCount = new Set(campResult.data.map(r => r.campaign_id)).size
-      const campDestCount = new Set(campResult.data.map(r => r.source).filter(Boolean)).size
-      const campTotals: PdfTotals = { count: campCount, answered: campResult.data.reduce((s,r)=>s+r.answered,0), missed: campResult.data.reduce((s,r)=>s+r.missed,0), counted: campResult.data.reduce((s,r)=>s+r.counted,0), total_bill: campTotalBill, destCount: campDestCount }
-
-      const profitVal = profit != null ? profit : (buyerTotalBill - campTotalBill)
-
-      const buyerCols = isSingleDayPdf
-        ? ['Destination', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill']
-        : ['Date', 'Destination', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill']
-      const campCols = ['Date', 'Campaign', 'Destination', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill']
-
-      const commonOpts = {
-        singleDay: isSingleDayPdf ? formatDmy(filters.from ?? null) : undefined,
-        dateFrom:  !isSingleDayPdf && filters.from ? formatDmy(filters.from) : undefined,
-        dateTo:    !isSingleDayPdf && filters.to   ? formatDmy(filters.to)   : undefined,
-      }
-
-      // Build combined doc — buyer table first
-      const doc = buildPdf('Revenue Records Export', filterLabel, buyerCols, buyerRows,
-        isSingleDayPdf ? 1 : 2, { ...commonOpts, totals: buyerTotals, entityLabel: 'Destination' })
-
-      // Profit badge BETWEEN the two tables
-      const profitY = (doc as any).lastAutoTable?.finalY ?? 78
-      const pageW2 = doc.internal.pageSize.getWidth()
-      const bW = 180; const bH = 30
-      const bX = (pageW2 - bW) / 2
-      const bY = profitY + 14
-      doc.setFillColor(26, 54, 84)
-      doc.roundedRect(bX, bY, bW, bH, 5, 5, 'F')
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(14)
-      doc.setTextColor(255, 255, 255)
-      doc.text(`PROFIT  $${Math.round(profitVal).toLocaleString('en-US')}`, bX + bW / 2, bY + bH / 2, { align: 'center', baseline: 'middle' })
-
-      // Campaign table on same doc
-      const startY = bY + bH + 14
-      const NAVY: [number,number,number] = [26,54,84]
-      const CYAN: [number,number,number] = [212,233,242]
-      const WHITE: [number,number,number] = [255,255,255]
-      const INK: [number,number,number] = [15,23,42]
-
-      // Camp body — always build fresh from raw data (no double-date issue)
-      const campMidRow = Math.floor(campResult.data.length / 2)
-      const campBody = campResult.data.map((r, i) => {
-        // Date cell value
-        let dateVal = ''
-        if (isSingleDayPdf) dateVal = i === campMidRow ? (commonOpts.singleDay ?? '') : ''
-        else dateVal = i === 0 ? (commonOpts.dateFrom ?? '') : i === campResult.data.length - 1 ? (commonOpts.dateTo ?? '') : ''
-        return [
-          dateVal,
-          r.campaign_code ?? '—',
-          r.source ?? '—',
-          num(r.answered),
-          num(r.missed),
-          num(r.counted),
-          `$${r.rate.toFixed(2)}`,
-          `$${Math.round(Number(r.total_bill)).toLocaleString('en-US')}`,
-        ]
-      })
-      campBody.push(['TOTAL', String(campTotals.count), String(campDestCount), num(campTotals.answered), num(campTotals.missed), num(campTotals.counted), '—', `$${Math.round(campTotalBill).toLocaleString('en-US')}`])
-      const campTotalIdx = campBody.length - 1
-
-      const autoTable = (await import('jspdf-autotable')).default
-      autoTable(doc, {
-        startY: startY + 20,
-        theme: 'grid',
-        head: [campCols],
-        body: campBody,
-        styles: { fontSize: 8, cellPadding: 4, lineColor: WHITE, lineWidth: 1, textColor: INK, valign: 'middle' },
-        headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', halign: 'center', lineColor: NAVY, lineWidth: 1 },
-        bodyStyles: { fillColor: CYAN },
-        columnStyles: {
-          0: { fillColor: WHITE, halign: 'center', fontStyle: 'bold', valign: 'middle', cellWidth: 68 },
-          3: { halign: 'right' as const },
-          4: { halign: 'right' as const },
-          5: { halign: 'right' as const },
-          6: { halign: 'right' as const },
-          7: { halign: 'right' as const },
-        },
-        margin: { left: 40, right: 40 },
-        didParseCell: (data: any) => {
-          if (data.section === 'body' && data.row.index === campTotalIdx) {
-            data.cell.styles.fillColor = NAVY
-            data.cell.styles.textColor = WHITE
-            data.cell.styles.fontStyle = 'bold'
-            if (data.column.index >= 3) data.cell.styles.halign = 'right'
-          }
-          if (data.section === 'body' && data.column.index === 0 && data.row.index !== campTotalIdx) {
-            data.cell.styles.fillColor = WHITE
-          }
-        },
-      })
-
-      doc.save('records-export.pdf')
-    } finally { setPdfLoading(false) }
-  }
-  */
-
   const meta = records.data?.meta
   const rows = records.data?.data ?? []
-
-  const actions = (
-    <>
-      {/* Report downloads removed.
-      <DownloadButton href={api.recordsExportUrl(filters)}>CSV</DownloadButton>
-      <Button variant="secondary" onClick={handlePdf} disabled={pdfLoading}>
-        {pdfLoading ? <Spinner className="h-3.5 w-3.5" /> : <PdfIcon />} PDF
-      </Button>
-      */}
-      {/* "Add record" retired — records are keyed in directly on the inline sheet below.
-      <Button onClick={openNew}><PlusIcon /> Add record</Button>
-      */}
-    </>
-  )
 
   // Date range lives in the page header (top-right), not the filters card.
   const dateControl = !hideDateFilter ? (
@@ -413,68 +151,74 @@ export default function RecordsSection({
     />
   ) : null
 
+  const tableGrid = navy && 'border-collapse [&_td]:border [&_td]:border-border [&_th]:border [&_th]:border-border'
+
   return (
     <section>
-      {compact ? (
-        <div className="mb-4 mt-10 flex flex-col gap-3 border-t border-white/50 pt-8 sm:flex-row sm:items-center sm:justify-between">
+      {hideHeader ? null : compact ? (
+        <div className="mb-4 mt-10 flex flex-col gap-3 border-t border-border pt-8 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h2>
-            <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>
+            <h2 className="text-lg font-display tracking-tight text-foreground">{title}</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">{actions}</div>
         </div>
       ) : (
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
-            <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+            <h1 className="text-xl font-display tracking-tight text-foreground sm:text-2xl">{title}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">{actions}</div>
         </div>
       )}
 
       {/* Filters */}
-      <Card className="filters mb-3 p-2.5">
+      <div className="filters mb-3 rounded-lg border border-border bg-card p-2.5">
         <div className="flex flex-wrap items-end justify-between gap-2">
-          <Input label="Search" placeholder={`${entityLabel} code…`} value={filters.search} onChange={(e) => set({ search: e.target.value })} />
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-foreground">Search</span>
+            <Input placeholder={`${entityLabel} code…`} value={filters.search} onChange={(e) => set({ search: e.target.value })} />
+          </label>
           <div className="flex flex-wrap items-end gap-3">
             {dateControl && (
               <label className="block">
-                <span className="mb-1 block text-sm font-medium text-slate-700">Date</span>
+                <span className="mb-1 block text-sm font-medium text-foreground">Date</span>
                 {dateControl}
               </label>
             )}
-            <Select
-              label={entityLabel}
-              value={isBuyer ? filters.buyer_id : filters.campaign_id}
-              onChange={(e) =>
-                set(isBuyer
-                  ? { buyer_id: e.target.value ? Number(e.target.value) : '' }
-                  : { campaign_id: e.target.value ? Number(e.target.value) : '' })
-              }
-            >
-              <option value="">All {isBuyer ? 'destinations' : 'campaigns'}</option>
-              {entities.data?.map((x) => <option key={x.id} value={x.id}>{x.code}</option>)}
-            </Select>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-foreground">{entityLabel}</span>
+              <select
+                className={selectCls}
+                value={isBuyer ? filters.buyer_id : filters.campaign_id}
+                onChange={(e) =>
+                  set(isBuyer
+                    ? { buyer_id: e.target.value ? Number(e.target.value) : '' }
+                    : { campaign_id: e.target.value ? Number(e.target.value) : '' })
+                }
+              >
+                <option value="">All {isBuyer ? 'destinations' : 'campaigns'}</option>
+                {entities.data?.map((x) => <option key={x.id} value={x.id}>{x.code}</option>)}
+              </select>
+            </label>
           </div>
         </div>
-      </Card>
+      </div>
 
       {/* Table */}
-      <Card className={cx(!isBuyer && 'overflow-hidden rounded-md!')}>
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
         {!isFiltered ? (
           <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+            <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
               </svg>
             </div>
-            <p className="text-base font-semibold text-slate-700">Select a date to view records</p>
-            <p className="max-w-sm text-sm text-slate-400">Pick a day or date range with the <span className="font-medium text-slate-500">Date</span> picker above to load call records.</p>
+            <p className="text-base font-semibold text-foreground">Select a date to view records</p>
+            <p className="max-w-sm text-sm text-muted-foreground">Pick a day or date range with the <span className="font-medium text-foreground">Date</span> picker above to load call records.</p>
           </div>
         ) : isSingleDay ? (
           allRecords.loading ? (
-            <div className="flex justify-center py-16"><Spinner className="h-6 w-6" /></div>
+            <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
           ) : (
             <RecordsGrid
               type={type}
@@ -488,27 +232,27 @@ export default function RecordsSection({
             />
           )
         ) : (bundled ? allRecords.loading : records.loading) ? (
-          <div className="flex justify-center py-16"><Spinner className="h-6 w-6" /></div>
+          <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
         ) : (bundled ? bundledRows.length === 0 : rows.length === 0) ? (
-          <EmptyState message="No records match these filters." />
+          <p className="py-16 text-center text-sm text-muted-foreground uppercase">No records match these filters.</p>
         ) : (
-          <div className="overflow-x-auto rounded-t-2xl">
-            <table className={cx('w-full min-w-[900px] table-fixed text-sm', navy && 'border-collapse [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white')}>
+          <div className="overflow-x-auto">
+            <table className={cn('w-full min-w-[900px] table-fixed text-sm', tableGrid)}>
               <colgroup>
-                {showSerial && <col className="w-[6%]" />}{/* # */}
-                {showDate && <col className="w-[11%]" />}{/* Date */}
-                <col className={isBuyer ? 'w-[14%]' : 'w-[12%]'} />{/* Destination (buyer) / Campaign (cost) */}
-                {!isBuyer && <col className="w-[14%]" />}{/* Source (Destination) — widened ~15%, from the Campaign col */}
-                <col className="w-[12%]" />{/* Answered */}
-                <col className="w-[10%]" />{/* Missed */}
-                <col className="w-[11%]" />{/* Replacement */}
-                <col className="w-[12%]" />{/* Counted */}
-                <col className="w-[12%]" />{/* Rate */}
-                <col className="w-[15%]" />{/* Total */}
-                <col className="w-[8%]" />{/* Actions */}
+                {showSerial && <col className="w-[6%]" />}
+                {showDate && <col className="w-[11%]" />}
+                <col className="w-[14%]" />
+                {!isBuyer && <col className="w-[12%]" />}
+                <col className="w-[12%]" />
+                <col className="w-[10%]" />
+                <col className="w-[11%]" />
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+                <col className="w-[15%]" />
+                <col className="w-[8%]" />
               </colgroup>
               <thead>
-                <tr className={cx('text-center text-xs font-semibold uppercase tracking-wide', navy ? 'bg-[#1a3654] text-white' : 'bg-blue-600 text-blue-50')}>
+                <tr className="bg-primary text-center text-xs font-semibold uppercase tracking-wide text-primary-foreground">
                   {showSerial && <th className="px-4 py-3 font-medium">#</th>}
                   {showDate && <Th onClick={() => set({ sort: 'record_date', dir: nextDir(filters, 'record_date') })} active={filters.sort === 'record_date'} dir={filters.dir}>Date</Th>}
                   <th className="px-4 py-3 font-medium">{entityLabel}</th>
@@ -525,46 +269,46 @@ export default function RecordsSection({
               <tbody>
                 {bundled
                   ? bundledRows.map((b, i) => (
-                    <tr key={b.key} className={cx(navy ? 'bg-[#d4e9f2] text-[#0f172a]' : 'border-b border-slate-100/70 odd:bg-white/40 even:bg-blue-50/40 hover:bg-blue-100/50')}>
+                    <tr key={b.key} className={cn(navy ? 'bg-card text-foreground' : 'border-b border-border odd:bg-card even:bg-accent hover:bg-accent/70')}>
                       {showDate && (
-                        <td className="whitespace-nowrap px-4 py-3 text-center font-medium text-slate-600">
+                        <td className="whitespace-nowrap px-4 py-3 text-center font-medium text-muted-foreground">
                           {i === 0 ? formatDate(filters.from ?? null) : i === bundledRows.length - 1 ? formatDate(filters.to ?? null) : ''}
                         </td>
                       )}
-                      <td className="py-3 pl-10 pr-2 text-center font-medium text-slate-800"><Box w="w-16" align="left">{b.camp}</Box></td>
-                      <td className="py-3 pl-6 pr-2 text-center text-slate-600"><FitText>{b.source}</FitText></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(b.answered)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-10">{num(b.missed)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-12">{num(b.replacement)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(b.counted)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-16">{money2(b.rate)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center font-semibold tabular-nums text-slate-900"><Box w="w-28">{money2(b.total_bill)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center font-medium text-foreground"><Box w="w-16" align="left">{b.camp}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center text-muted-foreground"><Box w="w-20" align="left">{b.source}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-foreground"><Box w="w-12">{num(b.answered)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-muted-foreground"><Box w="w-10">{num(b.missed)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-muted-foreground"><Box w="w-12">{num(b.replacement)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-foreground"><Box w="w-12">{num(b.counted)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-muted-foreground"><Box w="w-16">{money2(b.rate)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center font-semibold tabular-nums text-foreground"><Box w="w-28">{money2(b.total_bill)}</Box></td>
                       <td className="px-4 py-3 text-center">
-                        {b.count > 1 && <span className="text-xs tabular-nums text-slate-400" title={`${b.count} records merged into this row`}>{b.count}×</span>}
+                        {b.count > 1 && <span className="text-xs tabular-nums text-muted-foreground" title={`${b.count} records merged into this row`}>{b.count}×</span>}
                       </td>
                     </tr>
                   ))
                   : rows.map((r, i) => (
-                    <tr key={r.id} className={cx(navy ? 'bg-[#d4e9f2] text-[#0f172a]' : 'border-b border-slate-100/70 odd:bg-white/40 even:bg-blue-50/40 hover:bg-blue-100/50')}>
-                      {showSerial && <td className="px-4 py-3 text-center tabular-nums text-slate-400">{(meta ? (meta.page - 1) * meta.per_page : 0) + i + 1}</td>}
+                    <tr key={r.id} className={cn(navy ? 'bg-card text-foreground' : 'border-b border-border odd:bg-card even:bg-accent hover:bg-accent/70')}>
+                      {showSerial && <td className="px-4 py-3 text-center tabular-nums text-muted-foreground">{(meta ? (meta.page - 1) * meta.per_page : 0) + i + 1}</td>}
                       {showDate && (isFiltered
-                        ? <td className="whitespace-nowrap px-4 py-3 text-center text-slate-600 font-medium">
+                        ? <td className="whitespace-nowrap px-4 py-3 text-center text-muted-foreground font-medium">
                             {i === 0 ? formatDate(r.record_date) : i === rows.length - 1 ? formatDate(r.record_date) : ''}
                           </td>
-                        : <td className="whitespace-nowrap px-4 py-3 text-center text-slate-600">{formatDate(r.record_date)}</td>
+                        : <td className="whitespace-nowrap px-4 py-3 text-center text-muted-foreground">{formatDate(r.record_date)}</td>
                       )}
-                      <td className="py-3 pl-10 pr-2 text-center font-medium text-slate-800"><Box w="w-16" align="left">{(isBuyer ? r.buyer_code : r.campaign_code) ?? '—'}</Box></td>
-                      {!isBuyer && <td className="py-3 pl-6 pr-2 text-center text-slate-600"><FitText>{r.source ?? '—'}</FitText></td>}
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(r.answered)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-10">{num(r.missed)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-12">{num(r.replacement)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(r.counted)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-16">{money2(r.rate)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center font-semibold tabular-nums text-slate-900"><Box w="w-28">{money2(r.total_bill)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center font-medium text-foreground"><Box w="w-16" align="left">{(isBuyer ? r.buyer_code : r.campaign_code) ?? '—'}</Box></td>
+                      {!isBuyer && <td className="py-3 pl-10 pr-2 text-center text-muted-foreground"><Box w="w-20" align="left">{r.source ?? '—'}</Box></td>}
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-foreground"><Box w="w-12">{num(r.answered)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-muted-foreground"><Box w="w-10">{num(r.missed)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-muted-foreground"><Box w="w-12">{num(r.replacement)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-foreground"><Box w="w-12">{num(r.counted)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-muted-foreground"><Box w="w-16">{money2(r.rate)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center font-semibold tabular-nums text-foreground"><Box w="w-28">{money2(r.total_bill)}</Box></td>
                       <td className="px-4 py-3">
                         <div className="flex justify-center gap-1">
-                          <button onClick={() => openEdit(r)} className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600" title="Edit"><EditIcon /></button>
-                          <button onClick={() => onDelete(r)} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete"><TrashIcon /></button>
+                          <button onClick={() => openEdit(r)} className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-primary" title="Edit"><EditIcon /></button>
+                          <button onClick={() => onDelete(r)} className="rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" title="Delete"><TrashIcon /></button>
                         </div>
                       </td>
                     </tr>
@@ -572,8 +316,8 @@ export default function RecordsSection({
               </tbody>
               {totals && (
                 <tfoot>
-                  <tr className={cx('font-semibold', navy ? 'bg-[#1a3654] font-bold text-white' : 'border-t-2 border-blue-200 bg-blue-50 text-slate-900')}>
-                    <td className={cx('px-4 py-3 text-center text-xs font-bold uppercase tracking-wide', navy ? 'text-white' : 'text-blue-700')} colSpan={showSerial && showDate ? 2 : 1}>
+                  <tr className="bg-primary font-bold text-primary-foreground">
+                    <td className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide" colSpan={showSerial && showDate ? 2 : 1}>
                       TOTAL
                     </td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-16" align="left">{num(totals.count)}</Box></td>
@@ -582,8 +326,8 @@ export default function RecordsSection({
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-10">{num(totals.missed)}</Box></td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-12">{num(totals.replacement)}</Box></td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-12">{num(totals.counted)}</Box></td>
-                    <td className={cx('py-3 pl-10 pr-2 text-center tabular-nums', navy ? 'text-white/90' : 'text-blue-700')} title="Average rate = Total ÷ Counted"><Box w="w-16">{totals.counted > 0 ? money2(totals.total_bill / totals.counted) : '—'}</Box></td>
-                    <td className={cx('py-3 pl-10 pr-2 text-center tabular-nums', navy ? 'text-white' : 'text-blue-700')}><Box w="w-28">{money2(totals.total_bill)}</Box></td>
+                    <td className="py-3 pl-10 pr-2 text-center tabular-nums text-primary-foreground/90" title="Average rate = Total ÷ Counted"><Box w="w-16">{totals.counted > 0 ? money2(totals.total_bill / totals.counted) : '—'}</Box></td>
+                    <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-28">{money2(totals.total_bill)}</Box></td>
                     <td />
                   </tr>
                 </tfoot>
@@ -592,10 +336,9 @@ export default function RecordsSection({
           </div>
         )}
 
-        {/* Buyer view is server-paginated. The bundled campaign view already collapses
-            the full record set into merged rows, so it shows a one-line summary instead. */}
+        {/* Buyer view is server-paginated; bundled campaign view shows a one-line summary. */}
         {!bundled && isFiltered && !isSingleDay && meta && meta.total > 0 && (
-          <div className="flex flex-col items-center justify-between gap-2 border-t border-slate-100 px-4 py-3 text-sm text-slate-500 sm:flex-row">
+          <div className="flex flex-col items-center justify-between gap-2 border-t border-border px-4 py-3 text-sm text-muted-foreground sm:flex-row">
             <span>Showing {(meta.page - 1) * meta.per_page + 1}–{Math.min(meta.page * meta.per_page, meta.total)} of {num(meta.total)}</span>
             <div className="flex items-center gap-1">
               <Button variant="secondary" size="sm" disabled={meta.page <= 1}          onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) - 1 }))}>Prev</Button>
@@ -605,17 +348,22 @@ export default function RecordsSection({
           </div>
         )}
         {bundled && isFiltered && !isSingleDay && bundledRows.length > 0 && (
-          <div className="border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
+          <div className="border-t border-border px-4 py-3 text-sm text-muted-foreground">
             {num(bundledRows.length)} bundled campaign {bundledRows.length === 1 ? 'row' : 'rows'} from {num(allRecords.data?.data?.length ?? 0)} records
           </div>
         )}
-      </Card>
+      </div>
 
-      {records.error && <p className="mt-4 text-sm text-red-600">{records.error}</p>}
+      {records.error && <p className="mt-4 text-sm text-destructive">{records.error}</p>}
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit record' : `Add ${isBuyer ? 'revenue' : 'cost'} record`}>
-        <RecordForm type={type} editing={editing} entities={entities.data ?? []} destinations={destinations.data ?? []} onSaved={onSaved} onCancel={() => setModalOpen(false)} />
-      </Modal>
+      <Dialog open={modalOpen} onOpenChange={(o) => { if (!o) setModalOpen(false) }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Edit record' : `Add ${isBuyer ? 'revenue' : 'cost'} record`}</DialogTitle>
+          </DialogHeader>
+          <RecordForm type={type} editing={editing} entities={entities.data ?? []} destinations={destinations.data ?? []} onSaved={onSaved} onCancel={() => setModalOpen(false)} />
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }
@@ -624,22 +372,22 @@ function nextDir(filters: RecordFilters, col: string): 'asc' | 'desc' {
   return filters.sort === col && filters.dir === 'desc' ? 'asc' : 'desc'
 }
 
-// Fixed-width, left-aligned box centered inside the cell, so every value in a
-// column shares the same left edge — one clean vertical line, no drift.
+// Fixed-width, aligned box centered inside the cell so every value in a column
+// shares the same edge — one clean vertical line, no drift.
 function Box({ children, w, align = 'left' }: { children: ReactNode; w: string; align?: 'left' | 'right' }) {
-  return <span className={cx('inline-block tabular-nums', w, align === 'left' ? 'text-left' : 'text-right')}>{children}</span>
+  return <span className={cn('inline-block tabular-nums', w, align === 'left' ? 'text-left' : 'text-right')}>{children}</span>
 }
 function Th({ children, onClick, active, dir }: { children: ReactNode; onClick: () => void; active?: boolean; dir?: string }) {
   return (
     <th className="cursor-pointer select-none px-4 py-3 font-medium" onClick={onClick}>
-      <span className={cx(active && 'text-white underline underline-offset-4')}>{children}{active ? (dir === 'asc' ? ' ↑' : ' ↓') : ''}</span>
+      <span className={cn(active && 'underline underline-offset-4')}>{children}{active ? (dir === 'asc' ? ' ↑' : ' ↓') : ''}</span>
     </th>
   )
 }
 function ThNum({ children, onClick, active, dir }: { children: ReactNode; onClick: () => void; active?: boolean; dir?: string }) {
   return (
     <th className="cursor-pointer select-none px-4 py-3 text-center font-medium" onClick={onClick}>
-      <span className={cx(active && 'text-white underline underline-offset-4')}>{children}{active ? (dir === 'asc' ? ' ↑' : ' ↓') : ''}</span>
+      <span className={cn(active && 'underline underline-offset-4')}>{children}{active ? (dir === 'asc' ? ' ↑' : ' ↓') : ''}</span>
     </th>
   )
 }
@@ -668,14 +416,9 @@ function RecordForm({ type, editing, entities, destinations, onSaved, onCancel }
   const creatingNew    = !isEdit && entityId === '__new__'
   const creatingNewDest = !isBuyer && source === '__new__'
 
-  // Where the rate comes from:
-  //   buyer rows    -> the buyer's rate, auto-filled but now keyable per record
-  //   campaign rows -> the source/destination's rate (auto-filled, editable per row)
-  // The rate field is typeable everywhere so it stays consistent with the inline sheet.
   const effectiveRate = Number(rate) || 0
   const total = useMemo(() => (Number(counted) || 0) * effectiveRate, [counted, effectiveRate])
 
-  // Auto-fill the rate when the buyer / destination selection changes.
   const handleEntity = (v: string) => {
     setEntityId(v)
     if (isBuyer) {
@@ -707,7 +450,6 @@ function RecordForm({ type, editing, entities, destinations, onSaved, onCancel }
         if (!isBuyer) {
           const destName = source === '__new__' ? newDest : source
           if (destName) {
-            // Auto-create destination (with its rate, linked to the campaign) if new
             if (source === '__new__' && newDest) {
               const campaignId = entityId && entityId !== '__new__' ? Number(entityId) : undefined
               try { await api.createDestination({ name: newDest, rate: Number(rate) || 0, campaign_id: campaignId }) } catch { /* already exists */ }
@@ -724,51 +466,55 @@ function RecordForm({ type, editing, entities, destinations, onSaved, onCancel }
   return (
     <form onSubmit={submit} className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Input label="Date" type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} required />
+        <Field label="Date"><Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} required /></Field>
         {isEdit ? (
-          <Input label={entityLabel} value={(isBuyer ? editing!.buyer_code : editing!.campaign_code) ?? ''} disabled />
+          <Field label={entityLabel}><Input value={(isBuyer ? editing!.buyer_code : editing!.campaign_code) ?? ''} disabled /></Field>
         ) : (
-          <Select label={entityLabel} value={entityId} onChange={(e) => handleEntity(e.target.value)} required>
-            <option value="">Select {entityLabel.toLowerCase()}…</option>
-            {entities.map((x) => <option key={x.id} value={x.id}>{x.code}</option>)}
-            <option value="__new__">+ New {entityLabel.toLowerCase()}…</option>
-          </Select>
+          <Field label={entityLabel}>
+            <select className={selectCls} value={entityId} onChange={(e) => handleEntity(e.target.value)} required>
+              <option value="">Select {entityLabel.toLowerCase()}…</option>
+              {entities.map((x) => <option key={x.id} value={x.id}>{x.code}</option>)}
+              <option value="__new__">+ New {entityLabel.toLowerCase()}…</option>
+            </select>
+          </Field>
         )}
-        {creatingNew && <Input label="New code" placeholder={isBuyer ? 'e.g. RTG 99' : 'e.g. C-12'} value={newCode} onChange={(e) => setNewCode(e.target.value)} required />}
+        {creatingNew && <Field label="New code"><Input placeholder={isBuyer ? 'e.g. RTG 99' : 'e.g. C-12'} value={newCode} onChange={(e) => setNewCode(e.target.value)} required /></Field>}
       </div>
       {!isBuyer && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {isEdit ? (
-            <Input label="Destination" value={editing!.source ?? ''} onChange={(e) => setSource(e.target.value)} placeholder="e.g. AdsTerra" />
+            <Field label="Destination"><Input value={editing!.source ?? ''} onChange={(e) => setSource(e.target.value)} placeholder="e.g. AdsTerra" /></Field>
           ) : (
-            <Select label="Destination" value={source} onChange={(e) => handleSource(e.target.value)}>
-              <option value="">Select destination…</option>
-              {destinations
-                .filter((d) => !entityId || entityId === '__new__' || d.campaign_id == null || String(d.campaign_id) === entityId)
-                .map((d) => <option key={d.id} value={d.name}>{d.name} — {money2(d.rate)}</option>)}
-              <option value="__new__">+ New destination…</option>
-            </Select>
+            <Field label="Destination">
+              <select className={selectCls} value={source} onChange={(e) => handleSource(e.target.value)}>
+                <option value="">Select destination…</option>
+                {destinations
+                  .filter((d) => !entityId || entityId === '__new__' || d.campaign_id == null || String(d.campaign_id) === entityId)
+                  .map((d) => <option key={d.id} value={d.name}>{d.name} — {money2(d.rate)}</option>)}
+                <option value="__new__">+ New destination…</option>
+              </select>
+            </Field>
           )}
           {creatingNewDest && (
-            <Input label="New destination name" placeholder="e.g. AdsTerra" value={newDest} onChange={(e) => setNewDest(e.target.value)} required />
+            <Field label="New destination name"><Input placeholder="e.g. AdsTerra" value={newDest} onChange={(e) => setNewDest(e.target.value)} required /></Field>
           )}
         </div>
       )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Input label="Answered" type="number" min="0" value={answered} onChange={(e) => handleAnswered(e.target.value)} />
-        <Input label="Missed"   type="number" min="0" value={missed}   onChange={(e) => handleMissed(e.target.value)} />
-        <Input label="Counted"  type="number" min="0" value={counted}  disabled />
-        <Input label="Rate ($)" type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} title={isBuyer ? 'Buyer rate — auto-filled, editable per record' : 'Source rate — auto-filled from the destination; editable per record'} />
+        <Field label="Answered"><Input type="number" min="0" value={answered} onChange={(e) => handleAnswered(e.target.value)} /></Field>
+        <Field label="Missed"><Input type="number" min="0" value={missed} onChange={(e) => handleMissed(e.target.value)} /></Field>
+        <Field label="Counted"><Input type="number" min="0" value={counted} disabled /></Field>
+        <Field label="Rate ($)"><Input type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} title={isBuyer ? 'Buyer rate — auto-filled, editable per record' : 'Source rate — auto-filled from the destination; editable per record'} /></Field>
       </div>
-      <div className="flex items-center justify-between rounded-xl bg-linear-to-r from-blue-500 to-blue-600 px-4 py-3 text-white shadow-lg shadow-blue-600/25">
-        <span className="text-sm font-medium text-blue-50">{isBuyer ? 'Total revenue' : 'Total cost'}</span>
-        <span className="text-lg font-bold">{money2(total)}</span>
+      <div className="flex items-center justify-between rounded-lg bg-primary px-4 py-3 text-primary-foreground">
+        <span className="text-sm font-medium">{isBuyer ? 'Total revenue' : 'Total cost'}</span>
+        <span className="text-lg font-bold font-display">{money2(total)}</span>
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex justify-end gap-2 pt-1">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
         <Button type="submit" disabled={saving}>
-          {saving && <Spinner className="h-4 w-4 text-white" />}
+          {saving && <Spinner className="size-4" />}
           {isEdit ? 'Save changes' : 'Add record'}
         </Button>
       </div>
