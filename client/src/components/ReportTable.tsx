@@ -2,10 +2,10 @@
  * Buyers (revenue billing) and Campaigns (cost billing) so all three match. */
 import type { ReactNode } from 'react'
 import { formatDmy, money2, num } from '../lib/format'
-import { cx } from './ui'
+import { cx, FitText } from './ui'
 import type { CompleteReport } from '../types'
 
-export interface Col { label: string; w: string; box: string; kind: 'text' | 'num' | 'total' }
+export interface Col { label: string; w: string; box: string; kind: 'text' | 'num' | 'total'; fit?: boolean }
 
 /** Human-readable date label: single day, range, or em-dash when unset. */
 export function rangeText(from: string | null, to: string | null): string {
@@ -25,8 +25,8 @@ export const buyerCols: Col[] = [
 ]
 
 export const campCols: Col[] = [
-  { label: 'CAMP',        w: '11%', box: 'w-16', kind: 'text' },
-  { label: 'DESTINATION', w: '13%', box: 'w-20', kind: 'text' },
+  { label: 'CAMP',        w: '9%',  box: 'w-16', kind: 'text' },
+  { label: 'DESTINATION', w: '15%', box: 'w-20', kind: 'text', fit: true },
   { label: 'ANSWERED',    w: '12%', box: 'w-12', kind: 'num'  },
   { label: 'MISSED',      w: '10%', box: 'w-10', kind: 'num'  },
   { label: 'REPLACEMENT', w: '13%', box: 'w-12', kind: 'num'  },
@@ -118,7 +118,7 @@ export function SectionTable({ dateLabel, cols, rows, totals }: { dateLabel: str
                 )}
                 {cells.map((cell, ci) => (
                   <td key={ci} className={cx('border border-white bg-[#d4e9f2] px-2 py-2 text-center', KIND_CLASS[cols[ci].kind])}>
-                    <Box w={cols[ci].box}>{cell}</Box>
+                    {cols[ci].fit ? <FitText>{cell}</FitText> : <Box w={cols[ci].box}>{cell}</Box>}
                   </td>
                 ))}
               </tr>

@@ -9,7 +9,7 @@ import { useAsync } from '../lib/useAsync'
 import type { CallRecord, Campaign, Destination, RecordFilters, RecordType } from '../types'
 import { DateRangeFilter } from './DateRange'
 import RecordsGrid from './RecordsGrid'
-import { Button, Card, EmptyState, Input, Modal, Select, Spinner, cx } from './ui'
+import { Button, Card, EmptyState, FitText, Input, Modal, Select, Spinner, cx } from './ui'
 
 interface Entity { id: number; code: string; rate: number }
 
@@ -497,8 +497,8 @@ export default function RecordsSection({
               <colgroup>
                 {showSerial && <col className="w-[6%]" />}{/* # */}
                 {showDate && <col className="w-[11%]" />}{/* Date */}
-                <col className="w-[14%]" />{/* Destination / Campaign */}
-                {!isBuyer && <col className="w-[12%]" />}{/* Source */}
+                <col className={isBuyer ? 'w-[14%]' : 'w-[12%]'} />{/* Destination (buyer) / Campaign (cost) */}
+                {!isBuyer && <col className="w-[14%]" />}{/* Source (Destination) — widened ~15%, from the Campaign col */}
                 <col className="w-[12%]" />{/* Answered */}
                 <col className="w-[10%]" />{/* Missed */}
                 <col className="w-[11%]" />{/* Replacement */}
@@ -532,7 +532,7 @@ export default function RecordsSection({
                         </td>
                       )}
                       <td className="py-3 pl-10 pr-2 text-center font-medium text-slate-800"><Box w="w-16" align="left">{b.camp}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center text-slate-600"><Box w="w-20" align="left">{b.source}</Box></td>
+                      <td className="py-3 pl-6 pr-2 text-center text-slate-600"><FitText>{b.source}</FitText></td>
                       <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(b.answered)}</Box></td>
                       <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-10">{num(b.missed)}</Box></td>
                       <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-12">{num(b.replacement)}</Box></td>
@@ -554,7 +554,7 @@ export default function RecordsSection({
                         : <td className="whitespace-nowrap px-4 py-3 text-center text-slate-600">{formatDate(r.record_date)}</td>
                       )}
                       <td className="py-3 pl-10 pr-2 text-center font-medium text-slate-800"><Box w="w-16" align="left">{(isBuyer ? r.buyer_code : r.campaign_code) ?? '—'}</Box></td>
-                      {!isBuyer && <td className="py-3 pl-10 pr-2 text-center text-slate-600"><Box w="w-20" align="left">{r.source ?? '—'}</Box></td>}
+                      {!isBuyer && <td className="py-3 pl-6 pr-2 text-center text-slate-600"><FitText>{r.source ?? '—'}</FitText></td>}
                       <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(r.answered)}</Box></td>
                       <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-10">{num(r.missed)}</Box></td>
                       <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-12">{num(r.replacement)}</Box></td>

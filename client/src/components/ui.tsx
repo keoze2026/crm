@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react'
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -8,6 +9,51 @@ import type {
 type Cx = (string | false | null | undefined)[]
 // eslint-disable-next-line react-refresh/only-export-components
 export const cx = (...c: Cx) => c.filter(Boolean).join(' ')
+
+/**
+ * Keeps its text on a single line: if the text would overflow the column, the
+ * font size is stepped down (to a floor) until it fits — instead of wrapping.
+ * Meant for body cells only; column headers are left to wrap normally.
+ */
+export function FitText({
+  children,
+  className,
+  min = 10,
+  max = 14,
+}: {
+  children: ReactNode
+  className?: string
+  /** Smallest font size (px) before we stop shrinking. */
+  min?: number
+  /** Natural (largest) font size (px) — the column's normal text size. */
+  max?: number
+}) {
+  const ref = useRef<HTMLSpanElement>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const parent = el.parentElement
+    const fit = () => {
+      let size = max
+      el.style.fontSize = `${size}px`
+      // Shrink half a pixel at a time until the line fits or we hit the floor.
+      while (size > min && el.scrollWidth > el.clientWidth) {
+        size -= 0.5
+        el.style.fontSize = `${size}px`
+      }
+    }
+    fit()
+    // Re-fit when the column (the cell) is resized — e.g. on window resize.
+    const ro = new ResizeObserver(fit)
+    if (parent) ro.observe(parent)
+    return () => ro.disconnect()
+  }, [children, min, max])
+  return (
+    <span ref={ref} className={cx('block overflow-hidden whitespace-nowrap text-left', className)}>
+      {children}
+    </span>
+  )
+}
 
 export function Card({
   children,
