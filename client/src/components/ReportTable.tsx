@@ -26,12 +26,12 @@ export const buyerCols: Col[] = [
 
 export const campCols: Col[] = [
   { label: 'CAMP',        w: '11%', box: 'w-16', kind: 'text' },
-  { label: 'DESTINATION', w: '19%', box: 'w-28', kind: 'text' },
-  { label: 'ANSWERED',    w: '11%', box: 'w-12', kind: 'num'  },
-  { label: 'MISSED',      w: '9%',  box: 'w-10', kind: 'num'  },
-  { label: 'REPLACEMENT', w: '11%', box: 'w-12', kind: 'num'  },
-  { label: 'COUNTED',     w: '11%', box: 'w-12', kind: 'num'  },
-  { label: 'RATE',        w: '11%', box: 'w-16', kind: 'num'  },
+  { label: 'DESTINATION', w: '13%', box: 'w-20', kind: 'text' },
+  { label: 'ANSWERED',    w: '12%', box: 'w-12', kind: 'num'  },
+  { label: 'MISSED',      w: '10%', box: 'w-10', kind: 'num'  },
+  { label: 'REPLACEMENT', w: '13%', box: 'w-12', kind: 'num'  },
+  { label: 'COUNTED',     w: '12%', box: 'w-12', kind: 'num'  },
+  { label: 'RATE',        w: '12%', box: 'w-16', kind: 'num'  },
   { label: 'TOTAL BILL',  w: '17%', box: 'w-28', kind: 'total'},
 ]
 
