@@ -61,7 +61,7 @@ export default function RecordsGrid({
   // Always show existing rows highest-rate first.
   const sortedRecords = [...records].sort((a, b) => b.rate - a.rate)
 
-  const headCls = cx('whitespace-nowrap px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide', navy ? 'bg-[#1a3654] text-white' : 'bg-blue-600 text-blue-50')
+  const headCls = cx('px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide', navy ? 'bg-[#1a3654] text-white' : 'bg-blue-600 text-blue-50')
   // "REPLACEMENT" is the longest header; in the fixed-width campaign grid it clips
   // against the column edge, so this variant tightens the padding, drops the wide
   // letter-spacing and shrinks the font a notch so the whole word fits.
@@ -75,8 +75,8 @@ export default function RecordsGrid({
       <table className={cx('w-full text-sm', isBuyer ? 'min-w-[760px]' : 'min-w-[1020px] table-fixed', navy && 'border-collapse [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white')}>
         <thead>
           <tr>
-            <th className={headCls}>{isBuyer ? 'Destination' : 'Camp'}</th>
-            {!isBuyer && <th className={headCls}>Traffic Source</th>}
+            <th className={cx(headCls, !isBuyer && 'w-20')}>{isBuyer ? 'Destination' : 'Camp'}</th>
+            {!isBuyer && <th className={cx(headCls, 'w-56')}>Traffic Source</th>}
             <th className={headCls}>Answered</th>
             <th className={headCls}>Missed</th>
             <th className={headClsReplacement}>Replacement</th>
