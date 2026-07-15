@@ -42,10 +42,29 @@
       "Bash(php -l database/normalize_campaign_codes.php)",
       "Bash(php database/normalize_campaign_codes.php)",
       "Bash(curl -s \"http://localhost:8000/api/records?type=campaign&from=2026-01-01&to=2026-12-31&per_page=9999&page=1\")",
-      "Bash(git restore *)"
+      "Bash(git restore *)",
+      "Bash(git merge-tree *)",
+      "Bash(git grep *)",
+      "Bash(git ls-tree *)",
+      "Bash(git merge *)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git rm *)",
+      "Bash(echo \"=== exit: $? ===\")",
+      "Bash(git rev-parse *)",
+      "Bash(php -l server/src/Controllers/PortalExpenseController.php)",
+      "Bash(php -r ' *)",
+      "Bash(curl -s \"http://localhost:8000/api/portal-expenses?month=$\\(date +%Y-%m\\)\")",
+      "Bash(curl -s -X POST http://localhost:8000/api/portal-expenses -H 'Content-Type: application/json' -d '{\"month\":\"__CMDSUB_OUTPUT__\",\"name\":\"Nico\",\"voice_minutes\":28736.02,\"rejected_calls\":157.785,\"rent_values\":105,\"total_amount\":28998.80}')",
+      "Bash(curl -s http://localhost:8000/api/portal-expenses?month=__CMDSUB_OUTPUT__)",
+      "Bash(curl -s -X DELETE http://localhost:8000/api/portal-expenses/1)",
+      "Bash(curl -s \"http://localhost:8000/api/portal-expenses?month=2026-07\")",
+      "Bash(php -r '$d=json_decode\\(file_get_contents\\(\"php://stdin\"\\),true\\); printf\\(\"%-18s %12s %10s %8s %10s %12s\\\\n\",\"NAME\",\"VOICE\",\"REJECT\",\"RENT\",\"PAYOUT\",\"TOTAL\"\\); foreach\\($d as $r\\){printf\\(\"%-18s %12s %10s %8s %10s %12s\\\\n\",$r[\"name\"],number_format\\($r[\"voice_minutes\"],2\\),number_format\\($r[\"rejected_calls\"],3\\),number_format\\($r[\"rent_values\"],0\\),number_format\\($r[\"payout_expenses\"],2\\),number_format\\($r[\"total_amount\"],2\\)\\);}')",
+      "Bash(git check-ignore *)"
     ],
     "additionalDirectories": [
-      "C:\\Users\\hp 290 g4\\Desktop\\Dev Projects\\CRM\\client"
+      "C:\\Users\\hp 290 g4\\Desktop\\Dev Projects\\CRM\\client",
+      "c:\\Users\\hp 290 g4\\.claude\\projects\\c--Users-hp-290-g4-Desktop-Dev-Projects-CRM\\memory"
     ]
   }
 }

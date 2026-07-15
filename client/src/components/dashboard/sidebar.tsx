@@ -52,6 +52,7 @@ const svg = (path: React.ReactNode) => (
 const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", perm: "dashboard", icon: svg(<><rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" /><rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" /></>) },
   { to: "/records", label: "Daily Sheet", icon: svg(<><path d="M3 5h18M3 12h18M3 19h18" /></>) },
+  { to: "/portal-expenses", label: "Portal Expenses", icon: svg(<><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /><path d="M6 15h4" /></>) },
   { to: "/buyers", label: "Buyers", perm: "buyers", icon: svg(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>) },
   { to: "/campaigns", label: "Campaigns", perm: "campaigns", icon: svg(<><path d="m3 11 18-5v12L3 14v-3z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></>) },
   { to: "/complete-report", label: "Complete Report", perm: "complete-report", icon: svg(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M16 13H8M16 17H8M10 9H8" /></>) },

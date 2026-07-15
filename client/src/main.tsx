@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard'
 import Records from './pages/Records'
 import Buyers from './pages/Buyers'
 import Campaigns from './pages/Campaigns'
+import PortalExpenses from './pages/PortalExpenses'
 import CompleteReportPage from './pages/CompleteReport'
 import Attendance from './pages/Attendance'
 import Login from './pages/Login'
@@ -33,6 +34,7 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <RequirePage page="dashboard"><Dashboard /></RequirePage> },
           { path: 'records', element: <Records /> },
+          { path: 'portal-expenses', element: <PortalExpenses /> },
           { path: 'buyers', element: <RequirePage page="buyers"><Buyers /></RequirePage> },
           { path: 'campaigns', element: <RequirePage page="campaigns"><Campaigns /></RequirePage> },
           { path: 'complete-report', element: <RequirePage page="complete-report"><CompleteReportPage /></RequirePage> },

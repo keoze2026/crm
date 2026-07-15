@@ -1,6 +1,7 @@
 import type {
   Buyer,
   Destination,
+  PortalExpense,
   CallRecord,
   Campaign,
   CampaignSource,
@@ -117,6 +118,16 @@ export const api = {
     request<Destination>(`/destinations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteDestination: (id: number) =>
     request<{ deleted: boolean }>(`/destinations/${id}`, { method: 'DELETE' }),
+
+  // Portal expenses (monthly provider expenses)
+  portalExpenses: (month: string) =>
+    request<PortalExpense[]>(`/portal-expenses${qs({ month })}`),
+  createPortalExpense: (data: Partial<PortalExpense>) =>
+    request<PortalExpense>('/portal-expenses', { method: 'POST', body: JSON.stringify(data) }),
+  updatePortalExpense: (id: number, data: Partial<PortalExpense>) =>
+    request<PortalExpense>(`/portal-expenses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deletePortalExpense: (id: number) =>
+    request<{ deleted: boolean }>(`/portal-expenses/${id}`, { method: 'DELETE' }),
 
   // Records
   records: (filters: RecordFilters) =>

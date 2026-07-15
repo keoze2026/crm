@@ -13,6 +13,7 @@ use App\Controllers\AuthController;
 use App\Controllers\BuyerController;
 use App\Controllers\CampaignController;
 use App\Controllers\DestinationController;
+use App\Controllers\PortalExpenseController;
 use App\Controllers\RecordController;
 use App\Controllers\UserController;
 use App\Database;
@@ -89,6 +90,13 @@ $router->get('/destinations',         fn () => $destinations->index());
 $router->post('/destinations',        fn () => $destinations->store());
 $router->put('/destinations/{id}',    fn ($p) => $destinations->update($p));
 $router->delete('/destinations/{id}', fn ($p) => $destinations->destroy($p));
+
+// Portal expenses (monthly provider expenses)
+$portalExpenses = new PortalExpenseController();
+$router->get('/portal-expenses',         fn () => $portalExpenses->index());
+$router->post('/portal-expenses',        fn () => $portalExpenses->store());
+$router->put('/portal-expenses/{id}',    fn ($p) => $portalExpenses->update($p));
+$router->delete('/portal-expenses/{id}', fn ($p) => $portalExpenses->destroy($p));
 
 // Call records
 $records = new RecordController();
