@@ -3,7 +3,7 @@
 // import autoTable from 'jspdf-autotable'
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { api } from '../api/client'
-import { bundleCampaignRecords, normalizeCode } from '../lib/bundle'
+import { bundleCampaignRecords, effectiveCampaignReplacement, normalizeCode } from '../lib/bundle'
 import { formatDate, money2, num, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { CallRecord, Campaign, Destination, RecordFilters, RecordType } from '../types'
@@ -202,7 +202,9 @@ export default function RecordsSection({
     return {
       answered:    data.reduce((s, r) => s + Number(r.answered),    0),
       missed:      data.reduce((s, r) => s + Number(r.missed),      0),
-      replacement: data.reduce((s, r) => s + Number(r.replacement), 0),
+      // Match the rows: campaign Replacement is the effective (auto-filled) value,
+      // buyer Replacement is the stored manual value.
+      replacement: data.reduce((s, r) => s + (isBuyer ? Number(r.replacement) : effectiveCampaignReplacement(r)), 0),
       counted:     data.reduce((s, r) => s + Number(r.counted),     0),
       total_bill:  data.reduce((s, r) => s + Number(r.total_bill),  0),
       count:       uniqueEntities,

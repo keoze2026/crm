@@ -40,7 +40,8 @@
       "Bash(php -l src/Controllers/CampaignController.php)",
       "Bash(php -r 'require '\\\\''src/CampaignCode.php'\\\\''; use App\\\\CampaignCode; foreach\\(['\\\\''c03'\\\\'','\\\\''c-3'\\\\'','\\\\''C-03'\\\\'','\\\\''C-3'\\\\'','\\\\''Co3'\\\\'','\\\\''CO3'\\\\'','\\\\''C 03'\\\\'','\\\\''C05'\\\\'','\\\\''c11'\\\\'','\\\\''C-11'\\\\'','\\\\''C100'\\\\'','\\\\''CO-05'\\\\'','\\\\''RTG 04'\\\\'','\\\\''GOOGLE'\\\\'','\\\\''BING'\\\\'','\\\\''c-007'\\\\'','\\\\'' c3 '\\\\''] as $c\\) echo str_pad\\(json_encode\\($c\\),12\\).'\\\\'' -> '\\\\''.CampaignCode::standardize\\($c\\).PHP_EOL;')",
       "Bash(php -l database/normalize_campaign_codes.php)",
-      "Bash(php database/normalize_campaign_codes.php)"
+      "Bash(php database/normalize_campaign_codes.php)",
+      "Bash(curl -s \"http://localhost:8000/api/records?type=campaign&from=2026-01-01&to=2026-12-31&per_page=9999&page=1\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\hp 290 g4\\Desktop\\Dev Projects\\CRM\\client"
