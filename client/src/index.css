@@ -1,68 +1,290 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+/* ─────────────────────────────────────────────────────────────────────────────
+ * M.O.N.K.Y design system — ported from the dashboard-m-o-n-k-y template.
+ * Fonts: Rebels (display, self-hosted) + Roboto Mono (mono, Google).
+ * next/font is replaced by @font-face + @import and explicit CSS variables.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
+@import "tw-animate-css";
 
-@theme {
-  --font-sans: 'Poppins', ui-sans-serif, system-ui, -apple-system, sans-serif;
+@font-face {
+  font-family: "Rebels";
+  src: url("/fonts/Rebels-Fett.woff2") format("woff2"),
+       url("/fonts/Rebels-Fett.woff") format("woff");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
 }
 
-html,
-body,
-#root {
-  min-height: 100vh;
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-display: var(--font-rebels);
+  --font-mono: var(--font-roboto-mono);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-pop: var(--pop);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-active: var(--sidebar-accent-hover);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --spacing-gap: var(--gap);
+  --spacing-sides: var(--sides);
+  --spacing-header-mobile: var(--header-mobile);
+
+  --ease-anticipate: cubic-bezier(1, -0.4, 0.35, 0.95);
+
+  --animate-marquee-up: marquee-up 6s ease-in-out infinite;
+  --animate-marquee-down: marquee-down 6s ease-in-out infinite;
+  --animate-marquee-pulse: marquee-pulse 3s ease-in-out infinite;
 }
 
-body {
-  font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif;
-  color: #0f172a;
-  /* Soft colour blobs behind the frosted-glass UI */
-  background:
-    radial-gradient(38rem 38rem at 105% -8%, rgba(37, 99, 235, 0.20), transparent 60%),
-    radial-gradient(34rem 34rem at -8% 18%, rgba(99, 102, 241, 0.18), transparent 60%),
-    radial-gradient(30rem 30rem at 55% 118%, rgba(14, 165, 233, 0.16), transparent 60%),
-    linear-gradient(135deg, #eef2ff 0%, #f8fafc 50%, #eff6ff 100%);
-  background-attachment: fixed;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+:root {
+  /* Font stacks (previously injected by next/font). */
+  --font-rebels: "Rebels", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-roboto-mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --border: oklch(0.922 0 0);
+  --pop: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+
+  --success: oklch(0.7775 0.2447 144.9);
+  --destructive: oklch(0.577 0.245 27.325);
+  --warning: oklch(0.769 0.188 70.08);
+
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+  --gap: 2rem;
+  --sides: 1rem;
+  --header-mobile: 3.8rem;
 }
 
-@layer utilities {
-  /* Frosted glass surfaces */
-  .glass {
-    background-color: rgba(255, 255, 255, 0.55);
-    backdrop-filter: blur(16px) saturate(160%);
-    -webkit-backdrop-filter: blur(16px) saturate(160%);
-    border: 1px solid rgba(255, 255, 255, 0.6);
+.dark {
+  --background: oklch(0.2029 0.0037 345.62);
+  --foreground: oklch(0.9851 0 0);
+  --card: oklch(0.2029 0.0037 345.62);
+  --card-foreground: oklch(0.9851 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.4703 0.2364 263.19);
+  --primary-foreground: oklch(0.9851 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.2393 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.9851 0 0 / 5%);
+  --accent-foreground: oklch(0.985 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --pop: oklch(0.9851 0 0 / 2.5%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+
+  --success: oklch(0.7775 0.2447 144.9);
+  --warning: oklch(0.769 0.188 70.08);
+  --destructive: oklch(0.5961 0.2006 36.48);
+
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+
+  --sidebar: oklch(0.2029 0.0037 345.62);
+  --sidebar-foreground: oklch(0.9851 0 0);
+  --sidebar-primary: oklch(0.4703 0.2364 263.19);
+  --sidebar-primary-foreground: oklch(0.9851 0 0);
+  --sidebar-accent: oklch(0.9851 0 0 / 5%);
+  --sidebar-accent-hover: oklch(0.9851 0 0 / 10%);
+  --sidebar-accent-foreground: oklch(0.9851 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50 overscroll-none;
   }
-  .glass-strong {
-    background-color: rgba(255, 255, 255, 0.72);
-    backdrop-filter: blur(22px) saturate(170%);
-    -webkit-backdrop-filter: blur(22px) saturate(170%);
-    border: 1px solid rgba(255, 255, 255, 0.7);
+  body {
+    @apply bg-muted text-foreground font-mono;
   }
-  .glass-input {
-    background-color: rgba(255, 255, 255, 0.55);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-  }
-  /* Dark frosted sidebar — deep navy/indigo gradient over the light backdrop. */
-  .sidebar-dark {
-    background:
-      radial-gradient(26rem 20rem at 10% -5%, rgba(59, 130, 246, 0.28), transparent 60%),
-      linear-gradient(180deg, #131b31 0%, #0d1424 55%, #0a0f1d 100%);
-    backdrop-filter: blur(22px) saturate(160%);
-    -webkit-backdrop-filter: blur(22px) saturate(160%);
-    border-right: 1px solid rgba(255, 255, 255, 0.08);
-  }
-  /* Dark glass panel (e.g. login card frame on the grid backdrop). */
-  .glass-dark {
-    background-color: rgba(17, 24, 39, 0.65);
-    backdrop-filter: blur(20px) saturate(150%);
-    -webkit-backdrop-filter: blur(20px) saturate(150%);
-    border: 1px solid rgba(255, 255, 255, 0.10);
+  html,
+  body,
+  #root {
+    min-height: 100vh;
   }
 }
 
-/* ── Subtle motion ─────────────────────────────────────────────────────────── */
+.recharts-cartesian-grid-vertical :first-child,
+.recharts-cartesian-grid-vertical :last-child {
+  opacity: 0;
+}
+.recharts-default-tooltip {
+  border-radius: 0.75rem !important;
+}
+
+/* ─── Themed scrollbars ──────────────────────────────────────────────────────────
+ * Replace the light OS scrollbars (which stand out badly on the dark UI) with a
+ * thin, subtle bar tied to the theme tokens. Applies to every scroll container,
+ * including the horizontal scroll on wide tables. */
+* {
+  scrollbar-width: thin;                                      /* Firefox */
+  scrollbar-color: color-mix(in oklch, var(--foreground) 22%, transparent) transparent;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background-color: color-mix(in oklch, var(--foreground) 22%, transparent);
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklch, var(--foreground) 38%, transparent);
+}
+
+/* Responsive base font-size — the whole UI scales from rem units. */
+@media (min-width: 1028px) {
+  html { font-size: 0.7em; }
+}
+@media (min-width: 1240px) and (max-width: 1920px) {
+  html { font-size: 0.75em; }
+}
+@media (min-width: 1920px) {
+  html { font-size: 1em; }
+}
+@media (min-width: 2160px) {
+  html { font-size: 1.2em; }
+}
+
+/* ── Stat marquee animations ─────────────────────────────────────────────────── */
+@keyframes marquee-up {
+  0%   { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(0, -50%, 0); }
+}
+@keyframes marquee-down {
+  0%   { transform: translate3d(0, -50%, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+@keyframes marquee-pulse {
+  0%, 100% { opacity: 0.15; transform: scale(1) translateY(0); }
+  25%      { opacity: 0.4;  transform: scale(1.02) translateY(-1px); }
+  50%      { opacity: 0.8;  transform: scale(1.05) translateY(-2px); }
+  75%      { opacity: 0.6;  transform: scale(1.02) translateY(-1px); }
+}
+.group:hover .animate-marquee-pulse,
+.group:hover .animate-marquee-up,
+.group:hover .animate-marquee-down {
+  animation-play-state: paused;
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════
+ * PRESERVED FROM THE ORIGINAL CRM — functional, not decorative.
+ * The Excel-like Daily/Monthly sheets rely on this compact table density and the
+ * `.filters` control sizing. Keep these until the tables are re-styled per page.
+ * ════════════════════════════════════════════════════════════════════════════ */
+table {
+  font-size: 0.8125rem; /* 13px base for table text */
+}
+table td,
+table th {
+  padding-block: 0.1rem;
+  padding-inline: 1.5rem 0.25rem;
+  line-height: 1.2;
+  text-align: left;
+}
+table td :where(input, select, textarea) {
+  padding-block: 0.05rem;
+  padding-inline: 0;
+  border-radius: 0.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.2;
+  text-align: left;
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.filters :where(input, select, button) {
+  padding-block: 0.25rem;
+  padding-inline: 0.5rem;
+  font-size: 0.8125rem;
+  border-radius: 0.5rem;
+}
+.filters label > span {
+  margin-bottom: 0.1rem;
+  font-size: 0.7rem;
+}
+
+/* ─── Subtle motion (used by popovers, expandable rows, page transitions) ────── */
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
@@ -79,77 +301,6 @@ body {
 .animate-fade-in-up { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .animate-expand     { animation: expandRow 0.22s ease both; }
 
-/* A gentle, consistent easing on interactive surfaces across the app. */
-a, button, .nav-item, .glass, .glass-strong {
-  transition-property: background-color, border-color, color, box-shadow, transform, opacity;
-  transition-duration: 200ms;
-  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in, .animate-fade-in-up, .animate-expand { animation: none; }
-  a, button, .nav-item, .glass, .glass-strong { transition-duration: 0ms; }
-}
-
-/* Recharts: keep tooltips/cursors tidy on glass */
-.recharts-default-tooltip {
-  border-radius: 0.75rem !important;
-}
-
-/*
- * Global table styling (every page) — compact, Excel-like density.
- * These rules live outside any @layer, so they win over Tailwind's per-cell
- * utilities (px-*, py-*, text-*, rounded-*) without needing !important.
- *  - Tight cell padding and line-height pack more rows into the same height.
- *  - A slightly smaller base font keeps wide grids readable without wrapping.
- *  - Content is left-aligned with a small inset so it starts just off the edge.
- */
-table {
-  font-size: 0.8125rem;   /* 13px base for table text */
-}
-/*
- * Narrow columns (~50% less horizontal padding) and a tight vertical rhythm so
- * every table row lands at the same compact height as the Buyers Monthly Sheet.
- */
-table td,
-table th {
-  padding-block: 0.1rem;
-  /* Left-aligned, but a large left inset pushes content well toward the cell centre. */
-  padding-inline: 1.5rem 0.25rem;
-  line-height: 1.2;
-  text-align: left;
-}
-
-/*
- * Cell editors (inputs / selects / textareas) are the biggest row-height cost:
- * their default px-3 py-2 rounded-xl makes each editable row ~36px tall. Shrink
- * them to the cell for an Excel-like grid — and drop the box background/border so
- * editable cells read exactly like regular (read-only) cells.
- */
-table td :where(input, select, textarea) {
-  padding-block: 0.05rem;
-  padding-inline: 0;
-  border-radius: 0.25rem;
-  font-size: 0.8125rem;
-  line-height: 1.2;
-  text-align: left;
-  background-color: transparent;
-  border-color: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-}
-
-/*
- * Compact filtering sections — smaller controls, labels and radius so the
- * filter bars take far less vertical space. Add `filters` to the wrapper.
- */
-.filters :where(input, select, button) {
-  padding-block: 0.25rem;
-  padding-inline: 0.5rem;
-  font-size: 0.8125rem;
-  border-radius: 0.5rem;
-}
-.filters label > span {
-  margin-bottom: 0.1rem;
-  font-size: 0.7rem;
 }

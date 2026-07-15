@@ -2,7 +2,8 @@ import { useRef, useState } from 'react'
 import { api } from '../api/client'
 import { money, money2, num } from '../lib/format'
 import type { Buyer } from '../types'
-import { Input, cx } from './ui'
+import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 
 /**
  * "Monthly Sheet" of buyers (revenue side), matching the client layout:
@@ -28,11 +29,11 @@ export default function BuyersSheet({ buyers, onChanged }: { buyers: Buyer[]; on
   const maxDays = buyers.reduce((m, b) => Math.max(m, b.record_days), 0)
   const totalAvgPerDay = maxDays > 0 ? Math.round(totals.counted / maxDays) : 0
 
-  const headCls = 'px-3 py-2.5 text-center text-xs font-bold uppercase tracking-wide bg-[#1a3654] text-white'
+  const headCls = 'px-3 py-2.5 text-center text-xs font-bold uppercase tracking-wide bg-primary text-primary-foreground'
 
   return (
     <div className="overflow-x-auto rounded-t-2xl">
-      <table className="mx-auto w-[69.06%] min-w-138 table-fixed border-collapse text-sm [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white">
+      <table className="mx-auto w-[69.06%] min-w-138 table-fixed border-collapse text-sm [&_td]:border [&_td]:border-border [&_th]:border [&_th]:border-border">
         {/* No redistribution — reduced columns just shrink the table. Widths are
             the equal-share ratio (Sr No 0.6, Buyers/Rates 0.75, others 1.0),
             normalised to 100%. */}
@@ -58,17 +59,17 @@ export default function BuyersSheet({ buyers, onChanged }: { buyers: Buyer[]; on
           {buyers.map((b, i) => <BuyerRow key={b.id} index={i + 1} buyer={b} onChanged={onChanged} />)}
         </tbody>
         <tfoot>
-          <tr className="bg-[#1a3654] font-bold text-white">
+          <tr className="bg-primary font-bold text-primary-foreground">
             <td className="px-3 py-2.5 text-center text-xs font-bold uppercase">Total</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(buyers.length)}</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.counted)}</td>
-            <td className="px-3 py-2.5 text-center text-white/70">—</td>
+            <td className="px-3 py-2.5 text-center text-primary-foreground/70">—</td>
             <td className="px-3 py-2.5 text-center tabular-nums" title="Average rate = Amount Received ÷ Total Calls Bought">{money2(avgRate)}</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{money(totals.revenue)}</td>
           </tr>
         </tfoot>
       </table>
-      <div className="mt-2 inline-block rounded bg-[#1a3654] px-3 py-1.5 text-sm font-semibold text-white">
+      <div className="mt-2 inline-block rounded bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
         Total Average Calls a Day - {num(totalAvgPerDay)}
       </div>
     </div>
@@ -76,7 +77,7 @@ export default function BuyersSheet({ buyers, onChanged }: { buyers: Buyer[]; on
 }
 
 const td = 'px-2 py-1'
-const roCell = cx(td, 'text-center tabular-nums text-[#0f172a]')
+const roCell = cn(td, 'text-center tabular-nums text-foreground')
 
 // ── Existing buyer row ──────────────────────────────────────────────────────────
 function BuyerRow({ index, buyer, onChanged }: { index: number; buyer: Buyer; onChanged: () => void }) {
@@ -105,13 +106,13 @@ function BuyerRow({ index, buyer, onChanged }: { index: number; buyer: Buyer; on
   }, 0)
 
   return (
-    <tr ref={rowRef} onBlur={onRowBlur} className="bg-[#d4e9f2] text-[#0f172a]">
+    <tr ref={rowRef} onBlur={onRowBlur} className="bg-card text-foreground">
       <td className={roCell}>{num(index)}</td>
       <td className={td}><Input value={code} onChange={(e) => setCode(e.target.value)} /></td>
       <td className={roCell}>{num(buyer.counted)}</td>
       <td className={roCell}>{avgPerDay === null ? 'N/A' : num(avgPerDay)}</td>
       <td className={td}><Input type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} className="text-right" /></td>
-      <td className={cx(roCell, 'font-bold')}>{money(amount)}</td>
+      <td className={cn(roCell, 'font-bold')}>{money(amount)}</td>
     </tr>
   )
 }
