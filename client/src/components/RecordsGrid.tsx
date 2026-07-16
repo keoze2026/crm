@@ -73,6 +73,25 @@ export default function RecordsGrid({
           horizontally instead (matching Users / System Logs). Campaigns carry an
           extra Source column + Status select, so they need a wider floor. */}
       <table className={cx('w-full text-sm', isBuyer ? 'min-w-[760px]' : 'min-w-[1020px] table-fixed', navy && 'border-collapse [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white')}>
+        {/* Campaign grid only: without a colgroup the fixed layout splits all ten
+            columns evenly (10% each). Traffic Source holds the longest values, so it
+            takes 12%; the extra 2% comes out of the trailing actions column, which
+            only carries an icon button — every data column keeps its width and the
+            table's total stays at 100%. */}
+        {!isBuyer && (
+          <colgroup>
+            <col className="w-[10%]" />{/* Camp */}
+            <col className="w-[12%]" />{/* Traffic Source */}
+            <col className="w-[10%]" />{/* Answered */}
+            <col className="w-[10%]" />{/* Missed */}
+            <col className="w-[10%]" />{/* Replacement */}
+            <col className="w-[10%]" />{/* Counted */}
+            <col className="w-[10%]" />{/* Rate */}
+            <col className="w-[10%]" />{/* Total */}
+            <col className="w-[10%]" />{/* Status */}
+            <col className="w-[8%]" />{/* Actions */}
+          </colgroup>
+        )}
         <thead>
           <tr>
             <th className={headCls}>{isBuyer ? 'Destination' : 'Camp'}</th>

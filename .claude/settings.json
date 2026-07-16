@@ -60,7 +60,14 @@
       "Bash(curl -s -X DELETE http://localhost:8000/api/portal-expenses/1)",
       "Bash(curl -s \"http://localhost:8000/api/portal-expenses?month=2026-07\")",
       "Bash(php -r '$d=json_decode\\(file_get_contents\\(\"php://stdin\"\\),true\\); printf\\(\"%-18s %12s %10s %8s %10s %12s\\\\n\",\"NAME\",\"VOICE\",\"REJECT\",\"RENT\",\"PAYOUT\",\"TOTAL\"\\); foreach\\($d as $r\\){printf\\(\"%-18s %12s %10s %8s %10s %12s\\\\n\",$r[\"name\"],number_format\\($r[\"voice_minutes\"],2\\),number_format\\($r[\"rejected_calls\"],3\\),number_format\\($r[\"rent_values\"],0\\),number_format\\($r[\"payout_expenses\"],2\\),number_format\\($r[\"total_amount\"],2\\)\\);}')",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(git show *)",
+      "Bash(git diff *)",
+      "Bash(xargs -0 git rm -f -q --)",
+      "Bash(grep -nA6 \"\\\\.glass\")",
+      "Bash(grep -A6 \"MonthSelector.tsx$\")",
+      "Bash(bc)",
+      "Bash(sed -n '/{!isBuyer && \\(/,/<\\\\/colgroup>/p' client/src/components/RecordsGrid.tsx)"
     ],
     "additionalDirectories": [
       "C:\\Users\\hp 290 g4\\Desktop\\Dev Projects\\CRM\\client",
