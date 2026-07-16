@@ -34,9 +34,9 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <RequirePage page="dashboard"><Dashboard /></RequirePage> },
           { path: 'records', element: <Records /> },
-          { path: 'portal-expenses', element: <PortalExpenses /> },
           { path: 'buyers', element: <RequirePage page="buyers"><Buyers /></RequirePage> },
           { path: 'campaigns', element: <RequirePage page="campaigns"><Campaigns /></RequirePage> },
+          { path: 'portal-expenses', element: <PortalExpenses /> },
           { path: 'complete-report', element: <RequirePage page="complete-report"><CompleteReportPage /></RequirePage> },
           { path: 'attendance', element: <RequirePage page="attendance"><Attendance /></RequirePage> },
           { path: 'users', element: <RequirePage page="users"><Users /></RequirePage> },

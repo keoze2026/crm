@@ -1,8 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { daysAgo, today } from '../lib/format'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { Button, cx } from './ui'
 
 export interface Range {
   from: string
@@ -55,18 +54,18 @@ function Calendar({ year, month, selecting, from, to, hover, onDayClick, onDayHo
     <div className="select-none">
       {/* Month nav */}
       <div className="mb-3 flex items-center justify-between">
-        <button onClick={onPrev} className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground">
+        <button onClick={onPrev} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <span className="text-sm font-semibold text-foreground">{MONTHS[month]} {year}</span>
-        <button onClick={onNext} className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground">
+        <span className="text-sm font-semibold text-slate-800">{MONTHS[month]} {year}</span>
+        <button onClick={onNext} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
 
       {/* Day headers */}
       <div className="mb-1 grid grid-cols-7 text-center">
-        {DAYS.map((d) => <div key={d} className="py-1 text-[10px] font-semibold tracking-wide text-muted-foreground">{d}</div>)}
+        {DAYS.map((d) => <div key={d} className="py-1 text-[10px] font-semibold tracking-wide text-slate-400">{d}</div>)}
       </div>
 
       {/* Day cells */}
@@ -83,14 +82,14 @@ function Calendar({ year, month, selecting, from, to, hover, onDayClick, onDayHo
           else if (fromD && hoverD && selecting === 'to') inRange = isBetween(d, fromD, hoverD)
           return (
             <button key={idx} onClick={() => onDayClick(iso)} onMouseEnter={() => onDayHover(iso)}
-              className={cn(
+              className={cx(
                 'flex h-9 w-full items-center justify-center text-sm transition-colors',
-                inRange  && 'bg-primary/15 text-foreground',
-                isFrom   && 'rounded-l-full bg-primary text-primary-foreground hover:bg-primary/90',
-                isTo     && 'rounded-r-full bg-primary text-primary-foreground hover:bg-primary/90',
+                inRange  && 'bg-blue-50 text-blue-700',
+                isFrom   && 'rounded-l-full bg-blue-600 text-white hover:bg-blue-700',
+                isTo     && 'rounded-r-full bg-blue-600 text-white hover:bg-blue-700',
                 isFrom && isTo && 'rounded-full',
-                !isFrom && !isTo && !inRange && 'rounded-full text-foreground hover:bg-accent',
-                isToday && !isFrom && !isTo && 'font-bold text-primary',
+                !isFrom && !isTo && !inRange && 'rounded-full text-slate-700 hover:bg-slate-100',
+                isToday && !isFrom && !isTo && 'font-bold text-blue-600',
               )}>
               {day}
             </button>
@@ -204,7 +203,7 @@ export function DateRangeControl({ value, onChange }: { value: Range; onChange: 
   const dropdown = (
     <div
       data-datepicker
-      className="overflow-y-auto rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl"
+      className="overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
       style={{ position: 'absolute', top: dropPos.top, left: dropPos.left, width: dropPos.width, maxHeight: 'calc(100vh - 16px)', zIndex: 9999 }}
     >
       <div className="p-4">
@@ -212,24 +211,24 @@ export function DateRangeControl({ value, onChange }: { value: Range; onChange: 
         <div className="relative mb-4">
           <button
             onClick={() => setPresetOpen((o) => !o)}
-            className="flex w-full items-center justify-between rounded-xl border border-border bg-accent px-3 py-2 text-sm font-medium text-foreground hover:bg-accent/70"
+            className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
           >
             <span>{activePreset?.label ?? 'Custom range'}</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-              className={cn('transition-transform', presetOpen && 'rotate-180')}>
+              className={cx('transition-transform', presetOpen && 'rotate-180')}>
               <polyline points="6 9 12 15 18 9"/>
             </svg>
           </button>
           {presetOpen && (
-            <div className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-xl border border-border bg-popover shadow-lg">
+            <div className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
               {PRESETS.map((p) => {
                 const r = p.range()
                 const active = r.from === draft.from && r.to === draft.to
                 return (
                   <button key={p.label} onClick={() => handlePreset(r)}
-                    className={cn(
+                    className={cx(
                       'w-full px-3 py-2 text-left text-sm transition-colors',
-                      active ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-accent',
+                      active ? 'bg-blue-600 text-white' : 'text-slate-700 hover:bg-slate-50',
                     )}>
                     {p.label}
                   </button>
@@ -249,16 +248,16 @@ export function DateRangeControl({ value, onChange }: { value: Range; onChange: 
         />
 
         {/* Hint */}
-        <p className="mt-2 text-center text-[11px] text-muted-foreground">
+        <p className="mt-2 text-center text-[11px] text-slate-400">
           {selecting === 'from'
             ? 'Click a day to start. Click the same day twice for a single day.'
             : draft.from
-              ? <>Click end date — or <button className="text-primary hover:underline" onClick={() => { onChange({ from: draft.from, to: draft.from }); setOpen(false); setPresetOpen(false); setSelecting('from') }}>use {draft.from} only</button></>
+              ? <>Click end date — or <button className="text-blue-500 hover:underline" onClick={() => { onChange({ from: draft.from, to: draft.from }); setOpen(false); setPresetOpen(false); setSelecting('from') }}>use {draft.from} only</button></>
               : 'Click a day to start.'}
         </p>
 
         {/* Footer */}
-        <div className="mt-3 flex items-center justify-end gap-2 border-t border-border pt-3">
+        <div className="mt-3 flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
           <Button variant="secondary" onClick={handleCancel}>Cancel</Button>
           <Button onClick={handleApply} disabled={!draft.from}>Apply</Button>
         </div>
@@ -271,14 +270,14 @@ export function DateRangeControl({ value, onChange }: { value: Range; onChange: 
       <button
         ref={triggerRef}
         onClick={() => { setDraft(value); setOpen((o) => !o) }}
-        className="flex items-center gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm font-medium text-foreground hover:bg-accent/50"
+        className="glass-input flex items-center gap-2 rounded-xl border border-white/70 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-white/70"
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
         </svg>
         {triggerLabel}
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-          className={cn('transition-transform', open && 'rotate-180')}>
+          className={cx('transition-transform', open && 'rotate-180')}>
           <polyline points="6 9 12 15 18 9"/>
         </svg>
       </button>

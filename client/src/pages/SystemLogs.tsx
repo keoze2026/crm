@@ -1,25 +1,12 @@
 import { Fragment, useState } from 'react'
-import { ScrollText, Download, Trash2 } from 'lucide-react'
 import { api } from '../api/client'
 import { DateRangeControl, type Range } from '../components/DateRange'
-import DashboardPageLayout from '@/components/dashboard/page-layout'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Spinner } from '@/components/ui/spinner'
+import { PageHeader } from '../components/Layout'
+import { Badge, Button, Card, EmptyState, Input, Select, Spinner } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
 import type { AuditFilters, AuditLog } from '../types'
 
 const PAGE = 50
-
-const selectCls =
-  'rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]'
-
-type BadgeVariant = 'secondary' | 'outline-success' | 'outline-warning' | 'outline-destructive'
-const STATUS_VARIANT: Record<'red' | 'amber' | 'green' | 'slate', BadgeVariant> = {
-  red: 'outline-destructive', amber: 'outline-warning', green: 'outline-success', slate: 'secondary',
-}
 
 /** Admin-only audit trail: who did what, when. Rows expand to show the full change detail. */
 export default function SystemLogs() {
@@ -65,78 +52,83 @@ export default function SystemLogs() {
   }
 
   return (
-    <DashboardPageLayout header={{ title: 'System Logs', icon: ScrollText }}>
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-end gap-2">
+    <div>
+      <PageHeader title="System Logs">
         <DateRangeControl value={range} onChange={resetAndSet(setRange)} />
-        <select value={action} onChange={(e) => resetAndSet(setAction)(e.target.value)} className={selectCls}>
+        <Select value={action} onChange={(e) => resetAndSet(setAction)(e.target.value)} className="w-40">
           <option value="">All actions</option>
           {(actions.data ?? []).map((a) => <option key={a} value={a}>{a}</option>)}
-        </select>
-        <Input placeholder="Search user, action, path…" value={q}
-          onChange={(e) => resetAndSet(setQ)(e.target.value)} className="w-full sm:w-52" />
-        <div className="ml-auto flex gap-2">
-          <a href={api.auditExportUrl(filters)}>
-            <Button variant="secondary"><Download className="size-4" /> Download</Button>
-          </a>
-          <Button variant="destructive" onClick={clearAll} disabled={busy || rows.length === 0}>
-            <Trash2 className="size-4" /> Clear
-          </Button>
+        </Select>
+        <div className="w-full sm:w-52">
+          <Input placeholder="Search user, action, path…" value={q}
+            onChange={(e) => resetAndSet(setQ)(e.target.value)} />
         </div>
-      </div>
+        <a href={api.auditExportUrl(filters)}>
+          <Button variant="secondary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            Download
+          </Button>
+        </a>
+        <Button variant="danger" onClick={clearAll} disabled={busy || rows.length === 0}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+          </svg>
+          Clear
+        </Button>
+      </PageHeader>
 
-      <Card>
-        <CardContent className="overflow-hidden p-0">
-          {logs.loading ? (
-            <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
-          ) : logs.error ? (
-            <p className="py-10 text-center text-sm text-destructive">{logs.error}</p>
-          ) : rows.length === 0 ? (
-            <p className="py-16 text-center text-sm text-muted-foreground uppercase">No audit events match these filters.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[860px] text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    <th className="px-4 py-3 w-8"></th>
-                    <th className="px-4 py-3">Time</th>
-                    <th className="px-4 py-3">User</th>
-                    <th className="px-4 py-3">Action</th>
-                    <th className="px-4 py-3">Entity</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => (
-                    <LogRow
-                      key={r.id}
-                      row={r}
-                      open={expanded === r.id}
-                      onToggle={() => setExpanded((id) => (id === r.id ? null : r.id))}
-                      onDelete={() => deleteOne(r.id)}
-                      busy={busy}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+      <Card className="overflow-hidden">
+        {logs.loading ? (
+          <div className="flex justify-center py-16"><Spinner className="h-6 w-6" /></div>
+        ) : logs.error ? (
+          <p className="py-10 text-center text-sm text-red-600">{logs.error}</p>
+        ) : rows.length === 0 ? (
+          <EmptyState message="No audit events match these filters." />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] text-sm">
+              <thead>
+                <tr className="border-b border-white/50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <th className="px-4 py-3 w-8"></th>
+                  <th className="px-4 py-3">Time</th>
+                  <th className="px-4 py-3">User</th>
+                  <th className="px-4 py-3">Action</th>
+                  <th className="px-4 py-3">Entity</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <LogRow
+                    key={r.id}
+                    row={r}
+                    open={expanded === r.id}
+                    onToggle={() => setExpanded((id) => (id === r.id ? null : r.id))}
+                    onDelete={() => deleteOne(r.id)}
+                    busy={busy}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-          {rows.length > 0 && (
-            <div className="flex items-center justify-between border-t border-border px-4 py-3 text-sm text-muted-foreground">
-              <span>{offset + 1}–{Math.min(offset + PAGE, total)} of {total}</span>
-              <div className="flex gap-2">
-                <Button variant="secondary" size="sm" disabled={offset === 0}
-                  onClick={() => { setOffset((o) => Math.max(0, o - PAGE)); setExpanded(null) }}>Previous</Button>
-                <Button variant="secondary" size="sm" disabled={offset + PAGE >= total}
-                  onClick={() => { setOffset((o) => o + PAGE); setExpanded(null) }}>Next</Button>
-              </div>
+        {rows.length > 0 && (
+          <div className="flex items-center justify-between border-t border-white/50 px-4 py-3 text-sm text-slate-500">
+            <span>{offset + 1}–{Math.min(offset + PAGE, total)} of {total}</span>
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" disabled={offset === 0}
+                onClick={() => { setOffset((o) => Math.max(0, o - PAGE)); setExpanded(null) }}>Previous</Button>
+              <Button variant="secondary" size="sm" disabled={offset + PAGE >= total}
+                onClick={() => { setOffset((o) => o + PAGE); setExpanded(null) }}>Next</Button>
             </div>
-          )}
-        </CardContent>
+          </div>
+        )}
       </Card>
-    </DashboardPageLayout>
+    </div>
   )
 }
 
@@ -150,36 +142,38 @@ function LogRow({ row, open, onToggle, onDelete, busy }: {
     <Fragment>
       <tr
         onClick={onToggle}
-        className={'cursor-pointer border-b border-border last:border-0 transition-colors ' + (open ? 'bg-accent/60' : 'hover:bg-accent/50')}
+        className={cxRow(open)}
       >
-        <td className="px-4 py-2.5 text-muted-foreground">
+        <td className="px-4 py-2.5 text-slate-400">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
             className={open ? 'rotate-90 transition-transform' : 'transition-transform'}>
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </td>
-        <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">{fmtTime(row.created_at)}</td>
-        <td className="px-4 py-2.5 font-medium text-foreground">{row.user_email ?? '—'}</td>
-        <td className="px-4 py-2.5"><span className="font-mono text-xs text-foreground">{row.action}</span></td>
-        <td className="px-4 py-2.5 text-muted-foreground">
+        <td className="whitespace-nowrap px-4 py-2.5 text-slate-500">{fmtTime(row.created_at)}</td>
+        <td className="px-4 py-2.5 font-medium text-slate-700">{row.user_email ?? '—'}</td>
+        <td className="px-4 py-2.5"><span className="font-mono text-xs text-slate-700">{row.action}</span></td>
+        <td className="px-4 py-2.5 text-slate-600">
           {row.entity_type ? `${row.entity_type}${row.entity_id != null ? ` #${row.entity_id}` : ''}` : '—'}
         </td>
-        <td className="px-4 py-2.5">{status ? <Badge variant={STATUS_VARIANT[color]}>{status}</Badge> : '—'}</td>
+        <td className="px-4 py-2.5">{status ? <Badge color={color}>{status}</Badge> : '—'}</td>
         <td className="px-4 py-2.5 text-right">
           <button
             onClick={(e) => { e.stopPropagation(); onDelete() }}
             disabled={busy}
             title="Delete this entry"
             aria-label="Delete this entry"
-            className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
           >
-            <Trash2 className="size-4" />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            </svg>
           </button>
         </td>
       </tr>
       {open && (
         <tr>
-          <td colSpan={7} className="bg-accent/40 px-6 py-4">
+          <td colSpan={7} className="bg-slate-50/60 px-6 py-4">
             <div className="animate-expand">
               <Detail row={row} />
             </div>
@@ -198,7 +192,7 @@ function Detail({ row }: { row: AuditLog }) {
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-foreground">{summary}</p>
+      <p className="text-sm text-slate-700">{summary}</p>
 
       <div className="grid grid-cols-1 gap-x-8 gap-y-1.5 sm:grid-cols-2">
         <Meta label="When" value={new Date(row.created_at).toLocaleString()} />
@@ -211,14 +205,14 @@ function Detail({ row }: { row: AuditLog }) {
 
       {entries.length > 0 && (
         <div>
-          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Values</div>
-          <div className="overflow-hidden rounded-lg border border-border bg-card">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Values</div>
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
             <table className="w-full text-sm">
               <tbody>
                 {entries.map(([k, v]) => (
-                  <tr key={k} className="border-b border-border last:border-0">
-                    <td className="w-40 px-3 py-1.5 font-medium text-muted-foreground">{k}</td>
-                    <td className="px-3 py-1.5 font-mono text-xs text-foreground break-all">{renderValue(v)}</td>
+                  <tr key={k} className="border-b border-slate-100 last:border-0">
+                    <td className="w-40 px-3 py-1.5 font-medium text-slate-500">{k}</td>
+                    <td className="px-3 py-1.5 font-mono text-xs text-slate-700 break-all">{renderValue(v)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -234,13 +228,17 @@ function Detail({ row }: { row: AuditLog }) {
 function Meta({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex items-baseline gap-2 text-sm">
-      <span className="shrink-0 text-muted-foreground">{label}:</span>
-      <span className={mono ? 'font-mono text-xs text-foreground break-all' : 'text-foreground'}>{value}</span>
+      <span className="shrink-0 text-slate-400">{label}:</span>
+      <span className={mono ? 'font-mono text-xs text-slate-700 break-all' : 'text-slate-700'}>{value}</span>
     </div>
   )
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const cxRow = (open: boolean) =>
+  'cursor-pointer border-b border-white/30 last:border-0 transition-colors ' +
+  (open ? 'bg-white/50' : 'hover:bg-white/40')
 
 /** A human sentence describing what happened. */
 function summarize(row: AuditLog): string {

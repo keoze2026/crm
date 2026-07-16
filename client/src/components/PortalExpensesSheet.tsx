@@ -2,8 +2,7 @@ import { useRef, useState } from 'react'
 import { api } from '../api/client'
 import { money2 } from '../lib/format'
 import type { PortalExpense } from '../types'
-import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
+import { Input, cx } from './ui'
 
 /** Number with thousands separators and up to 3 decimals (e.g. 157.785). */
 const numFmt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 3 })
@@ -34,11 +33,9 @@ export default function PortalExpensesSheet({
     { vm: 0, rc: 0, rv: 0, payout: 0, total: 0 },
   )
 
-  const headCls = 'px-3 py-2.5 text-center text-xs font-bold uppercase tracking-wide bg-primary text-primary-foreground'
-
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-240 border-collapse text-sm [&_td]:border [&_td]:border-border [&_th]:border [&_th]:border-border">
+      <table className="w-full min-w-240 border-collapse text-sm [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white">
         <colgroup>
           <col style={{ width: '5%' }} />
           <col style={{ width: '17%' }} />
@@ -51,7 +48,7 @@ export default function PortalExpensesSheet({
           <col style={{ width: '4%' }} />
         </colgroup>
         <thead>
-          <tr>
+          <tr className="bg-[#1a3654] text-center text-xs font-bold uppercase tracking-wide text-white">
             <th className={headCls}>Sr. No.</th>
             <th className={headCls}>Name</th>
             <th className={headCls}>Voice Minutes</th>
@@ -70,7 +67,7 @@ export default function PortalExpensesSheet({
           <AddRow month={month} onChanged={onChanged} />
         </tbody>
         <tfoot>
-          <tr className="bg-primary font-bold text-primary-foreground">
+          <tr className="bg-[#1a3654] font-bold text-white">
             <td className="px-3 py-2.5 text-center text-xs font-bold uppercase" colSpan={2}>Total</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{fmtNum(totals.vm)}</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{fmtNum(totals.rc)}</td>
@@ -86,8 +83,11 @@ export default function PortalExpensesSheet({
   )
 }
 
-const td = 'px-2 py-1'
-const roCell = cn(td, 'text-center tabular-nums text-foreground')
+const headCls = 'px-3 py-2.5 text-center text-xs font-bold uppercase tracking-wide'
+const cellCls = 'px-2 py-1'
+const roCell = cx(cellCls, 'text-center tabular-nums')
+/** Sr. No. / index column — the darker label band, matching the report tables. */
+const idxCell = cx(cellCls, 'bg-[#bfdeeb] text-center font-bold text-[#1a3654]')
 
 // ── Existing expense row ────────────────────────────────────────────────────────
 function ExpenseRow({
@@ -160,26 +160,26 @@ function ExpenseRow({
   }, 0)
 
   return (
-    <tr ref={rowRef} onBlur={onRowBlur} className="bg-card text-foreground">
-      <td className={roCell}>{index}</td>
-      <td className={td}><Input value={name} onChange={(e) => setName(e.target.value)} /></td>
-      <td className={td}>
+    <tr ref={rowRef} onBlur={onRowBlur} className="bg-[#d4e9f2] text-[#0f172a]">
+      <td className={idxCell}>{index}</td>
+      <td className={cellCls}><Input value={name} onChange={(e) => setName(e.target.value)} /></td>
+      <td className={cellCls}>
         <Input type="number" min="0" step="0.0001" value={vm} className="text-right"
           onChange={(e) => editComponent(setVm, e.target.value, { vm: Number(e.target.value) || 0, rc: nRc, rv: nRv, payout: nPayout })} />
       </td>
-      <td className={td}>
+      <td className={cellCls}>
         <Input type="number" min="0" step="0.0001" value={rc} className="text-right"
           onChange={(e) => editComponent(setRc, e.target.value, { vm: nVm, rc: Number(e.target.value) || 0, rv: nRv, payout: nPayout })} />
       </td>
-      <td className={td}>
+      <td className={cellCls}>
         <Input type="number" min="0" step="0.0001" value={rv} className="text-right"
           onChange={(e) => editComponent(setRv, e.target.value, { vm: nVm, rc: nRc, rv: Number(e.target.value) || 0, payout: nPayout })} />
       </td>
-      <td className={td}>
+      <td className={cellCls}>
         <Input type="number" min="0" step="0.01" value={payout} className="text-right"
           onChange={(e) => editComponent(setPayout, e.target.value, { vm: nVm, rc: nRc, rv: nRv, payout: Number(e.target.value) || 0 })} />
       </td>
-      <td className={td}>
+      <td className={cellCls}>
         <Input type="number" min="0" step="0.01" value={total} className="text-right font-semibold"
           title="Defaults to the sum of the component columns; edit to set a flat amount"
           onChange={(e) => {
@@ -187,12 +187,12 @@ function ExpenseRow({
             setOverridden(Math.abs((Number(e.target.value) || 0) - sumComponents(nVm, nRc, nRv, nPayout)) > 0.005)
           }} />
       </td>
-      <td className={cn(roCell, 'font-semibold')}>{pctOfTotal.toFixed(1)}</td>
+      <td className={cx(roCell, 'font-semibold')}>{pctOfTotal.toFixed(1)}</td>
       <td className="p-0 text-center">
         <button onClick={remove} title="Delete row"
-          className="mx-auto flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+          className="mx-auto flex h-7 w-7 items-center justify-center rounded text-slate-500 transition-colors hover:bg-red-100 hover:text-red-600">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
           </svg>
         </button>
       </td>
@@ -241,18 +241,18 @@ function AddRow({ month, onChanged }: { month: string; onChanged: () => void }) 
   const onKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter') add() }
 
   return (
-    <tr className="bg-accent/40 text-foreground" onKeyDown={onKeyDown}>
-      <td className={cn(roCell, 'text-muted-foreground')}>+</td>
-      <td className={td}><Input value={name} placeholder="Add provider…" onChange={(e) => setName(e.target.value)} /></td>
-      <td className={td}><Input type="number" min="0" step="0.0001" value={vm} placeholder="0" className="text-right" onChange={(e) => setVm(e.target.value)} /></td>
-      <td className={td}><Input type="number" min="0" step="0.0001" value={rc} placeholder="0" className="text-right" onChange={(e) => setRc(e.target.value)} /></td>
-      <td className={td}><Input type="number" min="0" step="0.0001" value={rv} placeholder="0" className="text-right" onChange={(e) => setRv(e.target.value)} /></td>
-      <td className={td}><Input type="number" min="0" step="0.01" value={payout} placeholder="0" className="text-right" onChange={(e) => setPayout(e.target.value)} /></td>
-      <td className={td}><Input type="number" min="0" step="0.01" value={total} placeholder={componentSum ? fmtNum(componentSum) : '0'} className="text-right" onChange={(e) => setTotal(e.target.value)} /></td>
+    <tr className="bg-[#eaf5fa] text-[#0f172a]" onKeyDown={onKeyDown}>
+      <td className={cx(idxCell, 'text-slate-400')}>+</td>
+      <td className={cellCls}><Input value={name} placeholder="Add provider…" onChange={(e) => setName(e.target.value)} /></td>
+      <td className={cellCls}><Input type="number" min="0" step="0.0001" value={vm} placeholder="0" className="text-right" onChange={(e) => setVm(e.target.value)} /></td>
+      <td className={cellCls}><Input type="number" min="0" step="0.0001" value={rc} placeholder="0" className="text-right" onChange={(e) => setRc(e.target.value)} /></td>
+      <td className={cellCls}><Input type="number" min="0" step="0.0001" value={rv} placeholder="0" className="text-right" onChange={(e) => setRv(e.target.value)} /></td>
+      <td className={cellCls}><Input type="number" min="0" step="0.01" value={payout} placeholder="0" className="text-right" onChange={(e) => setPayout(e.target.value)} /></td>
+      <td className={cellCls}><Input type="number" min="0" step="0.01" value={total} placeholder={componentSum ? fmtNum(componentSum) : '0'} className="text-right" onChange={(e) => setTotal(e.target.value)} /></td>
       <td className={roCell}>—</td>
       <td className="p-0 text-center">
         <button onClick={add} disabled={name.trim() === ''} title="Add row"
-          className="mx-auto flex h-7 w-7 items-center justify-center rounded text-primary hover:bg-primary/10 disabled:opacity-30">
+          className="mx-auto flex h-7 w-7 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-100 disabled:opacity-30 disabled:hover:bg-transparent">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M12 5v14M5 12h14" />
           </svg>

@@ -11,13 +11,8 @@ import {
 import { api, fmtAttendanceTime } from '../api/client'
 import { useAsync } from '../lib/useAsync'
 import type { AttendanceDay, AttendanceStaff } from '../types'
-import DashboardPageLayout from '@/components/dashboard/page-layout'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Spinner } from '@/components/ui/spinner'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { cn } from '@/lib/utils'
-import { Clock } from 'lucide-react'
+import { PageHeader } from '../components/Layout'
+import { Button, Card, CardHeader, SegmentedTabs, Spinner, cx } from '../components/ui'
 import type { Range } from '../components/DateRange'
 import { fileDateRange } from '../lib/format'
 import { saveXlsx } from '../lib/xlsx'
@@ -154,36 +149,36 @@ function Avatar({ name, size = 28 }: { name: string | null; size?: number }) {
 }
 
 function StatusBadge({ row }: { row: AttendanceDay }) {
-  if (!row.present) return <span className="text-muted-foreground text-xs">—</span>
-  if (row.still_in) return <span className="inline-flex items-center rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">Checked in</span>
-  return <span className="inline-flex items-center rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-muted-foreground">Checked out</span>
+  if (!row.present) return <span className="text-slate-400 text-xs">—</span>
+  if (row.still_in) return <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">Checked in</span>
+  return <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Checked out</span>
 }
 
 function BreakStatusBadge({ overMin }: { overMin: number }) {
-  if (overMin > 0) return <span className="inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold bg-destructive/10 text-destructive">OVER by {overMin}m</span>
-  return <span className="inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold bg-success/10 text-success">OK</span>
+  if (overMin > 0) return <span className="inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold bg-red-50 text-red-700">OVER by {overMin}m</span>
+  return <span className="inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-700">OK</span>
 }
 
 /** Status derived from raw timestamps — works for /days rows that lack present/still_in. */
 function DayStatus({ row }: { row: AttendanceDay }) {
-  if (row.login_at == null) return <span className="text-muted-foreground text-xs">—</span>
-  if (row.logout_at == null) return <span className="inline-flex items-center rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">No logout</span>
-  return <span className="inline-flex items-center rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-muted-foreground">Checked out</span>
+  if (row.login_at == null) return <span className="text-slate-400 text-xs">—</span>
+  if (row.logout_at == null) return <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">No logout</span>
+  return <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Checked out</span>
 }
 
 /** Glass KPI card matching the Dashboard look. */
 function MetricCard({ label, value, sub }: { label: string; value: ReactNode; sub?: string; accent?: string }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
+    <div className="glass rounded-2xl p-4 shadow-xl shadow-slate-900/5">
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
+      {sub && <p className="mt-0.5 text-xs text-slate-400">{sub}</p>}
     </div>
   )
 }
 
 function ChartLoading() {
-  return <div className="flex h-full items-center justify-center"><Spinner className="size-6" /></div>
+  return <div className="flex h-full items-center justify-center"><Spinner className="h-6 w-6" /></div>
 }
 
 /** Single-series bar-chart tooltip (matches the Dashboard tooltip style). */
@@ -196,25 +191,12 @@ function BarTooltip({ active, payload, label, unit, name }: {
 }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-lg border border-border bg-popover text-popover-foreground px-3 py-2 text-xs shadow-lg">
-      {label != null && <div className="mb-1 font-medium text-foreground">{label}</div>}
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-lg">
+      {label != null && <div className="mb-1 font-medium text-slate-700">{label}</div>}
       <div className="flex items-center gap-1.5">
-        <span className="text-muted-foreground">{name}:</span>
-        <span className="font-medium tabular-nums text-foreground">{payload[0].value}{unit}</span>
+        <span className="text-slate-500">{name}:</span>
+        <span className="font-medium tabular-nums text-slate-800">{payload[0].value}{unit}</span>
       </div>
-    </div>
-  )
-}
-
-/** Small inline card header used in place of the old CardHeader component. */
-function CardHead({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <h3 className="font-display text-foreground">{title}</h3>
-        {subtitle && <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>}
-      </div>
-      {action && <div className="shrink-0">{action}</div>}
     </div>
   )
 }
@@ -254,20 +236,23 @@ export default function Attendance() {
   }, [])
 
   return (
-    <DashboardPageLayout header={{ title: 'Attendance', icon: Clock, description: <span className="text-xs text-muted-foreground tabular-nums">{clock}</span> }}>
-      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
-        <TabsList>
-          {TABS.map((t) => <TabsTrigger key={t.id} value={t.id}>{t.icon}{t.label}</TabsTrigger>)}
-        </TabsList>
-      </Tabs>
+    <div>
+      <PageHeader title="Attendance" subtitle="Team check-in / check-out via Telegram bot">
+        <span className="text-xs text-slate-400 tabular-nums">{clock}</span>
+      </PageHeader>
+
+      {/* Sub-menu */}
+      <div className="mb-6">
+        <SegmentedTabs tabs={TABS} value={tab} onChange={setTab} />
+      </div>
 
       {tab === 'roster' ? <RosterView /> : tab === 'summary' ? <StaffSummaryView /> : <BreakReportsView />}
-    </DashboardPageLayout>
+    </div>
   )
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-//  Daily roster  (logic unchanged — restyled to the dark theme)
+//  Daily roster  (logic unchanged — restyled to the glass theme)
 // ════════════════════════════════════════════════════════════════════════════════
 
 const PER_PAGE = 15
@@ -333,13 +318,13 @@ function RosterView() {
   return (
     <div>
       {/* Status strip */}
-      <div className="mb-6 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-4 py-3">
-        <span className="mr-2 text-xs font-medium text-muted-foreground">Now online</span>
+      <div className="glass mb-6 flex flex-wrap items-center gap-2 rounded-2xl px-4 py-3 shadow-xl shadow-slate-900/5">
+        <span className="mr-2 text-xs font-medium text-slate-500">Now online</span>
         {(liveReq.data ?? []).length === 0
-          ? <span className="text-xs text-muted-foreground">Nobody checked in yet today</span>
+          ? <span className="text-xs text-slate-400">Nobody checked in yet today</span>
           : (liveReq.data ?? []).map((m: AttendanceDay) => (
-            <span key={m.user_id} className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-3 py-1 text-xs font-medium text-success">
-              <span className="h-1.5 w-1.5 rounded-full bg-success" />
+            <span key={m.user_id} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
               {m.staff_name || m.username || m.user_id}
             </span>
           ))
@@ -356,21 +341,21 @@ function RosterView() {
       {/* Alert cards */}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {/* Absent */}
-        <div className="rounded-lg border border-border bg-card overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/50">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Absent</p>
-              <p className="text-xs text-muted-foreground mt-0.5">No record on {date}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Absent</p>
+              <p className="text-xs text-slate-400 mt-0.5">No record on {date}</p>
             </div>
-            <span className="text-2xl font-semibold text-foreground">{absentMembers.length}</span>
+            <span className="text-2xl font-semibold text-slate-800">{absentMembers.length}</span>
           </div>
           <div className="px-4 py-3 min-h-12">
             {absentMembers.length === 0
-              ? <p className="text-xs text-success">✓ Full attendance</p>
+              ? <p className="text-xs text-emerald-600">✓ Full attendance</p>
               : <div className="flex flex-wrap gap-1.5">
                 {absentMembers.map((m: AttendanceStaff) => (
-                  <span key={m.user_id} className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive">
-                    <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                  <span key={m.user_id} className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
                     {m.staff_name || m.username || m.user_id}
                   </span>
                 ))}
@@ -380,24 +365,24 @@ function RosterView() {
         </div>
 
         {/* Break overages */}
-        <div className="rounded-lg border border-border bg-card overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/50">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Break overages</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Exceeded 60-min allowance</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Break overages</p>
+              <p className="text-xs text-slate-400 mt-0.5">Exceeded 60-min allowance</p>
             </div>
-            <span className="text-2xl font-semibold text-foreground">
+            <span className="text-2xl font-semibold text-slate-800">
               {overBreakReq.data?.rows?.length ?? 0}
             </span>
           </div>
           <div className="px-4 py-3 min-h-12">
             {(overBreakReq.data?.rows?.length ?? 0) === 0
-              ? <p className="text-xs text-success">✓ No overages</p>
+              ? <p className="text-xs text-emerald-600">✓ No overages</p>
               : <div className="flex flex-col gap-1.5">
                 {(overBreakReq.data?.rows ?? []).map((r, i) => (
                   <div key={i} className="flex items-center justify-between text-xs">
-                    <span className="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary">{r.staff_name || r.user_id}</span>
-                    <span className="text-primary">+{r.over_min}m</span>
+                    <span className="rounded-full bg-violet-50 px-2.5 py-1 font-medium text-violet-700">{r.staff_name || r.user_id}</span>
+                    <span className="text-violet-500">+{r.over_min}m</span>
                   </div>
                 ))}
               </div>
@@ -410,28 +395,28 @@ function RosterView() {
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <input
           type="date" value={date} onChange={(e) => setDate(e.target.value)}
-          className="rounded-md border border-input bg-transparent px-3 py-1.5 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="glass-input rounded-lg border border-white/70 px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
         />
         <input
           type="text" placeholder="Search name or username…" value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-52 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="glass-input w-52 rounded-lg border border-white/70 px-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
         />
         <button
           onClick={() => { setDate(todayEST()); setSearch('') }}
-          className="rounded-md border border-input bg-transparent px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent/50"
+          className="glass-input rounded-lg border border-white/70 px-3 py-1.5 text-sm text-slate-600 hover:bg-white/80"
         >
           Reset
         </button>
-        <span className="ml-auto text-xs text-muted-foreground">{filtered.length} records</span>
+        <span className="ml-auto text-xs text-slate-400">{filtered.length} records</span>
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-border bg-accent/40">
+              <tr className="border-b border-white/50 bg-white/40">
                 {[
                   ['Date', 'work_date'],
                   ['Username', 'username'],
@@ -452,9 +437,9 @@ function RosterView() {
                   <th
                     key={label as string}
                     onClick={() => key && handleSort(key as string)}
-                    className={cn(
-                      'whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground',
-                      key ? 'cursor-pointer hover:text-foreground select-none' : ''
+                    className={cx(
+                      'whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500',
+                      key ? 'cursor-pointer hover:text-slate-700 select-none' : ''
                     )}
                   >
                     {label as string}{key ? sa(key as string) : ''}
@@ -464,15 +449,15 @@ function RosterView() {
             </thead>
             <tbody>
               {rosterReq.loading ? (
-                <tr><td colSpan={15} className="py-12 text-center text-sm text-muted-foreground">Loading…</td></tr>
+                <tr><td colSpan={15} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
               ) : rosterReq.error ? (
-                <tr><td colSpan={15} className="py-12 text-center text-sm text-destructive">{rosterReq.error}</td></tr>
+                <tr><td colSpan={15} className="py-12 text-center text-sm text-red-500">{rosterReq.error}</td></tr>
               ) : pageSlice.length === 0 ? (
-                <tr><td colSpan={15} className="py-12 text-center text-sm text-muted-foreground">No records for {date}</td></tr>
+                <tr><td colSpan={15} className="py-12 text-center text-sm text-slate-400">No records for {date}</td></tr>
               ) : pageSlice.map((r, i) => (
-                <tr key={i} className="border-b border-border hover:bg-accent/50 transition-colors">
-                  <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums text-muted-foreground">{r.work_date}</td>
-                  <td className="px-3 py-2.5 text-xs font-medium text-foreground">{r.username || '—'}</td>
+                <tr key={i} className="border-b border-white/40 hover:bg-white/40 transition-colors">
+                  <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums text-slate-600">{r.work_date}</td>
+                  <td className="px-3 py-2.5 text-xs font-medium text-slate-700">{r.username || '—'}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2">
                       <Avatar name={r.staff_name || r.username} size={24} />
@@ -480,20 +465,20 @@ function RosterView() {
                     </div>
                   </td>
                   <td className="px-3 py-2.5 text-center"><ActiveBadge active={onlineIds.has(r.user_id)} /></td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums text-muted-foreground">{r.user_id}</td>
+                  <td className="px-3 py-2.5 text-xs tabular-nums text-slate-400">{r.user_id}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums">{fmtAttendanceTime(r.login_at)}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums">{fmtAttendanceTime(r.logout_at)}</td>
                   <td className="px-3 py-2.5 text-xs tabular-nums">{r.hours != null ? r.hours : '—'}</td>
-                  <td className={cn('px-3 py-2.5 text-xs tabular-nums', r.net_hours != null && r.net_hours < 0 ? 'text-destructive' : 'text-foreground')}>
+                  <td className={cx('px-3 py-2.5 text-xs tabular-nums', r.net_hours != null && r.net_hours < 0 ? 'text-red-600' : 'text-slate-700')}>
                     {r.net_hours != null ? r.net_hours : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-xs text-center tabular-nums">{r.break_count}</td>
                   <td className="px-3 py-2.5 text-xs text-center tabular-nums">{r.break_min}</td>
-                  <td className={cn('px-3 py-2.5 text-xs text-center tabular-nums', r.over_break_min > 0 ? 'text-destructive' : 'text-foreground')}>
+                  <td className={cx('px-3 py-2.5 text-xs text-center tabular-nums', r.over_break_min > 0 ? 'text-red-600' : 'text-slate-700')}>
                     {r.over_break_min}
                   </td>
                   <td className="px-3 py-2.5"><BreakStatusBadge overMin={r.over_break_min} /></td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-xs text-muted-foreground">{r.break_detail || '—'}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-600">{r.break_detail || '—'}</td>
                   <td className="px-3 py-2.5"><StatusBadge row={r} /></td>
                 </tr>
               ))}
@@ -502,7 +487,7 @@ function RosterView() {
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between border-t border-border px-4 py-3 text-sm text-muted-foreground">
+        <div className="flex items-center justify-between border-t border-white/50 px-4 py-3 text-sm text-slate-500">
           <span>
             {filtered.length === 0 ? 'No records'
               : `Showing ${page * PER_PAGE + 1}–${Math.min(page * PER_PAGE + PER_PAGE, filtered.length)} of ${filtered.length}`}
@@ -510,12 +495,12 @@ function RosterView() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage((p) => p - 1)} disabled={page === 0}
-              className="rounded-md border border-input bg-transparent px-3 py-1 text-xs disabled:opacity-40 hover:bg-accent/50"
+              className="glass-input rounded-lg border border-white/70 px-3 py-1 text-xs disabled:opacity-40 hover:bg-white/80"
             >← Prev</button>
             <span className="text-xs">Page {page + 1} / {totalPages || 1}</span>
             <button
               onClick={() => setPage((p) => p + 1)} disabled={page + 1 >= totalPages}
-              className="rounded-md border border-input bg-transparent px-3 py-1 text-xs disabled:opacity-40 hover:bg-accent/50"
+              className="glass-input rounded-lg border border-white/70 px-3 py-1 text-xs disabled:opacity-40 hover:bg-white/80"
             >Next →</button>
           </div>
         </div>
@@ -686,23 +671,23 @@ function StaffSummaryView() {
   return (
     <div>
       {/* Month navigator */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-4 py-2.5">
+      <div className="glass mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl px-4 py-2.5 shadow-xl shadow-slate-900/5">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setMonth((m) => addMonth(m, -1))}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white/70 hover:text-slate-700"
             aria-label="Previous month"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6" /></svg>
           </button>
           <div className="flex items-center gap-2 text-sm">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
-            <span className="min-w-34 text-center font-semibold text-foreground">{monthLabel(month)}</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+            <span className="min-w-34 text-center font-semibold text-slate-800">{monthLabel(month)}</span>
           </div>
           <button
             onClick={() => setMonth((m) => addMonth(m, 1))}
             disabled={month >= currentMonth}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white/70 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent"
             aria-label="Next month"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6" /></svg>
@@ -710,13 +695,13 @@ function StaffSummaryView() {
           {month !== currentMonth && (
             <button
               onClick={() => setMonth(currentMonth)}
-              className="ml-1 rounded-md border border-input bg-transparent px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-accent/50"
+              className="glass-input ml-1 rounded-lg border border-white/70 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-white/80"
             >
               This month
             </button>
           )}
         </div>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-xs text-slate-400">
           <span className="tabular-nums">{fullDate(from)} → {fullDate(to)}</span>
           <span className="mx-1.5">·</span>
           {operationalDays} operational day{operationalDays === 1 ? '' : 's'}
@@ -736,45 +721,41 @@ function StaffSummaryView() {
       {/* Charts */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
-          <CardContent className="p-0">
-            <CardHead title="Top staff by hours" subtitle={`Total worked hours · ${monthLabel(month)}`} />
-            <div className="h-72 px-2 py-4">
-              {loading ? <ChartLoading /> : topHours.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No completed days in window</div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topHours} layout="vertical" margin={{ top: 0, right: 24, left: 8, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                    <XAxis type="number" tickFormatter={(v) => `${v}h`} tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} width={72} />
-                    <Tooltip cursor={{ fill: 'var(--accent)' }} content={<BarTooltip unit="h" name="Hours" />} />
-                    <Bar dataKey="hours" name="Hours" radius={[0, 4, 4, 0]} fill="var(--chart-2)" barSize={18} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </CardContent>
+          <CardHeader title="Top staff by hours" subtitle={`Total worked hours · ${monthLabel(month)}`} />
+          <div className="h-72 px-2 py-4">
+            {loading ? <ChartLoading /> : topHours.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm text-slate-400">No completed days in window</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topHours} layout="vertical" margin={{ top: 0, right: 24, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                  <XAxis type="number" tickFormatter={(v) => `${v}h`} tick={{ fontSize: 12, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: '#475569' }} tickLine={false} axisLine={false} width={72} />
+                  <Tooltip cursor={{ fill: '#f8fafc' }} content={<BarTooltip unit="h" name="Hours" />} />
+                  <Bar dataKey="hours" name="Hours" radius={[0, 4, 4, 0]} fill="#2563eb" barSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
         </Card>
 
         <Card>
-          <CardContent className="p-0">
-            <CardHead title="Break utilization" subtitle={`Total break minutes · ${monthLabel(month)}`} />
-            <div className="h-72 px-2 py-4">
-              {loading ? <ChartLoading /> : topBreaks.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No breaks recorded in window</div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topBreaks} layout="vertical" margin={{ top: 0, right: 24, left: 8, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                    <XAxis type="number" tickFormatter={(v) => `${v}m`} tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} width={72} />
-                    <Tooltip cursor={{ fill: 'var(--accent)' }} content={<BarTooltip unit=" min" name="Break" />} />
-                    <Bar dataKey="breakMin" name="Break minutes" radius={[0, 4, 4, 0]} fill="var(--chart-4)" barSize={18} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </CardContent>
+          <CardHeader title="Break utilization" subtitle={`Total break minutes · ${monthLabel(month)}`} />
+          <div className="h-72 px-2 py-4">
+            {loading ? <ChartLoading /> : topBreaks.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm text-slate-400">No breaks recorded in window</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topBreaks} layout="vertical" margin={{ top: 0, right: 24, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                  <XAxis type="number" tickFormatter={(v) => `${v}m`} tick={{ fontSize: 12, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: '#475569' }} tickLine={false} axisLine={false} width={72} />
+                  <Tooltip cursor={{ fill: '#f8fafc' }} content={<BarTooltip unit=" min" name="Break" />} />
+                  <Bar dataKey="breakMin" name="Break minutes" radius={[0, 4, 4, 0]} fill="#7c3aed" barSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
         </Card>
       </div>
 
@@ -783,23 +764,23 @@ function StaffSummaryView() {
         <input
           type="text" placeholder="Search staff…" value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-52 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="glass-input w-52 rounded-lg border border-white/70 px-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
         />
-        <span className="ml-auto text-xs text-muted-foreground">{filtered.length} staff · click a row for details</span>
+        <span className="ml-auto text-xs text-slate-400">{filtered.length} staff · click a row for details</span>
       </div>
 
       {/* Per-staff table */}
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-border bg-accent/40">
+              <tr className="border-b border-white/50 bg-white/40">
                 {SUMMARY_COLUMNS.map((c) => (
                   <th
                     key={c.label}
                     onClick={() => handleSort(c.key)}
-                    className={cn(
-                      'whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground cursor-pointer select-none hover:text-foreground',
+                    className={cx(
+                      'whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500 cursor-pointer select-none hover:text-slate-700',
                       c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left',
                     )}
                   >
@@ -810,37 +791,37 @@ function StaffSummaryView() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={SUMMARY_COLUMNS.length} className="py-12 text-center text-sm text-muted-foreground">Loading…</td></tr>
+                <tr><td colSpan={SUMMARY_COLUMNS.length} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
               ) : error ? (
-                <tr><td colSpan={SUMMARY_COLUMNS.length} className="py-12 text-center text-sm text-destructive">{error}</td></tr>
+                <tr><td colSpan={SUMMARY_COLUMNS.length} className="py-12 text-center text-sm text-red-500">{error}</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={SUMMARY_COLUMNS.length} className="py-12 text-center text-sm text-muted-foreground">No staff data in this window</td></tr>
+                <tr><td colSpan={SUMMARY_COLUMNS.length} className="py-12 text-center text-sm text-slate-400">No staff data in this window</td></tr>
               ) : filtered.map((s) => (
                 <tr
                   key={s.user_id}
                   onClick={() => setSelected(s)}
-                  className="border-b border-border hover:bg-accent/50 transition-colors cursor-pointer"
+                  className="border-b border-white/40 hover:bg-white/50 transition-colors cursor-pointer"
                 >
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2.5">
                       <Avatar name={s.staff_name || s.username} size={28} />
                       <div className="leading-tight">
-                        <div className="text-xs font-medium text-foreground">{s.staff_name || '—'}</div>
-                        {s.username && <div className="text-[11px] text-muted-foreground">@{s.username}</div>}
+                        <div className="text-xs font-medium text-slate-800">{s.staff_name || '—'}</div>
+                        {s.username && <div className="text-[11px] text-slate-400">@{s.username}</div>}
                       </div>
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 text-center text-xs tabular-nums text-foreground">
-                    {s.daysPresent}<span className="text-muted-foreground">/{operationalDays}</span>
+                  <td className="px-3 py-2.5 text-center text-xs tabular-nums text-slate-700">
+                    {s.daysPresent}<span className="text-slate-400">/{operationalDays}</span>
                   </td>
                   <td className="px-3 py-2.5 text-center">
                     <AttendancePill rate={s.attendanceRate} />
                   </td>
-                  <td className="px-3 py-2.5 text-center text-xs tabular-nums text-foreground">{fmtClock(s.avgCheckIn)}</td>
-                  <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-foreground">{fmtHours(s.totalHours)}</td>
-                  <td className="px-3 py-2.5 text-right text-xs tabular-nums text-foreground">{fmtHours(s.avgHoursPerDay)}</td>
+                  <td className="px-3 py-2.5 text-center text-xs tabular-nums text-slate-700">{fmtClock(s.avgCheckIn)}</td>
+                  <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-900">{fmtHours(s.totalHours)}</td>
+                  <td className="px-3 py-2.5 text-right text-xs tabular-nums text-slate-700">{fmtHours(s.avgHoursPerDay)}</td>
                   <td className="px-3 py-2.5 text-right text-xs tabular-nums">
-                    <span className={cn(s.totalOverBreakMin > 0 ? 'text-primary font-medium' : 'text-foreground')}>{fmtHours(s.totalBreakMin / 60)}</span>
+                    <span className={cx(s.totalOverBreakMin > 0 ? 'text-violet-600 font-medium' : 'text-slate-700')}>{fmtHours(s.totalBreakMin / 60)}</span>
                   </td>
                 </tr>
               ))}
@@ -858,17 +839,17 @@ function StaffSummaryView() {
 
 function AttendancePill({ rate }: { rate: number }) {
   const pct = Math.round(rate * 100)
-  const tone = pct >= 80 ? 'bg-success/10 text-success' : pct >= 50 ? 'bg-warning/10 text-warning' : 'bg-destructive/10 text-destructive'
-  return <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium tabular-nums', tone)}>{pct}%</span>
+  const tone = pct >= 80 ? 'bg-emerald-50 text-emerald-700' : pct >= 50 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'
+  return <span className={cx('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium tabular-nums', tone)}>{pct}%</span>
 }
 
 // ─── Individual staff detail ────────────────────────────────────────────────────
 
 function DetailStat({ label, value, accent }: { label: string; value: ReactNode; accent?: string }) {
   return (
-    <div className="rounded-xl bg-accent/50 px-3 py-2.5 ring-1 ring-border" style={{ borderTop: accent ? `2px solid ${accent}` : undefined }}>
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">{value}</p>
+    <div className="rounded-xl bg-white/60 px-3 py-2.5 ring-1 ring-white/60" style={{ borderTop: accent ? `2px solid ${accent}` : undefined }}>
+      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-0.5 text-lg font-semibold tabular-nums text-slate-900">{value}</p>
     </div>
   )
 }
@@ -891,22 +872,22 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-background/60 p-4 backdrop-blur-sm sm:p-8"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/30 p-4 backdrop-blur-sm sm:p-8"
       onClick={onClose}
     >
-      <div className="bg-card border border-border w-full max-w-3xl rounded-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="glass-strong w-full max-w-3xl rounded-2xl shadow-2xl shadow-slate-900/20" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <div className="flex items-center justify-between border-b border-white/50 px-5 py-4">
           <div className="flex items-center gap-3">
             <Avatar name={stat.staff_name || stat.username} size={40} />
             <div className="leading-tight">
-              <h3 className="text-lg font-semibold text-foreground">{stat.staff_name || labelFor(stat)}</h3>
-              <p className="text-xs text-muted-foreground">
+              <h3 className="text-lg font-semibold text-slate-900">{stat.staff_name || labelFor(stat)}</h3>
+              <p className="text-xs text-slate-400">
                 {stat.username ? `@${stat.username} · ` : ''}{periodLabel}{stat.lastDay ? ` · last seen ${shortDate(stat.lastDay)}` : ''}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground">
+          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
         </div>
@@ -914,7 +895,7 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
         <div className="px-5 py-4">
           {/* Stat grid */}
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            <DetailStat label="Days present" value={<>{stat.daysPresent}<span className="text-sm text-muted-foreground">/{operationalDays}</span></>} accent="#3B82F6" />
+            <DetailStat label="Days present" value={<>{stat.daysPresent}<span className="text-sm text-slate-400">/{operationalDays}</span></>} accent="#3B82F6" />
             <DetailStat label="Total hours" value={fmtHours(stat.totalHours)} accent="#1D9E75" />
             <DetailStat label="Avg hrs/day" value={fmtHours(stat.avgHoursPerDay)} accent="#0EA5E9" />
             <DetailStat label="Net hours" value={fmtHours(stat.netHours)} accent="#10B981" />
@@ -925,27 +906,27 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
           </div>
 
           {/* Secondary line */}
-          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-            <span>Attendance <span className="font-semibold text-foreground">{Math.round(stat.attendanceRate * 100)}%</span></span>
-            <span>Completion <span className="font-semibold text-foreground">{Math.round(stat.completionRate * 100)}%</span></span>
-            <span>Avg break <span className="font-semibold text-foreground">{stat.avgBreakMin != null ? `${Math.round(stat.avgBreakMin)}m/day` : '—'}</span></span>
-            <span>Over-allowance <span className={cn('font-semibold', stat.overBreakDays > 0 ? 'text-primary' : 'text-foreground')}>{stat.overBreakDays} day{stat.overBreakDays === 1 ? '' : 's'} ({stat.totalOverBreakMin}m)</span></span>
+          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
+            <span>Attendance <span className="font-semibold text-slate-700">{Math.round(stat.attendanceRate * 100)}%</span></span>
+            <span>Completion <span className="font-semibold text-slate-700">{Math.round(stat.completionRate * 100)}%</span></span>
+            <span>Avg break <span className="font-semibold text-slate-700">{stat.avgBreakMin != null ? `${Math.round(stat.avgBreakMin)}m/day` : '—'}</span></span>
+            <span>Over-allowance <span className={cx('font-semibold', stat.overBreakDays > 0 ? 'text-violet-600' : 'text-slate-700')}>{stat.overBreakDays} day{stat.overBreakDays === 1 ? '' : 's'} ({stat.totalOverBreakMin}m)</span></span>
           </div>
 
           {/* Daily hours chart */}
           <div className="mt-4">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Daily hours</p>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Daily hours</p>
             <div className="h-40">
               {chartData.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No activity in this window</div>
+                <div className="flex h-full items-center justify-center text-sm text-slate-400">No activity in this window</div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData} margin={{ top: 6, right: 8, left: -16, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={16} />
-                    <YAxis tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} width={32} tickFormatter={(v) => `${v}h`} />
-                    <Tooltip cursor={{ fill: 'var(--accent)' }} content={<BarTooltip unit="h" name="Hours" />} />
-                    <Bar dataKey="hours" name="hours" radius={[3, 3, 0, 0]} fill="var(--chart-2)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={16} />
+                    <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={32} tickFormatter={(v) => `${v}h`} />
+                    <Tooltip cursor={{ fill: '#f8fafc' }} content={<BarTooltip unit="h" name="Hours" />} />
+                    <Bar dataKey="hours" name="hours" radius={[3, 3, 0, 0]} fill="#2563eb" />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -953,27 +934,27 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
           </div>
 
           {/* Day-by-day table */}
-          <div className="mt-4 max-h-64 overflow-y-auto rounded-xl ring-1 ring-border">
+          <div className="mt-4 max-h-64 overflow-y-auto rounded-xl ring-1 ring-white/60">
             <table className="w-full border-collapse text-sm">
               <thead className="sticky top-0">
-                <tr className="bg-card">
+                <tr className="bg-white/80 backdrop-blur">
                   {['Date', 'Check-in', 'Check-out', 'Hours', 'Break', 'Status'].map((h, i) => (
-                    <th key={h} className={cn('whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground', i === 0 ? 'text-left' : 'text-right', h === 'Status' && 'text-center')}>{h}</th>
+                    <th key={h} className={cx('whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500', i === 0 ? 'text-left' : 'text-right', h === 'Status' && 'text-center')}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {stat.rows.length === 0 ? (
-                  <tr><td colSpan={6} className="py-8 text-center text-sm text-muted-foreground">No days recorded</td></tr>
+                  <tr><td colSpan={6} className="py-8 text-center text-sm text-slate-400">No days recorded</td></tr>
                 ) : stat.rows.slice().reverse().map((r, i) => {
                   const late = (minutesEST(r.login_at) ?? 0) > TARGET_LOGIN_MIN && r.login_at != null
                   return (
-                    <tr key={i} className="border-t border-border hover:bg-accent/50">
-                      <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">{fullDate(r.work_date)}</td>
-                      <td className={cn('whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums', late ? 'text-warning font-medium' : 'text-foreground')}>{fmtAttendanceTime(r.login_at)}</td>
-                      <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-foreground">{fmtAttendanceTime(r.logout_at)}</td>
-                      <td className="px-3 py-2 text-right text-xs tabular-nums text-foreground">{r.hours != null ? `${r.hours}h` : '—'}</td>
-                      <td className={cn('px-3 py-2 text-right text-xs tabular-nums', r.over_break_min > 0 ? 'text-primary font-medium' : 'text-foreground')}>{r.break_min}m</td>
+                    <tr key={i} className="border-t border-white/50 hover:bg-white/40">
+                      <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-600">{fullDate(r.work_date)}</td>
+                      <td className={cx('whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums', late ? 'text-amber-600 font-medium' : 'text-slate-700')}>{fmtAttendanceTime(r.login_at)}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-slate-700">{fmtAttendanceTime(r.logout_at)}</td>
+                      <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-700">{r.hours != null ? `${r.hours}h` : '—'}</td>
+                      <td className={cx('px-3 py-2 text-right text-xs tabular-nums', r.over_break_min > 0 ? 'text-violet-600 font-medium' : 'text-slate-700')}>{r.break_min}m</td>
                       <td className="px-3 py-2 text-center"><DayStatus row={r} /></td>
                     </tr>
                   )
@@ -1057,33 +1038,34 @@ function BreakReportsView() {
   return (
     <div>
       {/* Period controls — weekly / monthly presets + explicit date filtering */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-2.5">
+      <div className="glass mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-2.5 shadow-xl shadow-slate-900/5">
         <div className="flex flex-wrap items-center gap-1.5">
           {REPORT_PRESETS.map((p) => (
             <button
               key={p.label}
               onClick={() => setRange(p.get())}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+              style={activePreset?.label === p.label ? { backgroundColor: '#34eb92', color: '#0f172a' } : undefined}
+              className={cx(
+                'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
                 activePreset?.label === p.label
-                  ? 'bg-primary text-primary-foreground shadow'
-                  : 'border border-input bg-transparent text-muted-foreground hover:bg-accent/50',
+                  ? 'shadow'
+                  : 'glass-input border border-white/70 text-slate-600 hover:bg-white/80',
               )}
             >
               {p.label}
             </button>
           ))}
-          <label className="ml-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <label className="ml-1 flex items-center gap-1.5 text-xs font-medium text-slate-500">
             From
             <input
               type="date"
               value={range.from}
               max={range.to || maxDate}
               onChange={(e) => { if (e.target.value) setRange((r) => ({ ...r, from: e.target.value })) }}
-              className="rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              className="glass-input rounded-lg border border-white/70 px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
             />
           </label>
-          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <label className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
             To
             <input
               type="date"
@@ -1091,11 +1073,11 @@ function BreakReportsView() {
               min={range.from}
               max={maxDate}
               onChange={(e) => { if (e.target.value) setRange((r) => ({ ...r, to: e.target.value })) }}
-              className="rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              className="glass-input rounded-lg border border-white/70 px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
             />
           </label>
         </div>
-        <span className="text-xs text-muted-foreground tabular-nums">
+        <span className="text-xs text-slate-400 tabular-nums">
           {periodText} · {operationalDays} operational day{operationalDays === 1 ? '' : 's'}
         </span>
       </div>
@@ -1110,157 +1092,153 @@ function BreakReportsView() {
 
       {/* Team report */}
       <Card className="mb-6">
-        <CardContent className="p-0">
-          <CardHead
-            title="Overall Staff Report"
-            subtitle={`Worked hours and break time over the 60-minute allowance · ${periodText}`}
-            action={
-              <div className="flex flex-wrap gap-2">
-                <ExportBtn kind="xlsx" onClick={downloadTeamXlsx} loading={!!busy['team-xlsx']} disabled={!hasData} />
-                <ExportBtn kind="pdf" onClick={downloadTeamPdf} loading={!!busy['team-pdf']} disabled={!hasData} />
-              </div>
-            }
-          />
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-border bg-accent/40">
-                  {([
-                    { label: 'Staff', cls: 'text-left' },
-                    { label: 'Days Logged In', cls: 'text-center' },
-                    { label: 'Break Used', cls: 'text-right' },
-                    { label: 'Break-Time Exceeding Allowance', cls: 'text-right' },
-                    { label: 'Worked Hours', cls: 'text-right' },
-                  ] as const).map((c) => (
-                    <th key={c.label} className={cn('px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground', c.cls)}>
-                      {c.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {daysReq.loading ? (
-                  <tr><td colSpan={5} className="py-12 text-center text-sm text-muted-foreground">Loading…</td></tr>
-                ) : daysReq.error ? (
-                  <tr><td colSpan={5} className="py-12 text-center text-sm text-destructive">{daysReq.error}</td></tr>
-                ) : !hasData ? (
-                  <tr><td colSpan={5} className="py-12 text-center text-sm text-muted-foreground">No attendance recorded in this period</td></tr>
-                ) : stats.map((s) => (
-                  <tr key={s.user_id} className="border-b border-border hover:bg-accent/50 transition-colors">
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2.5">
-                        <Avatar name={s.staff_name || s.username} size={28} />
-                        <div className="leading-tight">
-                          <div className="text-xs font-medium text-foreground">{s.staff_name || '—'}</div>
-                          {s.username && <div className="text-[11px] text-muted-foreground">@{s.username}</div>}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-center text-xs tabular-nums text-foreground">{s.daysPresent}</td>
-                    <td className="px-3 py-2.5 text-right text-xs tabular-nums text-foreground">{fmtHm(s.totalBreakMin)}</td>
-                    <td className={cn('px-3 py-2.5 text-right text-xs font-semibold tabular-nums', s.totalOverMin > 0 ? 'text-destructive' : 'text-muted-foreground')}>
-                      {fmtHm(s.totalOverMin)}
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-foreground">{hoursCell(s.totalHours)}</td>
-                  </tr>
+        <CardHeader
+          title="Overall Staff Report"
+          subtitle={`Worked hours and break time over the 60-minute allowance · ${periodText}`}
+          action={
+            <div className="flex flex-wrap gap-2">
+              <ExportBtn kind="xlsx" onClick={downloadTeamXlsx} loading={!!busy['team-xlsx']} disabled={!hasData} />
+              <ExportBtn kind="pdf" onClick={downloadTeamPdf} loading={!!busy['team-pdf']} disabled={!hasData} />
+            </div>
+          }
+        />
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-white/50 bg-white/40">
+                {([
+                  { label: 'Staff', cls: 'text-left' },
+                  { label: 'Days Logged In', cls: 'text-center' },
+                  { label: 'Break Used', cls: 'text-right' },
+                  { label: 'Break-Time Exceeding Allowance', cls: 'text-right' },
+                  { label: 'Worked Hours', cls: 'text-right' },
+                ] as const).map((c) => (
+                  <th key={c.label} className={cx('px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500', c.cls)}>
+                    {c.label}
+                  </th>
                 ))}
-              </tbody>
-              {hasData && (
-                <tfoot>
-                  <tr className="border-t border-border bg-accent/50">
-                    <td className="px-3 py-2.5 text-xs font-semibold text-foreground">Team total</td>
-                    <td className="px-3 py-2.5 text-center text-xs font-semibold tabular-nums text-foreground">{team.presentDays}</td>
-                    <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-foreground">{fmtHm(team.totalBreak)}</td>
-                    <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-destructive">{fmtHm(team.totalOver)}</td>
-                    <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-foreground">{hoursCell(team.totalHours)}</td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
-        </CardContent>
+              </tr>
+            </thead>
+            <tbody>
+              {daysReq.loading ? (
+                <tr><td colSpan={5} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
+              ) : daysReq.error ? (
+                <tr><td colSpan={5} className="py-12 text-center text-sm text-red-500">{daysReq.error}</td></tr>
+              ) : !hasData ? (
+                <tr><td colSpan={5} className="py-12 text-center text-sm text-slate-400">No attendance recorded in this period</td></tr>
+              ) : stats.map((s) => (
+                <tr key={s.user_id} className="border-b border-white/40 hover:bg-white/40 transition-colors">
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <Avatar name={s.staff_name || s.username} size={28} />
+                      <div className="leading-tight">
+                        <div className="text-xs font-medium text-slate-800">{s.staff_name || '—'}</div>
+                        {s.username && <div className="text-[11px] text-slate-400">@{s.username}</div>}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5 text-center text-xs tabular-nums text-slate-700">{s.daysPresent}</td>
+                  <td className="px-3 py-2.5 text-right text-xs tabular-nums text-slate-700">{fmtHm(s.totalBreakMin)}</td>
+                  <td className={cx('px-3 py-2.5 text-right text-xs font-semibold tabular-nums', s.totalOverMin > 0 ? 'text-red-600' : 'text-slate-400')}>
+                    {fmtHm(s.totalOverMin)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-900">{hoursCell(s.totalHours)}</td>
+                </tr>
+              ))}
+            </tbody>
+            {hasData && (
+              <tfoot>
+                <tr className="border-t border-white/60 bg-white/50">
+                  <td className="px-3 py-2.5 text-xs font-semibold text-slate-700">Team total</td>
+                  <td className="px-3 py-2.5 text-center text-xs font-semibold tabular-nums text-slate-700">{team.presentDays}</td>
+                  <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-700">{fmtHm(team.totalBreak)}</td>
+                  <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-red-600">{fmtHm(team.totalOver)}</td>
+                  <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-900">{hoursCell(team.totalHours)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
       </Card>
 
       {/* Per-member report */}
       <Card>
-        <CardContent className="p-0">
-          <CardHead
-            title="Per-member report"
-            subtitle="Day-by-day worked hours and break detail for one member"
-            action={
-              <ExportBtn kind="pdf" label="All members PDF" onClick={downloadAllPdf} loading={!!busy['all-pdf']} disabled={!hasData} />
-            }
-          />
-          <div className="px-5 py-4">
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <select
-                value={selectedUser}
-                onChange={(e) => setSelectedUser(e.target.value)}
-                className="rounded-md border border-input bg-transparent px-3 py-1.5 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-              >
-                <option value="">Select a member…</option>
-                {stats.map((s) => (
-                  <option key={s.user_id} value={s.user_id}>{labelOf(s)}</option>
-                ))}
-              </select>
-              <ExportBtn kind="xlsx" onClick={downloadUserXlsx} loading={!!busy['user-xlsx']} disabled={!selectedStat} />
-              <ExportBtn kind="pdf" onClick={downloadUserPdf} loading={!!busy['user-pdf']} disabled={!selectedStat} />
-            </div>
-
-            {selectedStat ? (
-              <>
-                <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-muted-foreground">
-                  <span>Days logged in <span className="font-semibold text-foreground">{selectedStat.daysPresent}</span></span>
-                  <span>Worked hours <span className="font-semibold text-foreground">{hoursCell(selectedStat.totalHours)}</span></span>
-                  <span>Total break <span className="font-semibold text-foreground">{fmtHm(selectedStat.totalBreakMin)}</span></span>
-                  <span>
-                    Break-time exceeding allowance{' '}
-                    <span className={cn('font-semibold', selectedStat.totalOverMin > 0 ? 'text-destructive' : 'text-foreground')}>{fmtHm(selectedStat.totalOverMin)}</span>
-                    {' '}on {selectedStat.overDays} day{selectedStat.overDays === 1 ? '' : 's'}
-                  </span>
-                </div>
-                <div className="overflow-x-auto rounded-xl ring-1 ring-border">
-                  <table className="w-full border-collapse text-sm">
-                    <thead>
-                      <tr className="bg-accent/40">
-                        {['Date', 'Login', 'Logout', 'Worked Hours', 'Break', 'Exceeding Allowance', 'Status'].map((h, i) => (
-                          <th
-                            key={h}
-                            className={cn(
-                              'whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground',
-                              i === 0 ? 'text-left' : i === 6 ? 'text-center' : 'text-right',
-                            )}
-                          >
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedStat.rows.length === 0 ? (
-                        <tr><td colSpan={7} className="py-8 text-center text-sm text-muted-foreground">No days recorded</td></tr>
-                      ) : selectedStat.rows.slice().reverse().map((r, i) => (
-                        <tr key={i} className="border-t border-border hover:bg-accent/50">
-                          <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">{fullDate(r.work_date)}</td>
-                          <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-foreground">{fmtAttendanceTime(r.login_at)}</td>
-                          <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-foreground">{fmtAttendanceTime(r.logout_at)}</td>
-                          <td className="px-3 py-2 text-right text-xs tabular-nums text-foreground">{hoursCell(r.hours)}</td>
-                          <td className="px-3 py-2 text-right text-xs tabular-nums text-foreground">{r.break_min}m</td>
-                          <td className={cn('px-3 py-2 text-right text-xs font-medium tabular-nums', r.over_break_min > 0 ? 'text-destructive' : 'text-muted-foreground')}>{fmtHm(r.over_break_min)}</td>
-                          <td className="px-3 py-2 text-center"><DayStatus row={r} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            ) : (
-              <div className="rounded-xl bg-accent/40 py-10 text-center text-sm text-muted-foreground">
-                Choose a member above to preview and export their daily breakdown.
-              </div>
-            )}
+        <CardHeader
+          title="Per-member report"
+          subtitle="Day-by-day worked hours and break detail for one member"
+          action={
+            <ExportBtn kind="pdf" label="All members PDF" onClick={downloadAllPdf} loading={!!busy['all-pdf']} disabled={!hasData} />
+          }
+        />
+        <div className="px-5 py-4">
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <select
+              value={selectedUser}
+              onChange={(e) => setSelectedUser(e.target.value)}
+              className="glass-input rounded-lg border border-white/70 px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            >
+              <option value="">Select a member…</option>
+              {stats.map((s) => (
+                <option key={s.user_id} value={s.user_id}>{labelOf(s)}</option>
+              ))}
+            </select>
+            <ExportBtn kind="xlsx" onClick={downloadUserXlsx} loading={!!busy['user-xlsx']} disabled={!selectedStat} />
+            <ExportBtn kind="pdf" onClick={downloadUserPdf} loading={!!busy['user-pdf']} disabled={!selectedStat} />
           </div>
-        </CardContent>
+
+          {selectedStat ? (
+            <>
+              <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-slate-500">
+                <span>Days logged in <span className="font-semibold text-slate-700">{selectedStat.daysPresent}</span></span>
+                <span>Worked hours <span className="font-semibold text-slate-700">{hoursCell(selectedStat.totalHours)}</span></span>
+                <span>Total break <span className="font-semibold text-slate-700">{fmtHm(selectedStat.totalBreakMin)}</span></span>
+                <span>
+                  Break-time exceeding allowance{' '}
+                  <span className={cx('font-semibold', selectedStat.totalOverMin > 0 ? 'text-red-600' : 'text-slate-700')}>{fmtHm(selectedStat.totalOverMin)}</span>
+                  {' '}on {selectedStat.overDays} day{selectedStat.overDays === 1 ? '' : 's'}
+                </span>
+              </div>
+              <div className="overflow-x-auto rounded-xl ring-1 ring-white/60">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-white/60">
+                      {['Date', 'Login', 'Logout', 'Worked Hours', 'Break', 'Exceeding Allowance', 'Status'].map((h, i) => (
+                        <th
+                          key={h}
+                          className={cx(
+                            'whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500',
+                            i === 0 ? 'text-left' : i === 6 ? 'text-center' : 'text-right',
+                          )}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedStat.rows.length === 0 ? (
+                      <tr><td colSpan={7} className="py-8 text-center text-sm text-slate-400">No days recorded</td></tr>
+                    ) : selectedStat.rows.slice().reverse().map((r, i) => (
+                      <tr key={i} className="border-t border-white/50 hover:bg-white/40">
+                        <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-600">{fullDate(r.work_date)}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-slate-700">{fmtAttendanceTime(r.login_at)}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-slate-700">{fmtAttendanceTime(r.logout_at)}</td>
+                        <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-700">{hoursCell(r.hours)}</td>
+                        <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-700">{r.break_min}m</td>
+                        <td className={cx('px-3 py-2 text-right text-xs font-medium tabular-nums', r.over_break_min > 0 ? 'text-red-600' : 'text-slate-400')}>{fmtHm(r.over_break_min)}</td>
+                        <td className="px-3 py-2 text-center"><DayStatus row={r} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-xl bg-white/40 py-10 text-center text-sm text-slate-400">
+              Choose a member above to preview and export their daily breakdown.
+            </div>
+          )}
+        </div>
       </Card>
     </div>
   )
@@ -1271,13 +1249,13 @@ function BreakReportsView() {
 /** Active = currently checked in (from /attendance/live); otherwise Offline. */
 function ActiveBadge({ active }: { active: boolean }) {
   return active ? (
-    <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
-      <span className="h-1.5 w-1.5 rounded-full bg-success" />
+    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
       Active
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-muted-foreground">
-      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+      <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
       Offline
     </span>
   )
@@ -1310,7 +1288,7 @@ function ExportBtn({ kind, label, onClick, loading, disabled }: {
 }) {
   return (
     <Button variant="secondary" onClick={onClick} disabled={loading || disabled}>
-      {loading ? <Spinner className="size-3.5" /> : kind === 'pdf' ? <PdfIcon /> : <ExcelIcon />}
+      {loading ? <Spinner className="h-3.5 w-3.5" /> : kind === 'pdf' ? <PdfIcon /> : <ExcelIcon />}
       {label ?? (kind === 'pdf' ? 'PDF' : 'Excel')}
     </Button>
   )

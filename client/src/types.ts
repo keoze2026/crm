@@ -116,22 +116,6 @@ export interface Destination {
   created_at: string
 }
 
-export interface PortalExpense {
-  id: number
-  /** First day of the month, YYYY-MM-DD. */
-  month: string
-  name: string
-  voice_minutes: number
-  rejected_calls: number
-  rent_values: number
-  /** Payout expenses, USD. */
-  payout_expenses: number
-  total_amount: number
-  sort_order: number
-  created_at: string
-  updated_at: string
-}
-
 export interface Buyer {
   id: number
   code: string
@@ -349,4 +333,22 @@ export interface AuditFilters {
   q?: string
   limit?: number
   offset?: number
+}
+
+// ─── Portal expenses ─────────────────────────────────────────────────────────
+
+export interface PortalExpense {
+  id: number
+  /** First day of the month, YYYY-MM-DD. */
+  month: string
+  name: string
+  voice_minutes: number
+  rejected_calls: number
+  rent_values: number
+  /** Payout expenses, USD. */
+  payout_expenses: number
+  total_amount: number
+  sort_order: number
+  created_at: string
+  updated_at: string
 }

@@ -15,11 +15,6 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Path alias for ported design-system components (@/…) */
-    "paths": {
-      "@/*": ["./src/*"]
-    },
-
     /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,

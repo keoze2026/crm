@@ -3,10 +3,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { FullPageSpinner } from '../auth/RequireAuth'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Spinner } from '@/components/ui/spinner'
+import { Button, Input, Spinner } from '../components/ui'
 import type { EnrollInfo } from '../types'
 import { Shell } from './Login'
 
@@ -40,7 +37,7 @@ export default function Enroll() {
   if (!authEnabled) return <Navigate to="/" replace />
   if (!token) {
     return <Shell title="Enrolment" subtitle="Set up your authenticator">
-      <p className="text-center text-sm text-destructive">Missing enrolment link. Ask your admin for a new one.</p>
+      <p className="text-center text-sm text-red-600">Missing enrolment link. Ask your admin for a new one.</p>
     </Shell>
   }
 
@@ -60,41 +57,38 @@ export default function Enroll() {
   return (
     <Shell title="Set up sign-in" subtitle="Scan this with Google Authenticator">
       {startError ? (
-        <p className="text-center text-sm text-destructive">{startError}</p>
+        <p className="text-center text-sm text-red-600">{startError}</p>
       ) : !info ? (
-        <div className="flex justify-center py-8"><Spinner className="size-6" /></div>
+        <div className="flex justify-center py-8"><Spinner className="h-6 w-6" /></div>
       ) : (
         <div className="space-y-4">
           <div className="flex flex-col items-center gap-3">
-            <div className="rounded-2xl border border-border bg-white p-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <QRCodeSVG value={info.otpauth_uri} size={196} />
             </div>
-            <p className="text-center text-xs text-muted-foreground">
+            <p className="text-center text-xs text-slate-400">
               Can’t scan? Enter this key manually:
               <br />
-              <code className="mt-1 inline-block break-all rounded bg-accent px-2 py-1 font-mono text-[11px] text-foreground">
+              <code className="mt-1 inline-block break-all rounded bg-slate-100 px-2 py-1 font-mono text-[11px] text-slate-700">
                 {info.secret}
               </code>
             </p>
           </div>
           <form onSubmit={submit} className="space-y-3">
-            <div className="space-y-2">
-              <Label htmlFor="enroll-code">Enter the 6-digit code to confirm</Label>
-              <Input
-                id="enroll-code"
-                placeholder="123456"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={6}
-                value={code}
-                onChange={(e) => { setCode(e.target.value.replace(/\D/g, '')); setError(null) }}
-                autoComplete="one-time-code"
-                className="text-center text-lg tracking-[0.4em] font-display"
-              />
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Input
+              label="Enter the 6-digit code to confirm"
+              placeholder="123456"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={6}
+              value={code}
+              onChange={(e) => { setCode(e.target.value.replace(/\D/g, '')); setError(null) }}
+              autoComplete="one-time-code"
+              className="text-center text-lg tracking-[0.4em]"
+            />
+            {error && <p className="text-sm text-red-600">{error}</p>}
             <Button type="submit" className="w-full justify-center" disabled={busy || code.length < 6}>
-              {busy && <Spinner className="size-4" />} Confirm &amp; finish
+              {busy && <Spinner className="h-4 w-4 text-white" />} Confirm &amp; finish
             </Button>
           </form>
         </div>

@@ -1,7 +1,6 @@
 import type {
   Buyer,
   Destination,
-  PortalExpense,
   CallRecord,
   Campaign,
   CampaignSource,
@@ -24,6 +23,7 @@ import type {
   ManagedUser,
   AuditPage,
   AuditFilters,
+  PortalExpense,
   Role,
 } from '../types'
 
@@ -119,16 +119,6 @@ export const api = {
   deleteDestination: (id: number) =>
     request<{ deleted: boolean }>(`/destinations/${id}`, { method: 'DELETE' }),
 
-  // Portal expenses (monthly provider expenses)
-  portalExpenses: (month: string) =>
-    request<PortalExpense[]>(`/portal-expenses${qs({ month })}`),
-  createPortalExpense: (data: Partial<PortalExpense>) =>
-    request<PortalExpense>('/portal-expenses', { method: 'POST', body: JSON.stringify(data) }),
-  updatePortalExpense: (id: number, data: Partial<PortalExpense>) =>
-    request<PortalExpense>(`/portal-expenses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deletePortalExpense: (id: number) =>
-    request<{ deleted: boolean }>(`/portal-expenses/${id}`, { method: 'DELETE' }),
-
   // Records
   records: (filters: RecordFilters) =>
     request<Paginated<CallRecord>>(`/records${qs(filters as Record<string, unknown>)}`),
@@ -209,6 +199,16 @@ export const api = {
     request<{ reset: boolean; enroll: EnrollLink }>(`/admin/users/${id}/reset-totp`, { method: 'POST' }),
   deleteUser: (id: number) =>
     request<{ deleted: boolean }>(`/admin/users/${id}`, { method: 'DELETE' }),
+
+  // Portal expenses (monthly provider expenses)
+  portalExpenses: (month: string) =>
+    request<PortalExpense[]>(`/portal-expenses${qs({ month })}`),
+  createPortalExpense: (data: Partial<PortalExpense>) =>
+    request<PortalExpense>('/portal-expenses', { method: 'POST', body: JSON.stringify(data) }),
+  updatePortalExpense: (id: number, data: Partial<PortalExpense>) =>
+    request<PortalExpense>(`/portal-expenses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deletePortalExpense: (id: number) =>
+    request<{ deleted: boolean }>(`/portal-expenses/${id}`, { method: 'DELETE' }),
 }
 
 // Format a UTC timestamp to org timezone display
