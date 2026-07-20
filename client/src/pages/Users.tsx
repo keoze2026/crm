@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { DEFAULT_USER_PAGES, PAGES } from '../auth/pages'
 import { PageHeader } from '../components/Layout'
-import { Badge, Button, Card, EmptyState, Input, SegmentedTabs, Select, Spinner, StatTile, cx } from '../components/ui'
+import { Badge, Button, Card, EmptyState, Input, PageLoader, SegmentedTabs, Select, Spinner, StatTile, cx } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
 import type { AuthUser, EnrollLink, ManagedUser, Role } from '../types'
 
@@ -100,7 +100,7 @@ export default function Users() {
 
       <Card className="overflow-hidden">
         {list.loading ? (
-          <div className="flex justify-center py-16"><Spinner className="h-6 w-6" /></div>
+          <PageLoader label="Loading users…" />
         ) : list.error ? (
           <p className="py-10 text-center text-sm text-red-600">{list.error}</p>
         ) : shown.length === 0 ? (

@@ -7,7 +7,7 @@ import BuyersSheet from '../components/BuyersSheet'
 import {
   Card,
   Input,
-  Spinner,
+  PageLoader,
 } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
 // import type { Buyer } from '../types'  // only used by the retired Add-buyer modal
@@ -47,7 +47,7 @@ function BuyersPage() {
       </PageHeader>
 
       {buyers.loading ? (
-        <div className="flex justify-center py-16"><Spinner className="h-6 w-6" /></div>
+        <PageLoader label="Loading buyers…" />
       ) : (
         <Card className="overflow-hidden">
           <div className="border-b border-white/50 px-5 py-4">

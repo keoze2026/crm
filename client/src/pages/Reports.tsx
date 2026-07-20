@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { api } from '../api/client'
 import { DateRangeControl, DownloadButton, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
-import { Button, Card, CardHeader, EmptyState, Spinner } from '../components/ui'
+import { Button, Card, CardHeader, EmptyState, PageLoader, Spinner } from '../components/ui'
 import { daysAgo, fileDateRange, formatDmy, formatPeriod, money, money2, num, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import { saveCsv, saveXlsx, type XlsxSheet } from '../lib/xlsx'
@@ -632,7 +632,7 @@ function Table({
   empty: boolean
   numericFrom?: number
 }) {
-  if (loading) return <div className="flex justify-center py-12"><Spinner className="h-6 w-6" /></div>
+  if (loading) return <PageLoader />
   if (empty) return <EmptyState message="No data for this period." />
   return (
     <div className="overflow-x-auto">

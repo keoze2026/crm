@@ -9,7 +9,7 @@ import { useAsync } from '../lib/useAsync'
 import type { CallRecord, Campaign, Destination, RecordFilters, RecordType } from '../types'
 import { DateRangeFilter } from './DateRange'
 import RecordsGrid from './RecordsGrid'
-import { Button, Card, EmptyState, FitText, Input, Modal, Select, Spinner, cx } from './ui'
+import { Button, Card, EmptyState, FitText, Input, Modal, PageLoader, Select, Spinner, cx } from './ui'
 
 interface Entity { id: number; code: string; rate: number }
 
@@ -474,7 +474,7 @@ export default function RecordsSection({
           </div>
         ) : isSingleDay ? (
           allRecords.loading ? (
-            <div className="flex justify-center py-16"><Spinner className="h-6 w-6" /></div>
+            <PageLoader label="Loading records…" />
           ) : (
             <RecordsGrid
               type={type}
@@ -488,7 +488,7 @@ export default function RecordsSection({
             />
           )
         ) : (bundled ? allRecords.loading : records.loading) ? (
-          <div className="flex justify-center py-16"><Spinner className="h-6 w-6" /></div>
+          <PageLoader label="Loading records…" />
         ) : (bundled ? bundledRows.length === 0 : rows.length === 0) ? (
           <EmptyState message="No records match these filters." />
         ) : (

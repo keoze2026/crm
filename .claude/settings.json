@@ -67,7 +67,17 @@
       "Bash(grep -nA6 \"\\\\.glass\")",
       "Bash(grep -A6 \"MonthSelector.tsx$\")",
       "Bash(bc)",
-      "Bash(sed -n '/{!isBuyer && \\(/,/<\\\\/colgroup>/p' client/src/components/RecordsGrid.tsx)"
+      "Bash(sed -n '/{!isBuyer && \\(/,/<\\\\/colgroup>/p' client/src/components/RecordsGrid.tsx)",
+      "Bash(php -S 127.0.0.1:8787 -t public)",
+      "Bash(curl -s http://127.0.0.1:8787/api/health)",
+      "Bash(curl -s http://127.0.0.1:8787/api/auth/status)",
+      "Bash(curl -s -w \"\\\\nHTTP:%{http_code}\\\\n\" http://127.0.0.1:8787/api/vendors)",
+      "Bash(curl -s '__TRACKED_VAR__/vendor-payments?vendor=DXTST&from=2026-07-01&to=2026-07-16')",
+      "Bash(curl -s __TRACKED_VAR__/vendors)",
+      "Bash(node -e 'const v=JSON.parse\\(require\\(\"fs\"\\).readFileSync\\(0\\)\\).find\\(x=>x.name===\"DXTST\"\\); console.log\\(JSON.stringify\\(v\\)\\)')",
+      "Bash(php -l server/src/Controllers/VendorController.php)",
+      "Bash(echo \"LINT_EXIT:$?\")",
+      "Bash(grep -nA3 -iE \"poller|auto-?deploy|webhook|git pull|reset --hard|crontab|deploy\\\\.sh|systemctl.*poll\" MAINTENANCE.md)"
     ],
     "additionalDirectories": [
       "C:\\Users\\hp 290 g4\\Desktop\\Dev Projects\\CRM\\client",

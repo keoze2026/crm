@@ -20,7 +20,7 @@ import {
 import { api } from '../api/client'
 import { DateRangeControl, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
-import { Card, CardHeader, cx, Spinner } from '../components/ui'
+import { Card, CardHeader, cx, PageLoader } from '../components/ui'
 import { daysAgo, formatPeriod, money, num, pct, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 
@@ -413,11 +413,7 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 }
 
 function ChartLoading() {
-  return (
-    <div className="flex h-full items-center justify-center">
-      <Spinner className="h-6 w-6" />
-    </div>
-  )
+  return <PageLoader label="" size={40} className="h-full" />
 }
 
 interface TooltipProps {

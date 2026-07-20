@@ -59,6 +59,26 @@ export function formatPeriod(period: string): string {
   return period
 }
 
+/**
+ * Count of weekdays (Mon–Fri) between two ISO dates (YYYY-MM-DD), inclusive.
+ * Returns 0 for an empty, invalid, or reversed range. Used for the Vendors page's
+ * "Average Calls a Day" = Σ converted calls ÷ weekdays in the selected range.
+ */
+export function weekdaysBetween(from: string | null | undefined, to: string | null | undefined): number {
+  if (!from || !to) return 0
+  const start = new Date(from + 'T00:00:00')
+  const end = new Date(to + 'T00:00:00')
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return 0
+  let count = 0
+  const d = new Date(start)
+  while (d <= end) {
+    const day = d.getDay() // 0 = Sun, 6 = Sat
+    if (day !== 0 && day !== 6) count++
+    d.setDate(d.getDate() + 1)
+  }
+  return count
+}
+
 /** Today as YYYY-MM-DD (local). */
 export function today(): string {
   return new Date().toISOString().slice(0, 10)

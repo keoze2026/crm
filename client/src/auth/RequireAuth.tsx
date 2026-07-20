@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from './AuthContext'
-import { Spinner } from '../components/ui'
+import { PageLoader } from '../components/ui'
 
 /** Gate for all app routes. When auth is disabled it lets everything through (legacy mode). */
 export default function RequireAuth() {
@@ -14,9 +14,5 @@ export default function RequireAuth() {
 }
 
 export function FullPageSpinner() {
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <Spinner className="h-7 w-7" />
-    </div>
-  )
+  return <PageLoader className="min-h-screen" />
 }

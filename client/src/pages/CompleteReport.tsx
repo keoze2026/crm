@@ -6,7 +6,7 @@ import {
   SectionTable, SectionHeading, rangeText,
   buyerCols, campCols, buyerTableData, campTableData,
 } from '../components/ReportTable'
-import { Card, cx, EmptyState, Spinner } from '../components/ui'
+import { Card, cx, EmptyState, PageLoader } from '../components/ui'
 import { daysAgo, money2, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { CompleteReport } from '../types'
@@ -30,7 +30,7 @@ function CompleteReportView() {
 
       <Card className="p-6">
         {report.loading ? (
-          <div className="flex justify-center py-16"><Spinner className="h-7 w-7" /></div>
+          <PageLoader label="Loading report…" />
         ) : report.error ? (
           <p className="py-10 text-center text-sm text-red-600">{report.error}</p>
         ) : !data || (data.buyers.length === 0 && data.campaigns.length === 0) ? (

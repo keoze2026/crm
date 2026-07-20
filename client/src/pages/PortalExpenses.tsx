@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import { PageHeader } from '../components/Layout'
 import { MonthSelector, currentMonth, formatMonth } from '../components/MonthSelector'
 import PortalExpensesSheet from '../components/PortalExpensesSheet'
-import { Card, CardHeader, EmptyState, Spinner } from '../components/ui'
+import { Card, CardHeader, EmptyState, PageLoader } from '../components/ui'
 import { money2 } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { PortalExpense } from '../types'
@@ -48,9 +48,7 @@ export default function PortalExpenses() {
       </PageHeader>
 
       {expenses.loading ? (
-        <div className="flex justify-center py-16">
-          <Spinner className="h-6 w-6" />
-        </div>
+        <PageLoader label="Loading expenses…" />
       ) : (
         <>
           <Card>

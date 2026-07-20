@@ -278,6 +278,45 @@ export function Spinner({ className }: { className?: string }) {
   )
 }
 
+/**
+ * Page/section loading indicator: a thick ring with a glowing arc that sweeps around, in the
+ * app's navy→blue, over a soft slate track — a compact take on the reference loader. Use in
+ * place of a bare Spinner for page-level load states. Indeterminate (no percentage) since our
+ * data fetches don't report progress.
+ */
+export function PageLoader({ label = 'Loading…', size = 56, className }: { label?: string; size?: number; className?: string }) {
+  const stroke = Math.max(4, Math.round(size / 9))
+  const r = (size - stroke) / 2
+  const circumference = 2 * Math.PI * r
+  const mid = size / 2
+  return (
+    <div className={cx('flex flex-col items-center justify-center gap-3', className ?? 'py-16')}>
+      <svg
+        width={size} height={size} viewBox={`0 0 ${size} ${size}`}
+        className="animate-spin" style={{ animationDuration: '0.9s' }}
+        role="status" aria-label={label || 'Loading'}
+      >
+        <defs>
+          <linearGradient id="pageLoaderArc" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#1a3654" />
+            <stop offset="100%" stopColor="#2563eb" />
+          </linearGradient>
+        </defs>
+        {/* Track */}
+        <circle cx={mid} cy={mid} r={r} fill="none" strokeWidth={stroke} className="stroke-slate-200/80" />
+        {/* Sweeping arc (~28% of the ring) with a soft glow */}
+        <circle
+          cx={mid} cy={mid} r={r} fill="none" strokeWidth={stroke} strokeLinecap="round"
+          stroke="url(#pageLoaderArc)"
+          strokeDasharray={`${circumference * 0.28} ${circumference}`}
+          style={{ filter: 'drop-shadow(0 0 5px rgba(37,99,235,0.35))' }}
+        />
+      </svg>
+      {label && <span className="animate-pulse text-sm font-medium text-slate-500">{label}</span>}
+    </div>
+  )
+}
+
 export function EmptyState({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400">

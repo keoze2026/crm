@@ -24,6 +24,8 @@ import type {
   AuditPage,
   AuditFilters,
   PortalExpense,
+  Vendor,
+  VendorPayment,
   Role,
 } from '../types'
 
@@ -209,6 +211,26 @@ export const api = {
     request<PortalExpense>(`/portal-expenses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deletePortalExpense: (id: number) =>
     request<{ deleted: boolean }>(`/portal-expenses/${id}`, { method: 'DELETE' }),
+
+  // Vendors (traffic-source payment sheets)
+  vendors: () =>
+    request<Vendor[]>('/vendors'),
+  createVendor: (name: string) =>
+    request<Vendor>('/vendors', { method: 'POST', body: JSON.stringify({ name }) }),
+  // Upsert the hand-entered Due/Advance balance by name (works for discovered vendors too).
+  saveVendorMeta: (data: { name: string; manual_due?: number }) =>
+    request<Vendor>('/vendors', { method: 'PUT', body: JSON.stringify(data) }),
+  deleteVendor: (id: number) =>
+    request<{ deleted: boolean }>(`/vendors/${id}`, { method: 'DELETE' }),
+
+  vendorPayments: (vendor: string, range: DateRange) =>
+    request<VendorPayment[]>(`/vendor-payments${qs({ vendor, ...range })}`),
+  createVendorPayment: (data: Partial<VendorPayment>) =>
+    request<VendorPayment>('/vendor-payments', { method: 'POST', body: JSON.stringify(data) }),
+  updateVendorPayment: (id: number, data: Partial<VendorPayment>) =>
+    request<VendorPayment>(`/vendor-payments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteVendorPayment: (id: number) =>
+    request<{ deleted: boolean }>(`/vendor-payments/${id}`, { method: 'DELETE' }),
 }
 
 // Format a UTC timestamp to org timezone display

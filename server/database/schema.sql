@@ -171,3 +171,34 @@ CREATE TABLE IF NOT EXISTS portal_expenses (
 );
 
 CREATE INDEX IF NOT EXISTS idx_portal_expenses_month ON portal_expenses (month);
+
+-- Vendors (traffic sources) — powers the Vendors page. Tabs are the union of the distinct
+-- campaign sources (call_records.source) and the rows below, keyed by NAME. `vendors` holds
+-- manually-added vendors + a hand-entered Due/Advance balance; `vendor_payments` holds the
+-- dated ledger rows. Both standalone (no call_records link) so the 40-day cleanup never
+-- touches them. The "Payments" column in the UI is derived (converted_calls * price).
+CREATE TABLE IF NOT EXISTS vendors (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name        TEXT           NOT NULL,
+    is_manual   BOOLEAN        NOT NULL DEFAULT false,   -- true = added via the "+" tab (not in Campaigns)
+    manual_due  NUMERIC(16, 2) NOT NULL DEFAULT 0,       -- signed balance: positive = Due (red), negative = Advance (green)
+    sort_order  INTEGER        NOT NULL DEFAULT 0,
+    created_at  TIMESTAMPTZ    NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ    NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vendors_name_ci ON vendors (lower(btrim(name)));
+
+CREATE TABLE IF NOT EXISTS vendor_payments (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    vendor          TEXT           NOT NULL,                 -- the traffic-source name (matches vendors.name)
+    entry_date      DATE           NOT NULL,
+    converted_calls INTEGER        NOT NULL DEFAULT 0 CHECK (converted_calls >= 0),
+    price           NUMERIC(16, 2) NOT NULL DEFAULT 0 CHECK (price           >= 0),  -- USD per converted call
+    amount_paid     NUMERIC(16, 2) NOT NULL DEFAULT 0 CHECK (amount_paid     >= 0),  -- USD actually paid
+    created_at      TIMESTAMPTZ    NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ    NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_vendor_payments_vendor ON vendor_payments (vendor);
+CREATE INDEX IF NOT EXISTS idx_vendor_payments_date   ON vendor_payments (entry_date);

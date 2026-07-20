@@ -12,7 +12,7 @@ import { api, fmtAttendanceTime } from '../api/client'
 import { useAsync } from '../lib/useAsync'
 import type { AttendanceDay, AttendanceStaff } from '../types'
 import { PageHeader } from '../components/Layout'
-import { Button, Card, CardHeader, SegmentedTabs, Spinner, cx } from '../components/ui'
+import { Button, Card, CardHeader, PageLoader, SegmentedTabs, Spinner, cx } from '../components/ui'
 import type { Range } from '../components/DateRange'
 import { fileDateRange } from '../lib/format'
 import { saveXlsx } from '../lib/xlsx'
@@ -178,7 +178,7 @@ function MetricCard({ label, value, sub }: { label: string; value: ReactNode; su
 }
 
 function ChartLoading() {
-  return <div className="flex h-full items-center justify-center"><Spinner className="h-6 w-6" /></div>
+  return <PageLoader label="" size={40} className="h-full" />
 }
 
 /** Single-series bar-chart tooltip (matches the Dashboard tooltip style). */

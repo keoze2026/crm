@@ -3,7 +3,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { FullPageSpinner } from '../auth/RequireAuth'
-import { Button, Input, Spinner } from '../components/ui'
+import { Button, Input, PageLoader, Spinner } from '../components/ui'
 import type { EnrollInfo } from '../types'
 import { Shell } from './Login'
 
@@ -59,7 +59,7 @@ export default function Enroll() {
       {startError ? (
         <p className="text-center text-sm text-red-600">{startError}</p>
       ) : !info ? (
-        <div className="flex justify-center py-8"><Spinner className="h-6 w-6" /></div>
+        <PageLoader label="" size={44} className="py-8" />
       ) : (
         <div className="space-y-4">
           <div className="flex flex-col items-center gap-3">

@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard'
 import Records from './pages/Records'
 import Buyers from './pages/Buyers'
 import Campaigns from './pages/Campaigns'
+import Vendors from './pages/Vendors'
 import PortalExpenses from './pages/PortalExpenses'
 import CompleteReportPage from './pages/CompleteReport'
 import Attendance from './pages/Attendance'
@@ -36,6 +37,7 @@ const router = createBrowserRouter([
           { path: 'records', element: <Records /> },
           { path: 'buyers', element: <RequirePage page="buyers"><Buyers /></RequirePage> },
           { path: 'campaigns', element: <RequirePage page="campaigns"><Campaigns /></RequirePage> },
+          { path: 'vendors', element: <Vendors /> },
           { path: 'portal-expenses', element: <PortalExpenses /> },
           { path: 'complete-report', element: <RequirePage page="complete-report"><CompleteReportPage /></RequirePage> },
           { path: 'attendance', element: <RequirePage page="attendance"><Attendance /></RequirePage> },

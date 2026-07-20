@@ -16,6 +16,7 @@ use App\Controllers\DestinationController;
 use App\Controllers\PortalExpenseController;
 use App\Controllers\RecordController;
 use App\Controllers\UserController;
+use App\Controllers\VendorController;
 use App\Database;
 use App\Http;
 use App\Router;
@@ -97,6 +98,17 @@ $router->get('/portal-expenses',         fn () => $portalExpenses->index());
 $router->post('/portal-expenses',        fn () => $portalExpenses->store());
 $router->put('/portal-expenses/{id}',    fn ($p) => $portalExpenses->update($p));
 $router->delete('/portal-expenses/{id}', fn ($p) => $portalExpenses->destroy($p));
+
+// Vendors (traffic-source payment sheets)
+$vendors = new VendorController();
+$router->get('/vendors',                 fn () => $vendors->index());
+$router->post('/vendors',                fn () => $vendors->store());
+$router->put('/vendors',                 fn () => $vendors->upsertMeta());
+$router->delete('/vendors/{id}',         fn ($p) => $vendors->destroy($p));
+$router->get('/vendor-payments',         fn () => $vendors->payments());
+$router->post('/vendor-payments',        fn () => $vendors->storePayment());
+$router->put('/vendor-payments/{id}',    fn ($p) => $vendors->updatePayment($p));
+$router->delete('/vendor-payments/{id}', fn ($p) => $vendors->destroyPayment());
 
 // Call records
 $records = new RecordController();

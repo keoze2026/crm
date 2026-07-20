@@ -352,3 +352,30 @@ export interface PortalExpense {
   created_at: string
   updated_at: string
 }
+
+// ─── Vendors (traffic-source payment sheets) ───────────────────────────────────
+
+export interface Vendor {
+  /** null for a discovered campaign source that has no `vendors` metadata row yet. */
+  id: number | null
+  name: string
+  /** true = added via the "+" tab (not present on the Campaigns side). */
+  is_manual: boolean
+  /** Hand-entered balance, USD, signed: positive = Due (red), negative = Advance (green). */
+  manual_due: number
+  sort_order: number
+}
+
+export interface VendorPayment {
+  id: number
+  vendor: string
+  /** Entry date, YYYY-MM-DD. */
+  entry_date: string
+  converted_calls: number
+  /** USD per converted call. */
+  price: number
+  /** USD actually paid. */
+  amount_paid: number
+  created_at: string
+  updated_at: string
+}

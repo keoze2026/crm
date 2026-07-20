@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react'
 import { api } from '../api/client'
 import { DateRangeControl, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
-import { Badge, Button, Card, EmptyState, Input, Select, Spinner } from '../components/ui'
+import { Badge, Button, Card, EmptyState, Input, PageLoader, Select } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
 import type { AuditFilters, AuditLog } from '../types'
 
@@ -81,7 +81,7 @@ export default function SystemLogs() {
 
       <Card className="overflow-hidden">
         {logs.loading ? (
-          <div className="flex justify-center py-16"><Spinner className="h-6 w-6" /></div>
+          <PageLoader label="Loading logs…" />
         ) : logs.error ? (
           <p className="py-10 text-center text-sm text-red-600">{logs.error}</p>
         ) : rows.length === 0 ? (
