@@ -174,17 +174,19 @@ CREATE INDEX IF NOT EXISTS idx_portal_expenses_month ON portal_expenses (month);
 
 -- Vendors (traffic sources) — powers the Vendors page. Tabs are the union of the distinct
 -- campaign sources (call_records.source) and the rows below, keyed by NAME. `vendors` holds
--- manually-added vendors + a hand-entered Due/Advance balance; `vendor_payments` holds the
--- dated ledger rows. Both standalone (no call_records link) so the 40-day cleanup never
--- touches them. The "Payments" column in the UI is derived (converted_calls * price).
+-- manually-added vendors + the opening Advance the ledger starts from; `vendor_payments`
+-- holds the dated ledger rows. Both standalone (no call_records link) so the 40-day cleanup
+-- never touches them. The "Payments" column in the UI is derived (converted_calls * price),
+-- and so is the Due/Advance balance: opening_advance + Σ(amount_paid − payments), where the
+-- rows before the viewed period carry the balance forward (see 014_vendor_opening_advance).
 CREATE TABLE IF NOT EXISTS vendors (
-    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name        TEXT           NOT NULL,
-    is_manual   BOOLEAN        NOT NULL DEFAULT false,   -- true = added via the "+" tab (not in Campaigns)
-    manual_due  NUMERIC(16, 2) NOT NULL DEFAULT 0,       -- signed balance: positive = Due (red), negative = Advance (green)
-    sort_order  INTEGER        NOT NULL DEFAULT 0,
-    created_at  TIMESTAMPTZ    NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ    NOT NULL DEFAULT now()
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name            TEXT           NOT NULL,
+    is_manual       BOOLEAN        NOT NULL DEFAULT false,   -- true = added via the "+" tab (not in Campaigns)
+    opening_advance NUMERIC(16, 2) NOT NULL DEFAULT 0,       -- signed opening balance: positive = Advance (green), negative = Due (red)
+    sort_order      INTEGER        NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ    NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ    NOT NULL DEFAULT now()
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_vendors_name_ci ON vendors (lower(btrim(name)));

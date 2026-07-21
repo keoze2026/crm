@@ -6,7 +6,7 @@
 -- A "vendor" is a traffic source. The set of tabs on the page is the union of the
 -- distinct campaign sources (call_records.source where record_type='campaign') and the
 -- rows in `vendors` below. So `vendors` only needs rows for (a) manually-added vendors
--- that aren't in Campaigns, and (b) a hand-entered Due/Advance balance for any vendor.
+-- that aren't in Campaigns, and (b) an opening Advance balance for any vendor.
 -- Everything is keyed by NAME (matching the campaign `source` strings), not a foreign key.
 --
 -- `vendor_payments` holds the dated ledger rows (one page row = one entry). The "Payments"
@@ -18,19 +18,21 @@
 --
 -- Safe to run multiple times.
 
--- Vendor metadata: manual vendors + a hand-entered Due/Advance balance for any vendor.
+-- Vendor metadata: manual vendors + the opening Advance balance the ledger starts from.
+-- (`opening_advance` arrived in 014 — on a DB where 013 ran first it is named `manual_due`
+-- until that migration renames it.)
 CREATE TABLE IF NOT EXISTS vendors (
-    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name        TEXT           NOT NULL,
-    is_manual   BOOLEAN        NOT NULL DEFAULT false,   -- true = added via the "+" tab (not in Campaigns)
-    manual_due  NUMERIC(16, 2) NOT NULL DEFAULT 0,       -- signed balance: positive = Due (red), negative = Advance (green)
-    sort_order  INTEGER        NOT NULL DEFAULT 0,
-    created_at  TIMESTAMPTZ    NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ    NOT NULL DEFAULT now()
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name            TEXT           NOT NULL,
+    is_manual       BOOLEAN        NOT NULL DEFAULT false,   -- true = added via the "+" tab (not in Campaigns)
+    opening_advance NUMERIC(16, 2) NOT NULL DEFAULT 0,       -- signed opening balance: positive = Advance (green), negative = Due (red)
+    sort_order      INTEGER        NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ    NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ    NOT NULL DEFAULT now()
 );
 
 -- One vendor row per name, case/space-insensitive, so a discovered source and its
--- Due/Advance balance reconcile regardless of capitalisation or padding.
+-- opening balance reconcile regardless of capitalisation or padding.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_vendors_name_ci ON vendors (lower(btrim(name)));
 
 -- Dated ledger rows. Multiple rows per (vendor, date) are allowed.

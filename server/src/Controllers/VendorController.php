@@ -15,10 +15,19 @@ use App\Http;
  * and the rows in the `vendors` table. Everything is keyed by NAME rather than a foreign
  * key, so a discovered source ("DXTST") and a hand-added vendor share one namespace.
  *
- *  - `vendors`         : per-vendor metadata (manual flag + a hand-entered Due/Advance
- *                        balance — signed: positive = Due, negative = Advance).
+ *  - `vendors`         : per-vendor metadata (manual flag + `opening_advance`, the balance
+ *                        the ledger starts from — signed: positive = Advance, negative = Due).
  *  - `vendor_payments` : the dated ledger rows. The "Payments" column shown in the UI is
  *                        derived (converted_calls * price) and is never stored.
+ *
+ * The Due/Advance balance is never typed. It is derived, and it CARRIES FORWARD across
+ * viewing periods because the part of it that precedes the period is recomputed from the
+ * ledger on every request (see payments()):
+ *
+ *     initial_advance = opening_advance + Σ(amount_paid − converted_calls × price)
+ *                                           over rows dated BEFORE the period start
+ *     final balance   = initial_advance + Σ amount_paid − Σ payments   (within the period)
+ *     positive ⇒ Advance (the vendor holds our money) · negative ⇒ Due (we owe them)
  */
 final class VendorController
 {
@@ -27,7 +36,7 @@ final class VendorController
     /**
      * The tab list: distinct campaign sources merged with the `vendors` table, keyed by
      * case/space-insensitive name. Discovered-only sources come back with id=null and
-     * zeroed metadata; `vendors` rows carry their id, manual flag and Due/Advance balance.
+     * zeroed metadata; `vendors` rows carry their id, manual flag and opening advance.
      */
     public function index(): void
     {
@@ -35,7 +44,7 @@ final class VendorController
 
         // (a) Metadata rows.
         $vendors = $pdo->query(
-            'SELECT id, name, is_manual, manual_due, sort_order
+            'SELECT id, name, is_manual, opening_advance, sort_order
                FROM vendors'
         )->fetchAll();
 
@@ -52,22 +61,22 @@ final class VendorController
         $byKey = [];
         foreach ($vendors as $v) {
             $byKey[$this->key($v['name'])] = [
-                'id'         => (int) $v['id'],
-                'name'       => $v['name'],
-                'is_manual'  => (bool) $v['is_manual'],
-                'manual_due' => (float) $v['manual_due'],
-                'sort_order' => (int) $v['sort_order'],
+                'id'              => (int) $v['id'],
+                'name'            => $v['name'],
+                'is_manual'       => (bool) $v['is_manual'],
+                'opening_advance' => (float) $v['opening_advance'],
+                'sort_order'      => (int) $v['sort_order'],
             ];
         }
         foreach ($sources as $name) {
             $k = $this->key($name);
             if (!isset($byKey[$k])) {
                 $byKey[$k] = [
-                    'id'         => null,
-                    'name'       => $name,
-                    'is_manual'  => false,
-                    'manual_due' => 0.0,
-                    'sort_order' => 0,
+                    'id'              => null,
+                    'name'            => $name,
+                    'is_manual'       => false,
+                    'opening_advance' => 0.0,
+                    'sort_order'      => 0,
                 ];
             }
         }
@@ -93,7 +102,7 @@ final class VendorController
         $stmt = Database::connection()->prepare(
             'INSERT INTO vendors (name, is_manual)
              VALUES (:name, true)
-             RETURNING id, name, is_manual, manual_due, sort_order'
+             RETURNING id, name, is_manual, opening_advance, sort_order'
         );
         try {
             $stmt->execute([':name' => $name]);
@@ -104,9 +113,13 @@ final class VendorController
     }
 
     /**
-     * Upsert a vendor's hand-entered Due/Advance balance by name. Works for discovered
-     * vendors too (they have no `vendors` row until this is first edited). `manual_due` is
-     * signed: positive = amount Due, negative = Advance.
+     * Upsert a vendor's opening advance by name — the balance its ledger starts from,
+     * before any `vendor_payments` row. Works for discovered vendors too (they have no
+     * `vendors` row until this is first edited). Signed: positive = Advance, negative = Due.
+     *
+     * Note the client sends the seed, not the figure it sees: the page shows the opening
+     * balance *for the viewed period*, so it subtracts the ledger's prior-period movement
+     * (`prior_net` from payments()) before saving. That keeps every other period consistent.
      */
     public function upsertMeta(): void
     {
@@ -117,18 +130,18 @@ final class VendorController
         }
 
         $stmt = Database::connection()->prepare(
-            'INSERT INTO vendors (name, manual_due)
-             VALUES (:name, :due)
+            'INSERT INTO vendors (name, opening_advance)
+             VALUES (:name, :adv)
              ON CONFLICT (lower(btrim(name))) DO UPDATE SET
-                manual_due = COALESCE(:due2, vendors.manual_due),
-                updated_at = now()
-             RETURNING id, name, is_manual, manual_due, sort_order'
+                opening_advance = COALESCE(:adv2, vendors.opening_advance),
+                updated_at      = now()
+             RETURNING id, name, is_manual, opening_advance, sort_order'
         );
-        $due = isset($body['manual_due']) ? $this->signed($body['manual_due']) : null;
+        $adv = isset($body['opening_advance']) ? $this->signed($body['opening_advance']) : null;
         $stmt->execute([
             ':name' => $name,
-            ':due'  => $due ?? 0,
-            ':due2' => $due,
+            ':adv'  => $adv ?? 0,
+            ':adv2' => $adv,
         ]);
         Http::json($this->castVendor($stmt->fetch()));
     }
@@ -157,7 +170,19 @@ final class VendorController
 
     // ── Vendor payments (dated ledger rows) ─────────────────────────────────────
 
-    /** Ledger rows for one vendor within an optional date range. */
+    /**
+     * Ledger rows for one vendor within an optional date range, plus the balance carried
+     * INTO that range so the page's Due/Advance figure survives a change of period.
+     *
+     * Returns an envelope rather than a bare array:
+     *   rows            — the ledger rows inside the range
+     *   opening_advance — the vendor's stored seed (`vendors.opening_advance`)
+     *   prior_net       — Σ(amount_paid − converted_calls × price) for rows BEFORE `from`
+     *   initial_advance — opening_advance + prior_net, i.e. the "Initial Advance" shown
+     *
+     * Because prior_net is recomputed here on every request, editing or back-dating an old
+     * row automatically re-bases every later period — nothing is stored stale.
+     */
     public function payments(): void
     {
         $vendor = trim((string) Http::query('vendor', ''));
@@ -166,6 +191,7 @@ final class VendorController
         }
         $from = Http::query('from');
         $to   = Http::query('to');
+        $pdo  = Database::connection();
 
         $sql = 'SELECT id, vendor, to_char(entry_date, \'YYYY-MM-DD\') AS entry_date,
                        converted_calls, price, amount_paid, created_at, updated_at
@@ -176,9 +202,37 @@ final class VendorController
         if ($to)   { $sql .= ' AND entry_date <= :to';   $params[':to']   = $to; }
         $sql .= ' ORDER BY entry_date ASC, id ASC';
 
-        $stmt = Database::connection()->prepare($sql);
+        $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
-        Http::json($this->castPayments($stmt->fetchAll()));
+        $rows = $this->castPayments($stmt->fetchAll());
+
+        // The seed. Discovered vendors have no `vendors` row until one is saved -> 0.
+        $seed = $pdo->prepare(
+            'SELECT opening_advance FROM vendors
+              WHERE lower(btrim(name)) = lower(btrim(:vendor))'
+        );
+        $seed->execute([':vendor' => $vendor]);
+        $opening = (float) ($seed->fetchColumn() ?: 0);
+
+        // Everything the ledger moved before the range starts — the carry-forward.
+        $priorNet = 0.0;
+        if ($from) {
+            $prior = $pdo->prepare(
+                'SELECT COALESCE(SUM(amount_paid - converted_calls * price), 0)
+                   FROM vendor_payments
+                  WHERE lower(btrim(vendor)) = lower(btrim(:vendor))
+                    AND entry_date < :from'
+            );
+            $prior->execute([':vendor' => $vendor, ':from' => $from]);
+            $priorNet = (float) $prior->fetchColumn();
+        }
+
+        Http::json([
+            'rows'            => $rows,
+            'opening_advance' => $opening,
+            'prior_net'       => $priorNet,
+            'initial_advance' => $opening + $priorNet,
+        ]);
     }
 
     public function storePayment(): void
@@ -289,11 +343,11 @@ final class VendorController
     private function castVendor(array $row): array
     {
         return [
-            'id'         => (int) $row['id'],
-            'name'       => $row['name'],
-            'is_manual'  => (bool) $row['is_manual'],
-            'manual_due' => (float) $row['manual_due'],
-            'sort_order' => (int) $row['sort_order'],
+            'id'              => (int) $row['id'],
+            'name'            => $row['name'],
+            'is_manual'       => (bool) $row['is_manual'],
+            'opening_advance' => (float) $row['opening_advance'],
+            'sort_order'      => (int) $row['sort_order'],
         ];
     }
 

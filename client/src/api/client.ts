@@ -25,6 +25,7 @@ import type {
   AuditFilters,
   PortalExpense,
   Vendor,
+  VendorLedger,
   VendorPayment,
   Role,
 } from '../types'
@@ -217,14 +218,21 @@ export const api = {
     request<Vendor[]>('/vendors'),
   createVendor: (name: string) =>
     request<Vendor>('/vendors', { method: 'POST', body: JSON.stringify({ name }) }),
-  // Upsert the hand-entered Due/Advance balance by name (works for discovered vendors too).
-  saveVendorMeta: (data: { name: string; manual_due?: number }) =>
+  // Upsert the vendor's opening advance by name (works for discovered vendors too).
+  saveVendorMeta: (data: { name: string; opening_advance?: number }) =>
     request<Vendor>('/vendors', { method: 'PUT', body: JSON.stringify(data) }),
   deleteVendor: (id: number) =>
     request<{ deleted: boolean }>(`/vendors/${id}`, { method: 'DELETE' }),
 
-  vendorPayments: (vendor: string, range: DateRange) =>
-    request<VendorPayment[]>(`/vendor-payments${qs({ vendor, ...range })}`),
+  // The ledger endpoint returns an envelope (rows + the balance carried into the range).
+  // An older deployed API answers with a bare array — treat that as a zero carry-forward
+  // rather than crashing the page.
+  vendorPayments: async (vendor: string, range: DateRange): Promise<VendorLedger> => {
+    const res = await request<VendorLedger | VendorPayment[]>(`/vendor-payments${qs({ vendor, ...range })}`)
+    return Array.isArray(res)
+      ? { rows: res, opening_advance: 0, prior_net: 0, initial_advance: 0 }
+      : res
+  },
   createVendorPayment: (data: Partial<VendorPayment>) =>
     request<VendorPayment>('/vendor-payments', { method: 'POST', body: JSON.stringify(data) }),
   updateVendorPayment: (id: number, data: Partial<VendorPayment>) =>

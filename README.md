@@ -26,8 +26,10 @@ The difference between the two is the **gross margin**.
   (auto-discovered from campaigns, plus a **+** tab to add vendors by hand). Each
   tab is a manual dated ledger — Date · Traffic Source (auto) · Converted call ·
   Price · **Payments** (auto = calls × price) · Amount paid — with auto totals, an
-  **Average calls a day** (Σ converted ÷ weekdays in range), and a hand-entered,
-  colour-coded **Due / Advance** balance (red = due, green = advance). One
+  **Average calls a day** (Σ converted ÷ days worked), an **Initial Advance** (the
+  balance the period opens with, carried forward from the previous one), and a
+  derived, colour-coded **Due / Advance** balance — `initial + paid − payments`,
+  labelled Advance when positive and Due when negative, never typed. One
   top-level date-range filter drives every tab.
 - **Portal Expenses** — monthly per-provider expense sheet (voice minutes,
   rejected calls, rent values, payout expenses) with an auto-or-override Total
@@ -48,7 +50,7 @@ The difference between the two is the **gross margin**.
 | `campaigns`       | Media-buying campaigns that source calls (cost). e.g. `C-05`.     |
 | `call_records`    | One daily row: date, type, answered/missed/counted, rate.         |
 | `portal_expenses` | Monthly per-provider expenses (Portal Expenses page). Standalone. |
-| `vendors`         | Traffic-source metadata: manual vendors + Due/Advance balance.    |
+| `vendors`         | Traffic-source metadata: manual vendors + opening advance.        |
 | `vendor_payments` | Dated per-vendor ledger rows (Vendors page). Standalone.          |
 
 `call_records.total_bill` is a generated column (`counted * rate`).
@@ -193,9 +195,10 @@ PUT    /api/portal-expenses/{id}         DELETE /api/portal-expenses/{id}
 
 GET    /api/vendors                       # tab list: campaign sources ∪ manual vendors
 POST   /api/vendors {name}                # add a manual vendor
-PUT    /api/vendors {name, manual_due}    # upsert a vendor's Due/Advance balance
+PUT    /api/vendors {name, opening_advance}   # upsert the balance the ledger starts from
 DELETE /api/vendors/{id}                  # delete a manual vendor (+ its ledger rows)
-GET    /api/vendor-payments?vendor&from&to
+GET    /api/vendor-payments?vendor&from&to    # -> {rows, opening_advance, prior_net, initial_advance}
+                                              #    initial_advance carries the balance into the range
 POST   /api/vendor-payments   PUT /api/vendor-payments/{id}   DELETE /api/vendor-payments/{id}
 ```
 
@@ -242,8 +245,8 @@ CRM/
     │   ├── Audit.php  Database.php  Http.php  Router.php  RecordFilter.php
     └── database/
         ├── schema.sql
-        ├── migrations/          # 001–013 (007–010 = auth; 011–012 = portal expenses;
-        │                        #   013 = vendors)
+        ├── migrations/          # 001–014 (007–010 = auth; 011–012 = portal expenses;
+        │                        #   013–014 = vendors)
         ├── seed.php             # demo data
         └── seed_admin.php       # bootstrap the first admin (auth)
 ```

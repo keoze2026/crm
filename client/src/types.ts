@@ -379,8 +379,12 @@ export interface Vendor {
   name: string
   /** true = added via the "+" tab (not present on the Campaigns side). */
   is_manual: boolean
-  /** Hand-entered balance, USD, signed: positive = Due (red), negative = Advance (green). */
-  manual_due: number
+  /**
+   * The balance the vendor's ledger starts from, before any `vendor_payments` row —
+   * USD, signed: positive = Advance (green), negative = Due (red). Everything after it
+   * is derived from the ledger; see `VendorLedger`.
+   */
+  opening_advance: number
   sort_order: number
 }
 
@@ -396,4 +400,18 @@ export interface VendorPayment {
   amount_paid: number
   created_at: string
   updated_at: string
+}
+
+/**
+ * One vendor's ledger for a date range, plus the balance carried INTO that range — which
+ * is what keeps the Due/Advance figure accurate when you move to the next viewing period.
+ */
+export interface VendorLedger {
+  rows: VendorPayment[]
+  /** The vendor's stored seed (`vendors.opening_advance`), before any ledger row. */
+  opening_advance: number
+  /** Σ(amount_paid − converted_calls × price) over every row dated before the range. */
+  prior_net: number
+  /** opening_advance + prior_net — the "Initial Advance" the period opens with. */
+  initial_advance: number
 }
