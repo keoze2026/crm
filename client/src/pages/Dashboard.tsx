@@ -194,8 +194,29 @@ function Sparkline({ id, data, color, height = 40 }: {
   color: string
   height?: number
 }) {
-  if (data.length < 2) return <div style={{ height }} aria-hidden />
-  const points = data.map((v, i) => ({ i, v }))
+  // Genuinely nothing to plot — the range holds no records at all. Say so rather than
+  // leaving a blank gap that reads as a chart which failed to load.
+  if (data.length === 0) {
+    return (
+      <div className="flex items-center justify-center" style={{ height }}>
+        <span className="text-[11px] text-slate-300">No trend data in this range</span>
+      </div>
+    )
+  }
+
+  // A single bucket (only one day in the range carries records) still deserves a mark:
+  // duplicate it so there is a segment to stroke. Without this the tile silently loses
+  // its chart, which looks like a bug rather than like thin data.
+  const values = data.length === 1 ? [data[0], data[0]] : data
+  const points = values.map((v, i) => ({ i, v }))
+
+  // A perfectly flat series makes dataMin === dataMax, which pins the line to the edge of
+  // the band (and is the normal case for the duplicated single bucket above). Pad the
+  // domain so a flat line sits at mid-height instead.
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const pad = min === max ? Math.abs(max) * 0.5 || 1 : 0
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={points} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
@@ -205,7 +226,7 @@ function Sparkline({ id, data, color, height = 40 }: {
             <stop offset="100%" stopColor={color} stopOpacity={0} />
           </linearGradient>
         </defs>
-        <YAxis hide domain={['dataMin', 'dataMax']} />
+        <YAxis hide domain={[min - pad, max + pad]} />
         <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.75} fill={`url(#${id})`} dot={false} isAnimationActive={false} />
       </AreaChart>
     </ResponsiveContainer>
