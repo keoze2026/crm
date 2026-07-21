@@ -240,10 +240,17 @@ const cxRow = (open: boolean) =>
   'cursor-pointer border-b border-white/30 last:border-0 transition-colors ' +
   (open ? 'bg-white/50' : 'hover:bg-white/40')
 
+/** Entity slugs that read better with a space than a hyphen in the summary sentence. */
+const ENTITY_NOUN: Record<string, string> = {
+  'vendor-payment': 'vendor payment',
+  'portal-expense': 'portal expense',
+}
+
 /** A human sentence describing what happened. */
 function summarize(row: AuditLog): string {
   const who = row.user_email ?? 'Someone'
-  const [entity, verbRaw] = row.action.split('.')
+  const [entityRaw, verbRaw] = row.action.split('.')
+  const entity = ENTITY_NOUN[entityRaw] ?? entityRaw
   const verb = verbRaw ?? ''
   const target = row.entity_id != null ? `${entity} #${row.entity_id}` : entity
   const past: Record<string, string> = {

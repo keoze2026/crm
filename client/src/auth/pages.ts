@@ -9,12 +9,15 @@ export interface PageDef {
 
 /**
  * Access-controlled pages, in the order the admin ticks them in the Users editor
- * (dashboard, buyers, campaigns, attendance, users, logs, complete report).
+ * (dashboard, buyers, campaigns, vendors, portal expenses, attendance, users, logs,
+ * complete report).
  */
 export const PAGES: PageDef[] = [
   { key: 'dashboard', label: 'Dashboard', path: '/' },
   { key: 'buyers', label: 'Buyers', path: '/buyers' },
   { key: 'campaigns', label: 'Campaigns', path: '/campaigns' },
+  { key: 'vendors', label: 'Vendors', path: '/vendors' },
+  { key: 'portal-expenses', label: 'Portal Expenses', path: '/portal-expenses' },
   { key: 'attendance', label: 'Attendance', path: '/attendance' },
   { key: 'users', label: 'Users', path: '/users' },
   { key: 'logs', label: 'System Logs', path: '/system-logs' },
@@ -22,7 +25,7 @@ export const PAGES: PageDef[] = [
 ]
 
 /** Pages a non-admin user sees when their permissions have never been customised. */
-export const DEFAULT_USER_PAGES = ['dashboard', 'buyers', 'campaigns', 'attendance', 'complete-report']
+export const DEFAULT_USER_PAGES = ['dashboard', 'buyers', 'campaigns', 'vendors', 'portal-expenses', 'attendance', 'complete-report']
 
 /** Pages that only make sense while auth is enabled — hidden entirely when AUTH_ENABLED=false. */
 export const AUTH_ONLY_PAGES = ['users', 'logs']

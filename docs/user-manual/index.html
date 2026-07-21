@@ -150,13 +150,15 @@
       <a href="#daily-sheet">Daily Sheet</a>
       <a href="#buyers">Buyers</a>
       <a href="#campaigns">Campaigns</a>
+      <a href="#vendors">Vendors</a>
+      <a href="#portal-expenses">Portal Expenses</a>
       <a href="#complete-report">Complete Report</a>
       <a href="#attendance">Attendance</a>
       <a class="section">Reference</a>
       <a href="#auth">Accounts &amp; access</a>
       <a href="#faq">Tips &amp; FAQ</a>
     </nav>
-    <div class="foot">Revised 11 Jul 2026<br>Screens use sample data.</div>
+    <div class="foot">Revised 20 Jul 2026<br>Screens use sample data.</div>
   </aside>
 
   <main>
@@ -168,7 +170,7 @@
       <b>campaigns</b> (the cost side — the media buying that sources those calls). The gap between the
       two is your <b>profit</b>. This guide walks through every page and the controls you'll use daily.</p>
       <div class="meta">
-        <span class="pill">6 working pages</span>
+        <span class="pill">8 working pages</span>
         <span class="pill">Revenue &amp; cost tracking</span>
         <span class="pill">Live dashboard</span>
         <span class="pill">CSV / PDF reports</span>
@@ -204,11 +206,13 @@
       highlighted item is the page you're on. On a phone, tap the <kbd>☰</kbd> menu icon in the top bar to open it.</p>
       <div class="grid2">
         <div class="card">
-          <h3>The six pages</h3>
+          <h3>The eight pages</h3>
           <p><b>Dashboard</b> — the at-a-glance performance overview.</p>
           <p><b>Daily Sheet</b> — enter and review buyer (revenue) call records.</p>
           <p><b>Buyers</b> — a per-buyer monthly summary with editable rates.</p>
           <p><b>Campaigns</b> — enter and review campaign (cost) call records.</p>
+          <p><b>Vendors</b> — per-traffic-source payment ledgers.</p>
+          <p><b>Portal Expenses</b> — monthly provider expense sheet.</p>
           <p><b>Complete Report</b> — revenue, cost and profit side by side.</p>
           <p><b>Attendance</b> — team check-in / check-out tracking.</p>
         </div>
@@ -334,6 +338,75 @@
       </div>
     </section>
 
+    <!-- VENDORS -->
+    <section id="vendors">
+      <h2>Vendors</h2>
+      <p>A running <b>payment ledger for each traffic source</b>. The page opens with one <b>tab per traffic
+      source</b> — the same sources you buy on the <a href="#campaigns">Campaigns</a> sheet (e.g. <code>DXTST</code>,
+      <code>RGR</code>) — so you can track, per vendor, how many calls converted, what that comes to, and how much
+      has actually been paid.</p>
+      <figure>
+        <img src="./images/vendors.webp" alt="Vendors page showing the DXTST payment ledger" width="2400" height="1304" loading="lazy" decoding="async" />
+        <figcaption>Vendors — the DXTST tab: a dated ledger with auto Payments, an Average calls a day, and the colour-coded Due / Advance balance.</figcaption>
+      </figure>
+      <h3>Tabs &amp; the shared date filter</h3>
+      <p>Click a tab along the top to switch vendors. The <b>+</b> tab adds a vendor that isn't in Campaigns —
+      type its name and it behaves exactly like the rest. One <b>date-range picker</b> at the top-right applies to
+      <i>every</i> tab at once: change it and each vendor's rows and totals re-scope to that period.</p>
+      <table class="def">
+        <thead><tr><th>Column</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><b>Date</b></td><td>The day the entry is for — one row per day you record.</td></tr>
+          <tr><td><b>Traffic Source</b></td><td>Filled in for you — always the current tab's vendor.</td></tr>
+          <tr><td><b>Converted call</b></td><td>How many calls converted that day. You type this.</td></tr>
+          <tr><td><b>Price (Usd)</b></td><td>Price per converted call, in dollars. You type this; new rows pre-fill the last price used.</td></tr>
+          <tr><td><b>Payments</b></td><td>Calculated automatically as <code>Converted call × Price</code>. You never type this.</td></tr>
+          <tr><td><b>Amount paid</b></td><td>How much has actually been paid for that day. You type this.</td></tr>
+        </tbody>
+      </table>
+      <h3>Adding &amp; editing rows</h3>
+      <ol class="steps">
+        <li>On the bottom (blank) row, set the <b>Date</b>, then type the <b>Converted call</b> count, the <b>Price</b>, and any <b>Amount paid</b>.</li>
+        <li>Press <kbd>Enter</kbd> or click the <b>+</b> at the end of the row to save it.</li>
+        <li>Edit any saved row in place — changes save when you click away; the <b>trash</b> icon removes a row.</li>
+      </ol>
+      <h3>The figures below the sheet</h3>
+      <div class="grid2">
+        <div class="card"><h3>Average Calls a Day</h3><p>Total converted calls ÷ the number of <b>weekdays</b> (Mon–Fri) in the selected date range — calculated for you.</p></div>
+        <div class="card"><h3>Amount Due / Advance</h3><p>A balance <b>you type in</b> for the vendor. Pick <span class="tag-red">Due</span> (they owe you — shown red) or <span class="tag-green">Advance</span> (paid ahead — shown green) and enter the amount. It starts at&nbsp;0.</p></div>
+      </div>
+      <div class="callout"><span class="h">Payments vs. Amount paid</span>
+        <p><b>Payments</b> is what the calls come to (calls × price); <b>Amount paid</b> is what has actually been
+        settled. The navy <b>Total</b> bar sums Converted calls, Payments and Amount paid for the period.</p>
+      </div>
+    </section>
+
+    <!-- PORTAL EXPENSES -->
+    <section id="portal-expenses">
+      <h2>Portal Expenses</h2>
+      <p>A <b>monthly expense sheet</b>, one row per provider, for what you spend running the calling portals.
+      Pick a month with the selector at the top-right; the sheet and its charts are for that month.</p>
+      <figure>
+        <img src="./images/portal-expenses.webp" alt="Portal Expenses monthly sheet with charts" width="2400" height="1433" loading="lazy" decoding="async" />
+        <figcaption>Portal Expenses — the monthly sheet, per-metric provider charts and the month's Total Expenses band.</figcaption>
+      </figure>
+      <table class="def">
+        <thead><tr><th>Column</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><b>Name</b></td><td>The provider / expense line. Type to add or rename.</td></tr>
+          <tr><td><b>Voice Minutes · Rejected calls · Rent values · Payout expenses</b></td><td>The component amounts that make up the bill. You type each.</td></tr>
+          <tr><td><b>Total Amount (Usd)</b></td><td>Defaults to the sum of the four components, but you can <b>override</b> it for a flat fee.</td></tr>
+          <tr><td><b>% of Total</b></td><td>That row's share of the month's grand total — calculated for you.</td></tr>
+        </tbody>
+      </table>
+      <p>Rows auto-save when you click away, and the bottom row adds a new provider. Below the sheet, a per-metric
+      chart panel compares providers and a navy band shows the month's <b>Total Expenses</b>.</p>
+      <div class="callout note"><span class="h">Auto total, with an override</span>
+        <p>Leave <b>Total Amount</b> alone and it tracks the four component columns; type a value to pin a flat
+        amount (e.g. a fixed fee) independent of them.</p>
+      </div>
+    </section>
+
     <!-- COMPLETE REPORT -->
     <section id="complete-report">
       <h2>Complete Report</h2>
@@ -407,7 +480,7 @@
 
     <footer>
       Platform-CRM User Manual · Screens captured from sample data on 11 Jul 2026.<br>
-      A pay-per-call / call-forwarding CRM — Dashboard, Daily Sheet, Buyers, Campaigns, Complete Report &amp; Attendance.
+      A pay-per-call / call-forwarding CRM — Dashboard, Daily Sheet, Buyers, Campaigns, Vendors, Portal Expenses, Complete Report &amp; Attendance.
     </footer>
   </main>
 </div>

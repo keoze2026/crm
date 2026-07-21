@@ -22,6 +22,16 @@ The difference between the two is the **gross margin**.
   sortable columns, pagination, and CSV export of the filtered set.
 - **Buyers / Campaigns** — card views with per-entity revenue/cost, answer
   rate, record counts and last activity; create / edit / delete.
+- **Vendors** — per-traffic-source payment sheets, one tab per traffic source
+  (auto-discovered from campaigns, plus a **+** tab to add vendors by hand). Each
+  tab is a manual dated ledger — Date · Traffic Source (auto) · Converted call ·
+  Price · **Payments** (auto = calls × price) · Amount paid — with auto totals, an
+  **Average calls a day** (Σ converted ÷ weekdays in range), and a hand-entered,
+  colour-coded **Due / Advance** balance (red = due, green = advance). One
+  top-level date-range filter drives every tab.
+- **Portal Expenses** — monthly per-provider expense sheet (voice minutes,
+  rejected calls, rent values, payout expenses) with an auto-or-override Total
+  Amount and per-provider charts.
 - **Reports** — monthly breakdown, top buyers / campaigns / sources, and
   downloadable CSV reports.
 - **Authentication & access control (optional)** — passwordless login via the
@@ -32,15 +42,23 @@ The difference between the two is the **gross margin**.
 
 ## Data model
 
-| Table          | Purpose                                                        |
-| -------------- | ------------------------------------------------------------- |
-| `buyers`       | Customers who buy forwarded calls (revenue). e.g. `RTG 04`.   |
-| `campaigns`    | Media-buying campaigns that source calls (cost). e.g. `C-05`. |
-| `call_records` | One daily row: date, type, answered/missed/counted, rate.     |
+| Table             | Purpose                                                            |
+| ----------------- | ----------------------------------------------------------------- |
+| `buyers`          | Customers who buy forwarded calls (revenue). e.g. `RTG 04`.       |
+| `campaigns`       | Media-buying campaigns that source calls (cost). e.g. `C-05`.     |
+| `call_records`    | One daily row: date, type, answered/missed/counted, rate.         |
+| `portal_expenses` | Monthly per-provider expenses (Portal Expenses page). Standalone. |
+| `vendors`         | Traffic-source metadata: manual vendors + Due/Advance balance.    |
+| `vendor_payments` | Dated per-vendor ledger rows (Vendors page). Standalone.          |
 
 `call_records.total_bill` is a generated column (`counted * rate`).
 A `record_type` of `buyer` links to a buyer (revenue); `campaign` links to a
 campaign + traffic `source` (cost).
+
+`vendors` / `vendor_payments` and `portal_expenses` are standalone reference tables
+(no `call_records` link), so the 40-day cleanup never touches them — their data is
+kept indefinitely. The Vendors "Payments" figure is derived (`converted_calls × price`),
+not stored.
 
 ## Prerequisites
 
@@ -169,6 +187,16 @@ PUT    /api/campaigns/{id}       DELETE /api/campaigns/{id}
 GET    /api/records?from&to&type&buyer_id&campaign_id&search&sort&dir&page&per_page
 GET    /api/records/export?...   -> CSV (filtered records)
 POST   /api/records              PUT /api/records/{id}   DELETE /api/records/{id}
+
+GET    /api/portal-expenses?month        POST /api/portal-expenses
+PUT    /api/portal-expenses/{id}         DELETE /api/portal-expenses/{id}
+
+GET    /api/vendors                       # tab list: campaign sources ∪ manual vendors
+POST   /api/vendors {name}                # add a manual vendor
+PUT    /api/vendors {name, manual_due}    # upsert a vendor's Due/Advance balance
+DELETE /api/vendors/{id}                  # delete a manual vendor (+ its ledger rows)
+GET    /api/vendor-payments?vendor&from&to
+POST   /api/vendor-payments   PUT /api/vendor-payments/{id}   DELETE /api/vendor-payments/{id}
 ```
 
 ### Auth endpoints (only when `AUTH_ENABLED=true`)
@@ -201,18 +229,21 @@ CRM/
 │       ├── auth/                # AuthContext, RequireAuth/RequirePage, pages.ts
 │       ├── components/          # Layout, ui kit, DateRange
 │       ├── lib/                 # format helpers, useAsync hook
-│       ├── pages/               # Dashboard, Records, Buyers, Campaigns, Reports,
+│       ├── pages/               # Dashboard, Records, Buyers, Campaigns, Vendors,
+│       │                        #   PortalExpenses, Reports, CompleteReport, Attendance,
 │       │                        #   Login, Enroll, Users, SystemLogs
 │       └── types.ts
 └── server/
     ├── public/index.php         # entry point + router wiring + auth guard/audit hook
     ├── src/
     │   ├── Auth/                # Config, Totp, Session, Auth, AuthMiddleware, Pages
-    │   ├── Controllers/         # Buyer, Campaign, Record, Analytics, Auth, User, Audit
+    │   ├── Controllers/         # Buyer, Campaign, Record, Analytics, Destination,
+    │   │                        #   PortalExpense, Vendor, Auth, User, Audit
     │   ├── Audit.php  Database.php  Http.php  Router.php  RecordFilter.php
     └── database/
         ├── schema.sql
-        ├── migrations/          # 001–010 (007–010 = auth stack)
+        ├── migrations/          # 001–013 (007–010 = auth; 011–012 = portal expenses;
+        │                        #   013 = vendors)
         ├── seed.php             # demo data
         └── seed_admin.php       # bootstrap the first admin (auth)
 ```

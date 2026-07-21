@@ -23,10 +23,13 @@ final class Audit
 
     /** First-path-segment → singular entity type. */
     private const ENTITY_MAP = [
-        'buyers'       => 'buyer',
-        'campaigns'    => 'campaign',
-        'destinations' => 'destination',
-        'records'      => 'record',
+        'buyers'           => 'buyer',
+        'campaigns'        => 'campaign',
+        'destinations'     => 'destination',
+        'records'          => 'record',
+        'vendors'          => 'vendor',
+        'vendor-payments'  => 'vendor-payment',
+        'portal-expenses'  => 'portal-expense',
     ];
 
     /** @var array{method:string,path:string,body:array<string,mixed>}|null */
