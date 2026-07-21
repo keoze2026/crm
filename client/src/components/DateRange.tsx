@@ -102,7 +102,18 @@ function Calendar({ year, month, selecting, from, to, hover, onDayClick, onDayHo
 
 // ─── DateRangeControl ─────────────────────────────────────────────────────────
 
-export function DateRangeControl({ value, onChange }: { value: Range; onChange: (r: Range) => void }) {
+export function DateRangeControl({ value, onChange, tone = 'light' }: {
+  value: Range
+  onChange: (r: Range) => void
+  /**
+   * Trigger styling. 'light' is the app-wide frosted pill used by Buyers, Vendors,
+   * Complete Report, System Logs and Reports — leave it alone. 'dark' is opt-in: a solid
+   * navy box for the Dashboard, where the client asked for a dark date control on the
+   * otherwise-light header. The calendar popover stays light in both cases — it is a
+   * dense picker and reads better that way.
+   */
+  tone?: 'light' | 'dark'
+}) {
   const [open,        setOpen]        = useState(false)
   const [draft,       setDraft]       = useState<Range>(value)
   const [selecting,   setSelecting]   = useState<'from' | 'to'>('from')
@@ -270,7 +281,13 @@ export function DateRangeControl({ value, onChange }: { value: Range; onChange: 
       <button
         ref={triggerRef}
         onClick={() => { setDraft(value); setOpen((o) => !o) }}
-        className="glass-input flex items-center gap-2 rounded-xl border border-white/70 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-white/70"
+        className={cx(
+          'flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors',
+          tone === 'dark'
+            // Solid navy, matching the sidebar gradient so the two dark surfaces agree.
+            ? 'border-white/10 bg-linear-to-b from-[#1b2540] to-[#0d1424] text-slate-100 shadow-md shadow-slate-900/20 hover:from-[#22304f] hover:to-[#131b31]'
+            : 'glass-input border-white/70 text-slate-700 hover:bg-white/70',
+        )}
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>

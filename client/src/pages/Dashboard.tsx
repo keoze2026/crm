@@ -613,7 +613,10 @@ function DashboardPage() {
             Updating…
           </span>
         )}
-        <DateRangeControl value={range} onChange={setRange} />
+        {/* Dark date box — the client asked for this one control to be dark, on the
+            otherwise-light header. Opt-in, so the six other pages using this control
+            keep the standard frosted pill. */}
+        <DateRangeControl value={range} onChange={setRange} tone="dark" />
       </PageHeader>
 
       {/* Headline: profit leads, its inputs and the two rate metrics sit beside it.
