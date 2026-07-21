@@ -13,11 +13,23 @@ export interface Summary {
   campaign_records: number
   active_buyers: number
   active_campaigns: number
+  /** % change vs the immediately preceding period of the same length. */
   deltas: {
     revenue: number | null
     cost: number | null
     margin: number | null
     counted: number | null
+    answered: number | null
+    active_buyers: number | null
+    active_campaigns: number | null
+  }
+  /**
+   * Percentage-POINT difference vs the previous period, for metrics that are already
+   * percentages (a "% change of a %" would read as nonsense).
+   */
+  point_deltas: {
+    margin_pct: number | null
+    answer_rate: number | null
   }
 }
 

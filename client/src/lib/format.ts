@@ -13,8 +13,21 @@ const currencyFmt2 = new Intl.NumberFormat('en-US', {
 
 const numberFmt = new Intl.NumberFormat('en-US')
 
+/**
+ * Compact currency for chart axes — "$250K", "-$50K", "$1.2M", "$920".
+ * Preferred over hand-rolled `$${v / 1000}k`, which collapses every value under
+ * $500 to "$0k" and produces an axis of repeated zeroes on low-volume ranges.
+ */
+const currencyCompactFmt = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  notation: 'compact',
+  maximumFractionDigits: 1,
+})
+
 export const money = (n: number): string => currencyFmt.format(n || 0)
 export const money2 = (n: number): string => currencyFmt2.format(n || 0)
+export const moneyCompact = (n: number): string => currencyCompactFmt.format(n || 0)
 export const num = (n: number): string => numberFmt.format(n || 0)
 export const pct = (n: number | null | undefined): string =>
   n === null || n === undefined ? '—' : `${n > 0 ? '+' : ''}${n.toFixed(1)}%`
@@ -77,6 +90,32 @@ export function weekdaysBetween(from: string | null | undefined, to: string | nu
     d.setDate(d.getDate() + 1)
   }
   return count
+}
+
+/** Inclusive length of an ISO date range, in days. Returns 0 for an invalid range. */
+export function rangeDays(from: string | null | undefined, to: string | null | undefined): number {
+  if (!from || !to) return 0
+  const start = new Date(from + 'T00:00:00')
+  const end = new Date(to + 'T00:00:00')
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return 0
+  return Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1
+}
+
+/**
+ * The immediately preceding period of the same length — the baseline every
+ * "vs previous period" comparison on the Dashboard is measured against. Mirrors the
+ * server-side window in AnalyticsController::summary(), so client-computed deltas
+ * (per buyer, per campaign) line up with the API's headline deltas.
+ */
+export function previousPeriod(from: string, to: string): { from: string; to: string } {
+  const days = rangeDays(from, to) || 1
+  const end = new Date(from + 'T00:00:00')
+  end.setDate(end.getDate() - 1)
+  const start = new Date(end)
+  start.setDate(start.getDate() - (days - 1))
+  const iso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return { from: iso(start), to: iso(end) }
 }
 
 /** Today as YYYY-MM-DD (local). */
