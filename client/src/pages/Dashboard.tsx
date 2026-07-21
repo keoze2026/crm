@@ -80,11 +80,15 @@ function changePct(prev: number | undefined, curr: number): number | null {
   return Number((((curr - prev) / Math.abs(prev)) * 100).toFixed(1))
 }
 
-/** "vs previous 7 days" — the comparison window is always the same length as the range. */
+/**
+ * "vs prev. 7 days" — the comparison window is always the same length as the range.
+ * Abbreviated because it has to sit on one line beside the change figure inside a KPI
+ * tile roughly 145px wide; the unabbreviated form truncates there.
+ */
 function comparisonLabel(range: Range): string {
   const days = rangeDays(range.from, range.to)
-  if (days <= 1) return 'vs previous day'
-  return `vs previous ${days} days`
+  if (days <= 1) return 'vs prev. day'
+  return `vs prev. ${days} days`
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -121,9 +125,9 @@ function InfoDot({ text }: { text: string }) {
       type="button"
       title={text}
       aria-label={text}
-      className="inline-flex cursor-help text-slate-300 transition-colors hover:text-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+      className="inline-flex shrink-0 cursor-help text-slate-500 transition-colors hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
         <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" />
       </svg>
     </button>
@@ -139,9 +143,11 @@ function PanelHeader({ title, subtitle, info, action }: {
   return (
     <div className="flex flex-col gap-3 px-5 pb-2 pt-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <div className="min-w-0">
-        <div className="flex items-center gap-1.5">
-          <h3 className="truncate font-semibold text-slate-900">{title}</h3>
-          {info && <InfoDot text={info} />}
+        {/* Titles wrap rather than truncate — "Revenue, Running Fee & Profit Over Time"
+            is unreadable clipped on a phone. */}
+        <div className="flex items-start gap-1.5">
+          <h3 className="font-semibold text-slate-900">{title}</h3>
+          {info && <span className="mt-1"><InfoDot text={info} /></span>}
         </div>
         {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
       </div>
@@ -173,16 +179,19 @@ function DeltaChip({ value, tone, suffix = '%', caption, className, hideWhenNull
   }
   const good = value === 0 ? null : tone === 'up-good' ? value > 0 : value < 0
   return (
-    <span className={cx('flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5', className)}>
+    // The change and its "vs previous N days" caption stay on ONE line — the narrow KPI
+    // tiles would otherwise wrap the caption under the figure and read as two separate bits
+    // of information. The caption truncates rather than wrapping if the tile is too tight.
+    <span className={cx('flex items-baseline gap-x-1 whitespace-nowrap', className)}>
       <span
         className={cx(
-          'text-xs font-semibold',
+          'shrink-0 text-[11px] font-semibold',
           good === null ? 'text-slate-500' : good ? 'text-emerald-600' : 'text-red-500',
         )}
       >
         {value === 0 ? '±' : value > 0 ? '▲' : '▼'} {signed(value, suffix)}
       </span>
-      {caption && <span className="text-xs text-slate-400">{caption}</span>}
+      {caption && <span className="truncate text-[11px] text-slate-400">{caption}</span>}
     </span>
   )
 }
@@ -266,7 +275,7 @@ function ProfitHero({ value, delta, caption, spark, loading }: {
 }) {
   const negative = value !== undefined && value < 0
   return (
-    <Panel className="flex flex-col justify-between p-5 sm:col-span-2 lg:col-span-4 xl:col-span-2">
+    <Panel className="flex flex-col justify-between p-5 sm:col-span-2 xl:col-span-4 wide:col-span-2">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-1.5">
           <span className="text-sm font-medium text-slate-500">Profit</span>
@@ -350,8 +359,8 @@ function StripStat({ icon, iconClass, label, info, value, delta, tone, caption, 
   loading: boolean
 }) {
   return (
-    <div className="flex items-center gap-3 px-5 py-4">
-      <span className={cx('inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full', iconClass)}>{icon}</span>
+    <div className="flex items-center gap-3 px-4 py-4">
+      <span className={cx('inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full', iconClass)}>{icon}</span>
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-sm font-medium text-slate-500">{label}</span>
@@ -537,6 +546,8 @@ function DashboardPage() {
 
   const s = summary.data
   const series = useMemo(() => trends.data ?? [], [trends.data])
+  /** One bucket cannot form a line — the chart renders markers plus an explanation. */
+  const single = series.length === 1
 
   // KPI sparklines are derived from the trend series — the two rate metrics aren't
   // returned per bucket, so they're recomputed here from their components.
@@ -620,9 +631,11 @@ function DashboardPage() {
       </PageHeader>
 
       {/* Headline: profit leads, its inputs and the two rate metrics sit beside it.
-          At lg the hero takes a full row so the four tiles stay on one line; only at xl
-          is there room for the hero and all four side by side. */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+          Column counts are driven by the narrowest tile that still fits "Revenue (billed)"
+          and "▲ +8.7% vs prev. 7 days" on one line each. The sidebar eats 240px, so 1024px
+          and 1280px are much tighter than they look: six across only works from ~1440px,
+          four from 1280, two below that. Verified with an overflow check at each width. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 wide:grid-cols-6">
         <ProfitHero
           value={s?.margin}
           delta={s?.deltas.margin}
@@ -669,7 +682,9 @@ function DashboardPage() {
       </div>
 
       {/* Volume metrics — counts rather than money. */}
-      <Panel className="mt-4 grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x lg:divide-slate-100">
+      {/* Four across only from xl — at lg the sidebar leaves ~720px, which squeezes
+          "Active Campaigns" against its icon. */}
+      <Panel className="mt-4 grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4 xl:divide-x xl:divide-slate-100">
         <StripStat
           icon={<IconPhone />} iconClass="bg-emerald-100 text-emerald-700"
           label="Counted Calls"
@@ -729,40 +744,58 @@ function DashboardPage() {
               </div>
             }
           />
-          <div className="h-80 px-2 pb-4 pt-2">
+          <div className="relative h-80 px-2 pb-4 pt-2">
             {trends.loading ? (
               <ChartSkeleton />
             ) : series.length === 0 ? (
               <EmptyHint message="No calls were recorded in this period. Try a wider date range." />
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={series} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
-                  <XAxis dataKey="period" tickFormatter={formatPeriod} tick={{ fontSize: 12, fill: C.axis }} tickLine={false} axisLine={false} minTickGap={24} />
-                  <YAxis tickFormatter={moneyCompact} tick={{ fontSize: 12, fill: C.axis }} tickLine={false} axisLine={false} width={60} />
-                  {/* Zero baseline matters: profit legitimately runs negative. */}
-                  <ReferenceLine y={0} stroke="#cbd5e1" strokeWidth={1} />
-                  <Tooltip content={<SeriesTooltip format={money} />} />
-                  <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="plainline" />
-                  <Line type="monotone" dataKey="revenue" name="Revenue (billed)" stroke={C.revenue} strokeWidth={2} dot={{ r: 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 5 }} />
-                  <Line type="monotone" dataKey="cost" name="Running Fee" stroke={C.cost} strokeWidth={2} dot={{ r: 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 5 }} />
-                  <Line type="monotone" dataKey="margin" name="Profit" stroke={C.profit} strokeWidth={2} dot={{ r: 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 5 }} />
-                </LineChart>
-              </ResponsiveContainer>
+              <>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={series} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
+                    <XAxis dataKey="period" tickFormatter={formatPeriod} tick={{ fontSize: 12, fill: C.axis }} tickLine={false} axisLine={false} minTickGap={24} />
+                    <YAxis tickFormatter={moneyCompact} tick={{ fontSize: 12, fill: C.axis }} tickLine={false} axisLine={false} width={60} />
+                    {/* Zero baseline matters: profit legitimately runs negative. */}
+                    <ReferenceLine y={0} stroke="#cbd5e1" strokeWidth={1} />
+                    <Tooltip content={<SeriesTooltip format={money} />} />
+                    <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="plainline" />
+                    {/* A single bucket draws no line at all, so its markers are enlarged to
+                        stay legible on their own. */}
+                    <Line type="monotone" dataKey="revenue" name="Revenue (billed)" stroke={C.revenue} strokeWidth={2} dot={{ r: single ? 5 : 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="cost" name="Running Fee" stroke={C.cost} strokeWidth={2} dot={{ r: single ? 5 : 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="margin" name="Profit" stroke={C.profit} strokeWidth={2} dot={{ r: single ? 5 : 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+
+                {/* One bucket is not a trend. Rather than leave a near-empty plot, say why
+                    it is empty and what to do about it — usually the range is wider than
+                    the data actually covers. */}
+                {single && (
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6">
+                    <p className="max-w-xs rounded-xl border border-slate-200 bg-white/90 px-4 py-2.5 text-center text-xs leading-relaxed text-slate-500 shadow-sm backdrop-blur-sm">
+                      Only one {granularity === 'day' ? 'day' : granularity === '4day' ? '4-day block' : 'week'} in
+                      this range has records, so there is no trend to plot yet. Widen the date range to compare periods.
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </Panel>
 
-        {/* Call quality mix */}
-        <Panel>
+        {/* Call quality mix. This panel sits beside the much taller trend chart, so its
+            body grows to fill the row and centres its content — otherwise the ring and
+            legend hug the header and leave a large dead area underneath. */}
+        <Panel className="flex flex-col">
           <PanelHeader
             title="Answered vs Missed Calls"
-            subtitle="Call quality over time (buyer side)"
+            subtitle="Share of delivered calls, buyer side"
             info="Share of calls delivered to buyers that were picked up versus not picked up, across the whole period."
           />
-          <div className="px-5 pb-5 pt-2">
+          <div className="flex flex-1 items-center px-5 pb-5 pt-2">
             {summary.loading ? (
-              <div className="flex items-center gap-5 py-6">
+              <div className="flex w-full items-center gap-5 py-6">
                 <Skeleton className="h-32 w-32 rounded-full" />
                 <div className="flex-1 space-y-3">
                   <Skeleton className="h-4 w-24" />
@@ -770,10 +803,12 @@ function DashboardPage() {
                 </div>
               </div>
             ) : callTotal === 0 ? (
-              <EmptyHint message="No answered or missed calls were recorded in this period." />
+              <div className="w-full">
+                <EmptyHint message="No answered or missed calls were recorded in this period." />
+              </div>
             ) : (
-              <div className="flex flex-col items-center gap-5 sm:flex-row">
-                <div className="h-40 w-40 shrink-0">
+              <div className="flex w-full flex-col items-center gap-6 sm:flex-row sm:gap-5">
+                <div className="h-44 w-44 shrink-0">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -806,6 +841,12 @@ function DashboardPage() {
                       </dd>
                     </div>
                   ))}
+                  {/* The figure the two slices add up to — closes the loop for the reader
+                      and gives the panel a natural bottom edge. */}
+                  <div className="flex items-baseline justify-between border-t border-slate-100 pt-3">
+                    <dt className="text-sm text-slate-500">Total delivered</dt>
+                    <dd className="text-sm font-semibold tabular-nums text-slate-900">{num(callTotal)}</dd>
+                  </div>
                 </dl>
               </div>
             )}
