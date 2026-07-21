@@ -3,6 +3,13 @@
 
 @theme {
   --font-sans: 'Poppins', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /*
+   * Extra breakpoint at 1440px, between xl (1280) and 2xl (1536). The Dashboard's KPI row
+   * needs it: with the 240px sidebar, 1280px leaves too little width for six tiles across.
+   * Registered here rather than written inline as `min-[1440px]:` because Tailwind emits
+   * arbitrary media variants ahead of the named ones, so `xl:` would override it.
+   */
+  --breakpoint-wide: 90rem;
 }
 
 html,
