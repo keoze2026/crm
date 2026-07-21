@@ -13,21 +13,27 @@ export interface Summary {
   campaign_records: number
   active_buyers: number
   active_campaigns: number
-  /** % change vs the immediately preceding period of the same length. */
+  /**
+   * % change vs the immediately preceding period of the same length.
+   * The fields marked optional were added later — the client is deployed independently
+   * of the PHP API, so a client release can briefly run against an API that predates
+   * them. Treat "missing" as "no comparison available", never as an error.
+   */
   deltas: {
     revenue: number | null
     cost: number | null
     margin: number | null
     counted: number | null
-    answered: number | null
-    active_buyers: number | null
-    active_campaigns: number | null
+    answered?: number | null
+    active_buyers?: number | null
+    active_campaigns?: number | null
   }
   /**
    * Percentage-POINT difference vs the previous period, for metrics that are already
-   * percentages (a "% change of a %" would read as nonsense).
+   * percentages (a "% change of a %" would read as nonsense). Optional for the same
+   * independent-deploy reason as above.
    */
-  point_deltas: {
+  point_deltas?: {
     margin_pct: number | null
     answer_rate: number | null
   }

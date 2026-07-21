@@ -629,7 +629,7 @@ function DashboardPage() {
           label="Profit Margin"
           info="Profit as a share of revenue. Shown as a percentage-point change against the previous period."
           value={s ? `${s.margin_pct}%` : '—'}
-          delta={s?.point_deltas.margin_pct} deltaSuffix="pp" tone="up-good" caption={caption}
+          delta={s?.point_deltas?.margin_pct} deltaSuffix="pp" tone="up-good" caption={caption}
           spark={sparks.marginPct} sparkId="spark-margin" sparkColor={C.marginPct}
           loading={summary.loading}
         />
@@ -638,7 +638,7 @@ function DashboardPage() {
           label="Answer Rate"
           info="Answered calls as a share of answered + missed, buyer side. Shown as a percentage-point change against the previous period."
           value={s ? `${s.answer_rate}%` : '—'}
-          delta={s?.point_deltas.answer_rate} deltaSuffix="pp" tone="up-good" caption={caption}
+          delta={s?.point_deltas?.answer_rate} deltaSuffix="pp" tone="up-good" caption={caption}
           spark={sparks.answerRate} sparkId="spark-answer" sparkColor={C.answerRate}
           loading={summary.loading}
         />

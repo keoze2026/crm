@@ -27,8 +27,16 @@ final class AnalyticsController
 
         $current = $this->aggregate($pdo, $from, $to);
 
+        // Metrics compared as a % change vs the previous period.
+        $ratioKeys = ['revenue', 'cost', 'margin', 'counted', 'answered', 'active_buyers', 'active_campaigns'];
+        // Metrics that are already percentages — comparing them as a "% change of a %" is
+        // misleading, so these carry a percentage-POINT difference instead.
+        $pointKeys = ['margin_pct', 'answer_rate'];
+
+        $deltas      = array_fill_keys($ratioKeys, null);
+        $pointDeltas = array_fill_keys($pointKeys, null);
+
         // Compute deltas vs the immediately preceding period of the same length.
-        $deltas = ['revenue' => null, 'cost' => null, 'margin' => null, 'counted' => null];
         if ($from && $to) {
             $start = new \DateTimeImmutable($from);
             $end   = new \DateTimeImmutable($to);
@@ -36,12 +44,16 @@ final class AnalyticsController
             $prevEnd   = $start->modify('-1 day');
             $prevStart = $prevEnd->modify('-' . ($days - 1) . ' day');
             $previous  = $this->aggregate($pdo, $prevStart->format('Y-m-d'), $prevEnd->format('Y-m-d'));
-            foreach (['revenue', 'cost', 'margin', 'counted'] as $k) {
+            foreach ($ratioKeys as $k) {
                 $deltas[$k] = $this->pctChange((float) $previous[$k], (float) $current[$k]);
+            }
+            foreach ($pointKeys as $k) {
+                $pointDeltas[$k] = round((float) $current[$k] - (float) $previous[$k], 1);
             }
         }
 
-        $current['deltas'] = $deltas;
+        $current['deltas']       = $deltas;
+        $current['point_deltas'] = $pointDeltas;
         Http::json($current);
     }
 
