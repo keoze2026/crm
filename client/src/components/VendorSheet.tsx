@@ -8,8 +8,8 @@ import { Input, PageLoader, cx } from './ui'
 
 /**
  * Editable per-vendor payment sheet for the Vendors page, mirroring the client spreadsheet:
- * Date · Traffic Source · Converted call · Price (Usd) · Payments · Amount paid ·
- * Initial Advance.
+ * Date · Traffic Source · Converted call · Price (Usd) · Payments · Initial Advance ·
+ * Amount paid.
  *
  * Everything is manual entry except three auto-derived columns: Traffic Source (always the
  * active tab's vendor name), Payments (converted_calls × price), and Initial Advance — a
@@ -88,8 +88,8 @@ export default function VendorSheet({
                 <col style={{ width: '12%' }} />
                 <col style={{ width: '11%' }} />
                 <col style={{ width: '14%' }} />
-                <col style={{ width: '14%' }} />
                 <col style={{ width: '15%' }} />
+                <col style={{ width: '14%' }} />
                 <col style={{ width: '6%' }} />
               </colgroup>
               <thead>
@@ -99,10 +99,10 @@ export default function VendorSheet({
                   <th className={headCls}>Converted call</th>
                   <th className={headCls}>Price (Usd)</th>
                   <th className={headCls}>Payments</th>
-                  <th className={headCls}>Amount paid</th>
                   <th className={headCls} title="The balance this row opens with — the previous row's closing balance">
                     Initial Advance
                   </th>
+                  <th className={headCls}>Amount paid</th>
                   <th className={headCls} aria-label="actions" />
                 </tr>
               </thead>
@@ -138,11 +138,11 @@ export default function VendorSheet({
                   <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.calls)}</td>
                   <td className="px-3 py-2.5" />
                   <td className="px-3 py-2.5 text-center tabular-nums">{money2(totals.payments)}</td>
-                  <td className="px-3 py-2.5 text-center tabular-nums">{money2(totals.paid)}</td>
                   {/* The column runs on past the last row: this is what the period closes at. */}
                   <td className="px-3 py-2.5 text-center tabular-nums" title="Closing balance = Initial Advance + Amount paid − Payments">
                     {money2(finalBalance)}
                   </td>
+                  <td className="px-3 py-2.5 text-center tabular-nums">{money2(totals.paid)}</td>
                   <td className="px-3 py-2.5" />
                 </tr>
               </tfoot>
@@ -262,11 +262,11 @@ function PaymentRow({
           onChange={(e) => setPrice(e.target.value)} />
       </td>
       <td className={cx(roCell, 'font-semibold')}>{money2(rowPayments)}</td>
+      <td className={cx(roCell, 'font-semibold', balanceColor(opening))}>{money2(opening)}</td>
       <td className={cellCls}>
         <Input type="number" min="0" step="0.01" value={paid} className="text-right"
           onChange={(e) => setPaid(e.target.value)} />
       </td>
-      <td className={cx(roCell, 'font-semibold', balanceColor(opening))}>{money2(opening)}</td>
       <td className="p-0 text-center">
         <button onClick={remove} title="Delete row"
           className="mx-auto flex h-7 w-7 items-center justify-center rounded text-slate-500 transition-colors hover:bg-red-100 hover:text-red-600">
@@ -318,9 +318,9 @@ function AddRow({
       <td className={cellCls}><Input type="number" min="0" step="1" value={calls} placeholder="0" className="text-right" onChange={(e) => setCalls(e.target.value)} /></td>
       <td className={cellCls}><Input type="number" min="0" step="0.01" value={price} placeholder="0.00" className="text-right" onChange={(e) => setPrice(e.target.value)} /></td>
       <td className={roCell}>{calls.trim() === '' ? '—' : money2(rowPayments)}</td>
-      <td className={cellCls}><Input type="number" min="0" step="0.01" value={paid} placeholder="0.00" className="text-right" onChange={(e) => setPaid(e.target.value)} /></td>
       {/* What a new entry would open with = where the ledger currently stands. */}
       <td className={cx(roCell, 'text-slate-400')}>{money2(opening)}</td>
+      <td className={cellCls}><Input type="number" min="0" step="0.01" value={paid} placeholder="0.00" className="text-right" onChange={(e) => setPaid(e.target.value)} /></td>
       <td className="p-0 text-center">
         <button onClick={add} disabled={!date || calls.trim() === ''} title="Add entry"
           className="mx-auto flex h-7 w-7 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-100 disabled:opacity-30 disabled:hover:bg-transparent">
