@@ -1,15 +1,16 @@
 // Dashboard — performance overview of calls, revenue and margin.
 //
-// Visual language here is intentionally local to this page: flat white panels rather
-// than the app-wide frosted `.glass` surfaces, per the 2026-07 redesign. The shared
-// components in components/ui.tsx are deliberately NOT used for panels/tiles so the
-// other pages keep their current look. See docs/design/dashboard-design-brief.md.
-//
-// Report downloads (CSV/PDF) were removed and are not part of this page.
+// Light theme (flat white panels on the app's soft gradient), matching the rest of the app.
+// Layout mirrors the client's reference mock: a full-width Total Profit hero with a large
+// area chart, a row of four KPI cards with sparklines, a row of four volume cards each with
+// an isometric 3D-style icon + bar sparkline, then the trend/donut and ranked-list rows.
+// Report downloads (CSV/PDF) were removed; a lightweight KPI CSV export lives on this page.
 import { useMemo, useState, type ReactNode } from 'react'
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   Cell,
   Legend,
@@ -49,15 +50,16 @@ const GRANULARITIES: { value: Granularity; label: string }[] = [
   { value: 'week', label: 'Weekly' },
 ]
 
-/** One colour = one meaning, across every block on the page. */
+/** One colour = one meaning, across every block. */
 const C = {
   revenue: '#2563eb',
   cost: '#f97316',
   profit: '#16a34a',
+  hero: '#8b5cf6',
   marginPct: '#8b5cf6',
   answerRate: '#0d9488',
   answered: '#16a34a',
-  missed: '#ef4444',
+  missed: '#f43f5e',
   grid: '#eef2f6',
   axis: '#94a3b8',
 }
@@ -80,18 +82,14 @@ function changePct(prev: number | undefined, curr: number): number | null {
   return Number((((curr - prev) / Math.abs(prev)) * 100).toFixed(1))
 }
 
-/**
- * "vs prev. 7 days" — the comparison window is always the same length as the range.
- * Abbreviated because it has to sit on one line beside the change figure inside a KPI
- * tile roughly 145px wide; the unabbreviated form truncates there.
- */
+/** "vs prev. 7 days" — the comparison window is always the same length as the range. */
 function comparisonLabel(range: Range): string {
   const days = rangeDays(range.from, range.to)
   if (days <= 1) return 'vs prev. day'
   return `vs prev. ${days} days`
 }
 
-// ─── Icons ────────────────────────────────────────────────────────────────────
+// ─── Line icons (KPI badges, controls) ─────────────────────────────────────────
 
 const svg = (children: ReactNode, size = 20) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden focusable="false">
@@ -99,17 +97,214 @@ const svg = (children: ReactNode, size = 20) => (
   </svg>
 )
 
-const IconDollar = () => svg(<><path d="M12 1v22" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></>)
-const IconOutflow = () => svg(<><path d="M3 3v18h18" /><path d="m19 9-5 5-4-4-4 4" /></>)
-const IconPercent = () => svg(<><line x1="19" y1="5" x2="5" y2="19" /><circle cx="6.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="17.5" r="2.5" /></>)
-const IconTarget = () => svg(<><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></>)
-const IconPhone = () => svg(<><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></>)
-const IconUsers = () => svg(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>)
-const IconMegaphone = () => svg(<><path d="m3 11 18-5v12L3 14v-3z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></>)
-const IconPhoneIn = () => svg(<><polyline points="16 2 16 8 22 8" /><line x1="22" y1="2" x2="16" y2="8" /><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></>)
+const IconHeadphones = () => svg(<><path d="M3 14v-2a9 9 0 0 1 18 0v2" /><path d="M21 16a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2zM3 16a2 2 0 0 0 2 2h1v-6H5a2 2 0 0 0-2 2z" /></>)
+const IconRefresh = () => svg(<><path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" /></>, 14)
+
+// ─── Isometric 3D-style icons for the volume cards ─────────────────────────────
+//
+// Hand-built SVGs — an object on a glossy pedestal with gradient shading and a soft ground
+// shadow — standing in for the reference mock's rendered-3D illustrations (true 3D renders
+// can't be produced as code). One factory keeps the pedestal/lighting consistent; each card
+// supplies its subject and a colour ramp.
+
+interface Ramp { light: string; base: string; dark: string; pad: string; padDark: string }
+
+const RAMPS: Record<string, Ramp> = {
+  green: { light: '#bbf7d0', base: '#22c55e', dark: '#15803d', pad: '#86efac', padDark: '#16a34a' },
+  blue: { light: '#bfdbfe', base: '#3b82f6', dark: '#1d4ed8', pad: '#93c5fd', padDark: '#2563eb' },
+  purple: { light: '#ddd6fe', base: '#8b5cf6', dark: '#6d28d9', pad: '#c4b5fd', padDark: '#7c3aed' },
+  orange: { light: '#fed7aa', base: '#f97316', dark: '#c2410c', pad: '#fdba74', padDark: '#ea580c' },
+}
+
+function Iso3D({ id, ramp, size = 64, children }: { id: string; ramp: Ramp; size?: number; children: ReactNode }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden focusable="false">
+      <defs>
+        <linearGradient id={`${id}-obj`} x1="0" y1="0" x2="0.4" y2="1">
+          <stop offset="0%" stopColor={ramp.light} />
+          <stop offset="55%" stopColor={ramp.base} />
+          <stop offset="100%" stopColor={ramp.dark} />
+        </linearGradient>
+        <linearGradient id={`${id}-objSoft`} x1="0" y1="0" x2="0.4" y2="1">
+          <stop offset="0%" stopColor={ramp.light} />
+          <stop offset="100%" stopColor={ramp.base} />
+        </linearGradient>
+        <linearGradient id={`${id}-padTop`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#fff" stopOpacity="0.9" />
+          <stop offset="100%" stopColor={ramp.pad} />
+        </linearGradient>
+      </defs>
+      {/* Ground shadow */}
+      <ellipse cx="32" cy="55" rx="19" ry="4.5" fill="rgba(15,23,42,0.12)" />
+      {/* Pedestal — isometric slab */}
+      <path d="M32 39 L51 46.5 L32 54 L13 46.5 Z" fill={`url(#${id}-padTop)`} />
+      <path d="M13 46.5 L32 54 L32 58 L13 50.5 Z" fill={ramp.padDark} />
+      <path d="M51 46.5 L32 54 L32 58 L51 50.5 Z" fill={ramp.pad} />
+      {/* Subject */}
+      {children}
+    </svg>
+  )
+}
+
+const Phone3D = ({ size }: { size?: number }) => (
+  <Iso3D id="i3-phone" ramp={RAMPS.green} size={size}>
+    {/* Handset — filled receiver, tilted, with a couple of sound arcs. */}
+    <g transform="translate(15 8) scale(1.35)">
+      <path
+        d="M4.8 2.2c-.9-.4-1.9 0-2.3.9L1.4 5.4c-.4.9-.2 2 .5 2.7 3 3 6 6 9 9 .7.7 1.8.9 2.7.5l2.3-1.1c.9-.4 1.3-1.4.9-2.3l-1.1-2.5c-.3-.8-1.2-1.2-2-1L13 11.4c-.5.1-1.1 0-1.5-.4L8.9 8.4c-.4-.4-.5-1-.4-1.5l.8-2.4c.2-.8-.2-1.7-1-2z"
+        fill={`url(#i3-phone-obj)`}
+        stroke="#0f5132"
+        strokeWidth="0.4"
+      />
+      <path d="M14 2.6a5 5 0 0 1 3.4 3.4" stroke={RAMPS.green.dark} strokeWidth="1.1" strokeLinecap="round" fill="none" opacity="0.85" />
+      <path d="M12.6 5a2.6 2.6 0 0 1 1.8 1.8" stroke={RAMPS.green.dark} strokeWidth="1.1" strokeLinecap="round" fill="none" opacity="0.85" />
+    </g>
+  </Iso3D>
+)
+
+const People3D = ({ size }: { size?: number }) => (
+  <Iso3D id="i3-people" ramp={RAMPS.blue} size={size}>
+    {/* Three figures — two lighter behind, one darker in front. */}
+    <g>
+      <circle cx="19" cy="24" r="5" fill={`url(#i3-people-objSoft)`} />
+      <path d="M11 43c0-5 3.6-8 8-8s8 3 8 8z" fill={`url(#i3-people-objSoft)`} />
+      <circle cx="45" cy="24" r="5" fill={`url(#i3-people-objSoft)`} />
+      <path d="M37 43c0-5 3.6-8 8-8s8 3 8 8z" fill={`url(#i3-people-objSoft)`} />
+      <circle cx="32" cy="20" r="6.5" fill={`url(#i3-people-obj)`} stroke="#1e3a8a" strokeWidth="0.4" />
+      <path d="M21 44c0-6.5 4.6-11 11-11s11 4.5 11 11z" fill={`url(#i3-people-obj)`} stroke="#1e3a8a" strokeWidth="0.4" />
+    </g>
+  </Iso3D>
+)
+
+const Megaphone3D = ({ size }: { size?: number }) => (
+  <Iso3D id="i3-mega" ramp={RAMPS.purple} size={size}>
+    {/* Bullhorn pointing up-right, with a handle and sound arcs. */}
+    <g transform="rotate(-18 32 28)">
+      <path d="M14 24 L34 18 L34 38 L14 32 Z" fill={`url(#i3-mega-obj)`} stroke="#4c1d95" strokeWidth="0.4" />
+      <ellipse cx="34" cy="28" rx="3.4" ry="10" fill={RAMPS.purple.light} />
+      <rect x="9" y="24" width="6" height="8" rx="2" fill={`url(#i3-mega-obj)`} />
+      <rect x="20" y="38" width="5" height="9" rx="2.2" fill={RAMPS.purple.dark} />
+      <path d="M40 20a10 10 0 0 1 0 16" stroke={RAMPS.purple.base} strokeWidth="2" strokeLinecap="round" fill="none" />
+      <path d="M44 15a16 16 0 0 1 0 26" stroke={RAMPS.purple.light} strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.8" />
+    </g>
+  </Iso3D>
+)
+
+const Headphones3D = ({ size }: { size?: number }) => (
+  <Iso3D id="i3-head" ramp={RAMPS.orange} size={size}>
+    {/* Over-ear headphones — filled band + two ear cups. */}
+    <g>
+      <path d="M16 38 V30 a16 16 0 0 1 32 0 V38 h-4 V30 a12 12 0 0 0-24 0 V38 Z" fill={`url(#i3-head-obj)`} stroke="#7c2d12" strokeWidth="0.4" />
+      <rect x="12.5" y="34" width="9" height="14" rx="4" fill={`url(#i3-head-obj)`} stroke="#7c2d12" strokeWidth="0.4" />
+      <rect x="42.5" y="34" width="9" height="14" rx="4" fill={`url(#i3-head-obj)`} stroke="#7c2d12" strokeWidth="0.4" />
+      <rect x="14.5" y="36.5" width="4.5" height="9" rx="2.2" fill={RAMPS.orange.light} opacity="0.7" />
+    </g>
+  </Iso3D>
+)
+
+// ─── KPI card illustrations ────────────────────────────────────────────────────
+//
+// Themed SVG graphics for the four colour widgets, floating on a soft white glow so they
+// read on any card colour — the code-drawn equivalent of the reference mock's 3D artwork
+// (rendered-3D images can't be produced as code). Money-in, money-out, growth, and a rate
+// gauge, one per metric.
+
+const AnswerArt = ({ size = 82 }: { size?: number }) => (
+  <svg viewBox="0 0 88 88" width={size} height={size} fill="none" aria-hidden focusable="false">
+    <defs>
+      <radialGradient id="ans-glow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stopColor="#fff" stopOpacity="0.5" />
+        <stop offset="70%" stopColor="#fff" stopOpacity="0" />
+      </radialGradient>
+    </defs>
+    <circle cx="44" cy="46" r="40" fill="url(#ans-glow)" />
+    {/* Gauge — track, filled arc, needle. */}
+    <path d="M22 62 a24 24 0 0 1 44 0" stroke="#fff" strokeOpacity="0.35" strokeWidth="6" strokeLinecap="round" fill="none" />
+    <path d="M22 62 a24 24 0 0 1 8-17.6" stroke="#fff" strokeWidth="6" strokeLinecap="round" fill="none" />
+    <path d="M55 45 a24 24 0 0 1 11 17" stroke="#fff" strokeWidth="6" strokeLinecap="round" fill="none" />
+    <circle cx="44" cy="62" r="6" fill="#fff" />
+    <path d="M44 62 L57 47" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" />
+    <circle cx="44" cy="62" r="2.5" fill="#0d9488" />
+  </svg>
+)
+
+const RevenueArt = ({ size = 82 }: { size?: number }) => (
+  <svg viewBox="0 0 88 88" width={size} height={size} fill="none" aria-hidden focusable="false">
+    <defs>
+      <radialGradient id="rev-glow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stopColor="#fff" stopOpacity="0.5" />
+        <stop offset="70%" stopColor="#fff" stopOpacity="0" />
+      </radialGradient>
+      <linearGradient id="rev-note" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#6ee7b7" /><stop offset="100%" stopColor="#10b981" />
+      </linearGradient>
+      <linearGradient id="rev-coin" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#fde68a" /><stop offset="100%" stopColor="#f59e0b" />
+      </linearGradient>
+    </defs>
+    <circle cx="44" cy="46" r="40" fill="url(#rev-glow)" />
+    {/* Banknotes */}
+    <g transform="rotate(-10 44 52)">
+      <rect x="20" y="46" width="46" height="17" rx="3" fill="#34d399" />
+      <rect x="17" y="42" width="46" height="17" rx="3" fill="url(#rev-note)" stroke="#059669" strokeWidth="1" />
+      <circle cx="40" cy="50.5" r="5.5" fill="#d1fae5" />
+    </g>
+    {/* Coin stack */}
+    <ellipse cx="30" cy="70" rx="11" ry="4.2" fill="#d97706" />
+    <ellipse cx="30" cy="66.6" rx="11" ry="4.2" fill="url(#rev-coin)" stroke="#d97706" strokeWidth="0.8" />
+    {/* Floating coin with $ */}
+    <circle cx="64" cy="34" r="10" fill="url(#rev-coin)" stroke="#d97706" strokeWidth="1" />
+    <path d="M64 29v10M61.6 31h4a1.6 1.6 0 0 1 0 3.2h-2.6a1.6 1.6 0 0 0 0 3.2h4" stroke="#b45309" strokeWidth="1.1" strokeLinecap="round" fill="none" />
+  </svg>
+)
+
+const CostArt = ({ size = 82 }: { size?: number }) => (
+  <svg viewBox="0 0 88 88" width={size} height={size} fill="none" aria-hidden focusable="false">
+    <defs>
+      <radialGradient id="cost-glow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stopColor="#fff" stopOpacity="0.5" />
+        <stop offset="70%" stopColor="#fff" stopOpacity="0" />
+      </radialGradient>
+      <linearGradient id="cost-coin" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#fff7ed" /><stop offset="100%" stopColor="#fdba74" />
+      </linearGradient>
+    </defs>
+    <circle cx="44" cy="46" r="40" fill="url(#cost-glow)" />
+    {/* Bank card */}
+    <g transform="rotate(-12 42 44)">
+      <rect x="18" y="32" width="40" height="26" rx="4" fill="#fff" />
+      <rect x="18" y="38" width="40" height="6" fill="#fb923c" />
+      <rect x="24" y="50" width="16" height="3" rx="1.5" fill="#fdba74" />
+    </g>
+    {/* Coin stack (fees paid out) */}
+    <ellipse cx="62" cy="66" rx="11" ry="4.2" fill="#c2410c" />
+    <ellipse cx="62" cy="62.6" rx="11" ry="4.2" fill="url(#cost-coin)" stroke="#c2410c" strokeWidth="0.8" />
+    <ellipse cx="62" cy="59.2" rx="11" ry="4.2" fill="url(#cost-coin)" stroke="#c2410c" strokeWidth="0.8" />
+  </svg>
+)
+
+const ProfitArt = ({ size = 82 }: { size?: number }) => (
+  <svg viewBox="0 0 88 88" width={size} height={size} fill="none" aria-hidden focusable="false">
+    <defs>
+      <radialGradient id="pro-glow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stopColor="#fff" stopOpacity="0.5" />
+        <stop offset="70%" stopColor="#fff" stopOpacity="0" />
+      </radialGradient>
+    </defs>
+    <circle cx="44" cy="46" r="40" fill="url(#pro-glow)" />
+    {/* Rising bars */}
+    <rect x="22" y="52" width="11" height="16" rx="2" fill="#fff" fillOpacity="0.85" />
+    <rect x="37" y="44" width="11" height="24" rx="2" fill="#fff" fillOpacity="0.92" />
+    <rect x="52" y="34" width="11" height="34" rx="2" fill="#fff" />
+    {/* Growth arrow */}
+    <path d="M22 46 L38 36 L48 42 L66 26" stroke="#a3e635" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    <path d="M58 26 h8 v8" stroke="#a3e635" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+  </svg>
+)
 
 // ─── Small building blocks ────────────────────────────────────────────────────
 
+/** Flat white card on the app's soft gradient backdrop. */
 function Panel({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <section className={cx('rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/5', className)}>
@@ -125,7 +320,7 @@ function InfoDot({ text }: { text: string }) {
       type="button"
       title={text}
       aria-label={text}
-      className="inline-flex shrink-0 cursor-help text-slate-500 transition-colors hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+      className="inline-flex shrink-0 cursor-help text-slate-400 transition-colors hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
     >
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
         <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" />
@@ -143,8 +338,7 @@ function PanelHeader({ title, subtitle, info, action }: {
   return (
     <div className="flex flex-col gap-3 px-5 pb-2 pt-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <div className="min-w-0">
-        {/* Titles wrap rather than truncate — "Revenue, Running Fee & Profit Over Time"
-            is unreadable clipped on a phone. */}
+        {/* Titles wrap rather than truncate — the trend title is long. */}
         <div className="flex items-start gap-1.5">
           <h3 className="font-semibold text-slate-900">{title}</h3>
           {info && <span className="mt-1"><InfoDot text={info} /></span>}
@@ -179,9 +373,6 @@ function DeltaChip({ value, tone, suffix = '%', caption, className, hideWhenNull
   }
   const good = value === 0 ? null : tone === 'up-good' ? value > 0 : value < 0
   return (
-    // The change and its "vs previous N days" caption stay on ONE line — the narrow KPI
-    // tiles would otherwise wrap the caption under the figure and read as two separate bits
-    // of information. The caption truncates rather than wrapping if the tile is too tight.
     <span className={cx('flex items-baseline gap-x-1 whitespace-nowrap', className)}>
       <span
         className={cx(
@@ -196,15 +387,16 @@ function DeltaChip({ value, tone, suffix = '%', caption, className, hideWhenNull
   )
 }
 
-/** Axis-less trend line for the KPI tiles, drawn from the same series as the main chart. */
-function Sparkline({ id, data, color, height = 40 }: {
+/** Axis-less area sparkline for the KPI tiles, drawn from the same series as the main chart. */
+function Sparkline({ id, data, color, height = 40, dots = false, fillOpacity = 0.28 }: {
   id: string
   data: number[]
   color: string
   height?: number
+  /** Show a marker at each point (the colour-widget cards use these). */
+  dots?: boolean
+  fillOpacity?: number
 }) {
-  // Genuinely nothing to plot — the range holds no records at all. Say so rather than
-  // leaving a blank gap that reads as a chart which failed to load.
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center" style={{ height }}>
@@ -212,16 +404,9 @@ function Sparkline({ id, data, color, height = 40 }: {
       </div>
     )
   }
-
-  // A single bucket (only one day in the range carries records) still deserves a mark:
-  // duplicate it so there is a segment to stroke. Without this the tile silently loses
-  // its chart, which looks like a bug rather than like thin data.
+  // A single bucket still deserves a mark: duplicate it so there is a segment to stroke.
   const values = data.length === 1 ? [data[0], data[0]] : data
   const points = values.map((v, i) => ({ i, v }))
-
-  // A perfectly flat series makes dataMin === dataMax, which pins the line to the edge of
-  // the band (and is the normal case for the duplicated single bucket above). Pad the
-  // domain so a flat line sits at mid-height instead.
   const min = Math.min(...values)
   const max = Math.max(...values)
   const pad = min === max ? Math.abs(max) * 0.5 || 1 : 0
@@ -231,14 +416,91 @@ function Sparkline({ id, data, color, height = 40 }: {
       <AreaChart data={points} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
         <defs>
           <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.28} />
+            <stop offset="0%" stopColor={color} stopOpacity={fillOpacity} />
             <stop offset="100%" stopColor={color} stopOpacity={0} />
           </linearGradient>
         </defs>
         <YAxis hide domain={[min - pad, max + pad]} />
-        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.75} fill={`url(#${id})`} dot={false} isAnimationActive={false} />
+        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.75} fill={`url(#${id})`} dot={dots ? { r: 2.5, fill: color, stroke: 'none' } : false} isAnimationActive={false} />
       </AreaChart>
     </ResponsiveContainer>
+  )
+}
+
+/** Tiny activity bars for the volume cards, echoing the reference's mini bar charts. */
+function BarSpark({ data, color, height = 40 }: { data: number[]; color: string; height?: number }) {
+  if (data.length === 0) return <div style={{ height }} aria-hidden />
+  const points = data.map((v, i) => ({ i, v }))
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={points} margin={{ top: 2, right: 0, bottom: 0, left: 0 }} barCategoryGap={2}>
+        <YAxis hide domain={[0, 'dataMax']} />
+        <Bar dataKey="v" fill={color} radius={[2, 2, 0, 0]} isAnimationActive={false} />
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+/** The full-width Total Profit hero: big figure on the left, large area chart on the right. */
+function HeroBanner({ value, delta, caption, series, loading }: {
+  value: number | undefined
+  delta: number | null | undefined
+  caption: string
+  series: { period: string; margin: number }[]
+  loading: boolean
+}) {
+  const negative = value !== undefined && value < 0
+  const plottable = series.length >= 2
+  return (
+    <Panel className="bg-linear-to-br from-violet-50/70 to-white">
+      <div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[minmax(0,20rem)_1fr] lg:items-center lg:gap-8">
+        {/* Left — the headline figure */}
+        <div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-medium text-slate-500">Total Profit</span>
+            <InfoDot text="Revenue (billed) minus Running Fee for the selected period. Negative means the calls cost more than they billed." />
+          </div>
+          {loading ? (
+            <Skeleton className="mt-2 h-11 w-52" />
+          ) : (
+            <div className={cx('mt-1 text-4xl font-bold tracking-tight', negative ? 'text-red-600' : 'text-slate-900')}>
+              {value !== undefined ? money(value) : '—'}
+            </div>
+          )}
+          {!loading && <DeltaChip className="mt-2" value={delta} tone="up-good" caption={caption} />}
+        </div>
+
+        {/* Right — the large area chart */}
+        <div className="relative h-44">
+          <div className="absolute right-0 top-0 z-10 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
+            Area Chart
+          </div>
+          {loading ? (
+            <div className="flex h-full items-center justify-center"><Skeleton className="h-32 w-full" /></div>
+          ) : !plottable ? (
+            <div className="flex h-full items-center justify-center">
+              <span className="text-xs text-slate-400">Not enough data to plot a trend for this range.</span>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={series} margin={{ top: 24, right: 8, left: 4, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="hero-area" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={C.hero} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={C.hero} stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
+                <XAxis dataKey="period" tickFormatter={formatPeriod} tick={{ fontSize: 11, fill: C.axis }} tickLine={false} axisLine={false} minTickGap={24} />
+                <YAxis tickFormatter={moneyCompact} tick={{ fontSize: 11, fill: C.axis }} tickLine={false} axisLine={false} width={48} />
+                <Tooltip content={<SeriesTooltip format={money} />} />
+                <Area type="monotone" dataKey="margin" name="Profit" stroke={C.hero} strokeWidth={2.5} fill="url(#hero-area)" dot={false} activeDot={{ r: 5 }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+    </Panel>
   )
 }
 
@@ -263,117 +525,87 @@ function ChartSkeleton() {
   )
 }
 
-// ─── KPI tiles ────────────────────────────────────────────────────────────────
+// ─── KPI + volume cards ────────────────────────────────────────────────────────
 
-/** The page's lead figure: profit, its direction, and its shape over the period. */
-function ProfitHero({ value, delta, caption, spark, loading }: {
-  value: number | undefined
-  delta: number | null | undefined
-  caption: string
-  spark: number[]
-  loading: boolean
-}) {
-  const negative = value !== undefined && value < 0
-  return (
-    <Panel className="flex flex-col justify-between p-5 sm:col-span-2 xl:col-span-4 wide:col-span-2">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm font-medium text-slate-500">Profit</span>
-          <InfoDot text="Revenue (billed) minus Running Fee for the selected period. Negative means the calls cost more than they billed." />
-        </div>
-        {!loading && value !== undefined && (
-          <span
-            className={cx(
-              'rounded-full px-2.5 py-0.5 text-xs font-semibold',
-              negative ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700',
-            )}
-          >
-            {negative ? 'Negative' : 'Positive'}
-          </span>
-        )}
-      </div>
-
-      <div className="mt-3 grid grid-cols-1 items-end gap-4 sm:grid-cols-2">
-        <div>
-          {loading ? (
-            <Skeleton className="h-10 w-44" />
-          ) : (
-            <div className={cx('text-3xl font-bold tracking-tight', negative ? 'text-red-600' : 'text-slate-900')}>
-              {value !== undefined ? money(value) : '—'}
-            </div>
-          )}
-          {!loading && <DeltaChip className="mt-2" value={delta} tone="up-good" caption={caption} />}
-        </div>
-        <div className="h-16">{!loading && <Sparkline id="spark-profit" data={spark} color={C.profit} height={64} />}</div>
-      </div>
-    </Panel>
-  )
-}
-
-function MetricTile({ icon, iconClass, label, info, value, delta, deltaSuffix, tone, caption, spark, sparkId, sparkColor, loading }: {
-  icon: ReactNode
-  iconClass: string
+/**
+ * A solid colour-filled KPI widget (CoreUI-style): white value + directional delta + label,
+ * a "⋮" menu that surfaces the metric definition, and an edge-to-edge chart at the bottom.
+ * The delta is white and follows the raw sign only — on a solid colour tile the good/bad
+ * green/red coding can't read, so it's intentionally dropped here (the arrow shows direction).
+ */
+function StatWidget({ gradient, label, info, value, delta, deltaSuffix = '%', chart, art, loading }: {
+  gradient: string
   label: string
   info: string
   value: string
   delta: number | null | undefined
   deltaSuffix?: string
-  tone: Tone
-  caption: string
-  spark: number[]
-  sparkId: string
-  sparkColor: string
+  chart: ReactNode
+  /** Themed illustration, floated on the right (see the KPI card illustrations above). */
+  art: ReactNode
   loading: boolean
 }) {
+  const arrow = delta == null ? '' : delta > 0 ? '↑' : delta < 0 ? '↓' : ''
   return (
-    <Panel className="flex flex-col justify-between p-4">
-      <div>
-        <span className={cx('inline-flex h-10 w-10 items-center justify-center rounded-full', iconClass)}>{icon}</span>
-        <div className="mt-3 flex items-center gap-1.5">
-          <span className="truncate text-sm font-medium text-slate-500">{label}</span>
-          <InfoDot text={info} />
-        </div>
+    // title carries the metric definition on hover (the ⋮ menu was dropped to make room for
+    // the illustration, mirroring the reference cards which have no menu).
+    <div title={info} className={cx('relative flex flex-col overflow-hidden rounded-2xl p-4 text-white shadow-lg shadow-slate-900/10', gradient)}>
+      {/* Illustration — right side, vertically centred, above the chart. */}
+      <div className="pointer-events-none absolute right-1 top-[22px] z-0">{art}</div>
+      {/* Text — reserve space on the right so the value never runs under the art. */}
+      <div className="relative z-10 min-w-0 pr-20">
         {loading ? (
-          <Skeleton className="mt-1.5 h-7 w-28" />
+          <div className="h-7 w-24 animate-pulse rounded bg-white/25" />
         ) : (
-          <div className="mt-1 text-xl font-bold tracking-tight text-slate-900">{value}</div>
+          <div className="flex flex-wrap items-baseline gap-x-1.5">
+            <span className="text-xl font-bold tracking-tight">{value}</span>
+            {delta != null && (
+              <span className="text-xs font-medium text-white/85">({signed(delta, deltaSuffix)} {arrow})</span>
+            )}
+          </div>
         )}
-        {!loading && <DeltaChip className="mt-1.5" value={delta} tone={tone} suffix={deltaSuffix} caption={caption} />}
+        <div className="mt-0.5 truncate text-sm text-white/85">{label}</div>
       </div>
-      <div className="-mx-1 mt-3 h-10">
-        {!loading && <Sparkline id={sparkId} data={spark} color={sparkColor} />}
-      </div>
-    </Panel>
+      {/* Chart bleeds to the card edges; the negative margins cancel the p-4. */}
+      <div className="relative z-10 -mx-4 -mb-4 mt-3 h-16">{!loading && chart}</div>
+    </div>
   )
 }
 
-function StripStat({ icon, iconClass, label, info, value, delta, tone, caption, loading }: {
+/** A volume card: label + value + delta on the left, a 3D icon on the right, bars below. */
+function VolumeCard({ icon, label, info, value, delta, tone, caption, bars, barColor, loading }: {
   icon: ReactNode
-  iconClass: string
   label: string
   info: string
   value: string
   delta: number | null | undefined
   tone: Tone
   caption: string
+  bars: number[]
+  barColor: string
   loading: boolean
 }) {
   return (
-    <div className="flex items-center gap-3 px-4 py-4">
-      <span className={cx('inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full', iconClass)}>{icon}</span>
-      <div className="min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-medium text-slate-500">{label}</span>
-          <InfoDot text={info} />
+    <Panel className="flex flex-col justify-between p-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-sm font-medium text-slate-600">{label}</span>
+            <InfoDot text={info} />
+          </div>
+          {loading ? (
+            <Skeleton className="mt-2 h-7 w-20" />
+          ) : (
+            <div className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900">{value}</div>
+          )}
+          {!loading && <DeltaChip className="mt-1" value={delta} tone={tone} caption={caption} />}
         </div>
-        {loading ? (
-          <Skeleton className="mt-1 h-6 w-20" />
-        ) : (
-          <div className="mt-0.5 text-xl font-bold tracking-tight text-slate-900">{value}</div>
-        )}
-        {!loading && <DeltaChip className="mt-0.5" value={delta} tone={tone} caption={caption} />}
+        <span className="-mt-1 -mr-1 shrink-0">{icon}</span>
       </div>
-    </div>
+      <div className="-mx-1 mt-3 h-9">
+        {!loading && <BarSpark data={bars} color={barColor} />}
+      </div>
+    </Panel>
   )
 }
 
@@ -381,8 +613,7 @@ function StripStat({ icon, iconClass, label, info, value, delta, tone, caption, 
 
 /**
  * Buyers and campaigns have no logo in the schema — only a short code and an optional
- * name — so identity is carried by initials on a tint derived from the code, which keeps
- * each entity the same colour between loads.
+ * name — so identity is carried by initials on a tint derived from the code.
  */
 const TINTS = [
   'bg-blue-50 text-blue-700',
@@ -401,11 +632,7 @@ function tintFor(seed: string): string {
   return TINTS[h % TINTS.length]
 }
 
-/**
- * Codes are short and mostly alphanumeric ("L48", "RTG 04", "C-05"), so the first three
- * characters with separators stripped stay recognisable. Taking one letter per word
- * instead would collapse a whole campaign list to "C0"/"C1"/"C2".
- */
+/** Codes are short and mostly alphanumeric — first three chars, separators stripped. */
 function initialsFor(code: string): string {
   return code.replace(/[\s\-_]+/g, '').slice(0, 3).toUpperCase()
 }
@@ -418,13 +645,14 @@ interface RankRow {
   delta: number | null
 }
 
-function RankPanel({ title, subtitle, info, rows, loading, emptyMessage, to, perm, linkLabel, caption }: {
+/** A ranked table (Rank · Name · Value · Change) matching the reference's bottom cards. */
+function RankPanel({ title, info, rows, loading, emptyMessage, valueHead, to, perm, linkLabel, caption }: {
   title: string
-  subtitle: string
   info: string
   rows: RankRow[]
   loading: boolean
   emptyMessage: string
+  valueHead: string
   to: string
   /** Permission key for the linked page — the link is hidden from viewers who lack it. */
   perm: string
@@ -434,8 +662,18 @@ function RankPanel({ title, subtitle, info, rows, loading, emptyMessage, to, per
   const { canAccess } = useAuth()
   return (
     <Panel className="flex flex-col">
-      <PanelHeader title={title} subtitle={subtitle} info={info} />
-      <div className="flex-1 px-2 pb-1 pt-1">
+      <div className="flex items-center justify-between px-5 pb-1 pt-4">
+        <div className="flex items-center gap-1.5">
+          <h3 className="font-semibold text-slate-900">{title}</h3>
+          <InfoDot text={info} />
+        </div>
+        {canAccess(perm) && (
+          <Link to={to} className="text-xs font-medium text-blue-600 hover:text-blue-700">
+            {linkLabel}
+          </Link>
+        )}
+      </div>
+      <div className="flex-1 px-2 pb-3 pt-1">
         {loading ? (
           <ul className="space-y-1 px-3 py-2">
             {[0, 1, 2, 3, 4].map((i) => (
@@ -449,49 +687,45 @@ function RankPanel({ title, subtitle, info, rows, loading, emptyMessage, to, per
         ) : rows.length === 0 ? (
           <EmptyHint message={emptyMessage} />
         ) : (
-          <ol className="px-1">
-            {rows.map((r, i) => (
-              <li
-                key={r.key}
-                className="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-slate-50"
-              >
-                <span className="w-4 shrink-0 text-right text-xs font-medium text-slate-400">{i + 1}</span>
-                <span
-                  className={cx(
-                    'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold tracking-tight',
-                    tintFor(r.code),
-                  )}
-                  aria-hidden
+          <>
+            {/* Column headers, echoing the reference's Buyer / Revenue / Change layout. */}
+            <div className="flex items-center gap-3 px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+              <span className="w-4 text-right">#</span>
+              <span className="flex-1">Name</span>
+              <span className="w-20 text-right">{valueHead}</span>
+              <span className="w-12 text-right">Change</span>
+            </div>
+            <ol className="px-1">
+              {rows.map((r, i) => (
+                <li
+                  key={r.key}
+                  className="flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-slate-50"
                 >
-                  {initialsFor(r.code)}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-slate-800">{r.code}</span>
-                  {r.name && <span className="block truncate text-xs text-slate-400">{r.name}</span>}
-                </span>
-                <span className="shrink-0 text-right">
-                  <span className="block text-sm font-semibold tabular-nums text-slate-900">{money(r.value)}</span>
-                  <DeltaChip value={r.delta} tone="up-good" className="justify-end" hideWhenNull />
-                </span>
-              </li>
-            ))}
-          </ol>
+                  <span className="w-4 shrink-0 text-right text-xs font-medium text-slate-400">{i + 1}</span>
+                  <span
+                    className={cx(
+                      'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold tracking-tight',
+                      tintFor(r.code),
+                    )}
+                    aria-hidden
+                  >
+                    {initialsFor(r.code)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-slate-800">{r.code}</span>
+                    {r.name && <span className="block truncate text-xs text-slate-400">{r.name}</span>}
+                  </span>
+                  <span className="w-20 shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900">{money(r.value)}</span>
+                  <span className="w-12 shrink-0 text-right">
+                    <DeltaChip value={r.delta} tone="up-good" className="justify-end" hideWhenNull />
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </>
         )}
       </div>
-      {canAccess(perm) && (
-        <div className="mt-auto border-t border-slate-100 px-5 py-3">
-          <Link
-            to={to}
-            className="group inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
-          >
-            {linkLabel}
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="transition-transform group-hover:translate-x-0.5">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </Link>
-          <p className="sr-only">{caption}</p>
-        </div>
-      )}
+      <p className="sr-only">{caption}</p>
     </Panel>
   )
 }
@@ -550,12 +784,16 @@ function DashboardPage() {
   const single = series.length === 1
 
   // KPI sparklines are derived from the trend series — the two rate metrics aren't
-  // returned per bucket, so they're recomputed here from their components.
+  // returned per bucket, so they're recomputed here from their components. The volume
+  // cards' bars reuse the closest available per-bucket series (Active Buyers / Campaigns
+  // have no per-bucket count, so counted / spend stand in as a volume proxy).
   const sparks = useMemo(
     () => ({
       revenue: series.map((p) => p.revenue),
       cost: series.map((p) => p.cost),
       profit: series.map((p) => p.margin),
+      counted: series.map((p) => p.counted),
+      answered: series.map((p) => p.answered),
       marginPct: series.map((p) => (p.revenue > 0 ? (p.margin / p.revenue) * 100 : 0)),
       answerRate: series.map((p) => (p.answered + p.missed > 0 ? (p.answered / (p.answered + p.missed)) * 100 : 0)),
     }),
@@ -584,8 +822,7 @@ function DashboardPage() {
     }))
   }, [topCampaigns.data, prevCampaigns.data])
 
-  // Spend is heavily top-weighted, so the tail is folded into a single "Others" row
-  // rather than rendered as a row of invisible slivers.
+  // Spend is heavily top-weighted, so the tail is folded into a single "Others" row.
   const sources = useMemo(() => {
     const all = topSources.data ?? []
     const total = all.reduce((sum, r) => sum + r.cost, 0)
@@ -612,111 +849,109 @@ function DashboardPage() {
 
   const blocks = [summary, trends, topBuyers, topCampaigns, topSources]
   const failed = blocks.filter((b) => b.error)
-  const refreshing = blocks.some((b) => b.refreshing)
   const retryAll = () => failed.forEach((b) => b.reload())
+
+  const heroSeries = useMemo(() => series.map((p) => ({ period: p.period, margin: p.margin })), [series])
 
   return (
     <div>
       <PageHeader title="Dashboard" subtitle="Performance overview of calls, revenue and margin">
-        {refreshing && (
-          <span className="flex items-center gap-1.5 text-xs font-medium text-slate-400" role="status">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
-            Updating…
-          </span>
-        )}
-        {/* Dark date box — the client asked for this one control to be dark, on the
-            otherwise-light header. Opt-in, so the six other pages using this control
-            keep the standard frosted pill. */}
+        {/* Dark date box on the light header, per the client's request. */}
         <DateRangeControl value={range} onChange={setRange} tone="dark" />
       </PageHeader>
 
-      {/* Headline: profit leads, its inputs and the two rate metrics sit beside it.
-          Column counts are driven by the narrowest tile that still fits "Revenue (billed)"
-          and "▲ +8.7% vs prev. 7 days" on one line each. The sidebar eats 240px, so 1024px
-          and 1280px are much tighter than they look: six across only works from ~1440px,
-          four from 1280, two below that. Verified with an overflow check at each width. */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 wide:grid-cols-6">
-        <ProfitHero
-          value={s?.margin}
-          delta={s?.deltas.margin}
-          caption={caption}
-          spark={sparks.profit}
-          loading={summary.loading}
-        />
-        <MetricTile
-          icon={<IconDollar />} iconClass="bg-blue-100 text-blue-700"
+      {/* Total Profit hero — full-width banner with a large area chart. */}
+      <HeroBanner
+        value={s?.margin}
+        delta={s?.deltas.margin}
+        caption={caption}
+        series={heroSeries}
+        loading={summary.loading}
+      />
+
+      {/* KPI widgets — solid colour tiles with an embedded chart (CoreUI style). White
+          charts read on the colour; Answer Rate uses bars, the rest lines-with-markers /
+          an area, echoing the reference's mix. 2×2 until wide, four across at 1440+. */}
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 wide:grid-cols-4">
+        <StatWidget
+          gradient="bg-linear-to-br from-blue-500 to-blue-600"
           label="Revenue (billed)"
           info="Total billed to buyers for calls delivered in the selected period."
           value={s ? money(s.revenue) : '—'}
-          delta={s?.deltas.revenue} tone="up-good" caption={caption}
-          spark={sparks.revenue} sparkId="spark-revenue" sparkColor={C.revenue}
+          delta={s?.deltas.revenue}
+          chart={<Sparkline id="w-revenue" data={sparks.revenue} color="#fff" height={64} dots fillOpacity={0.22} />}
+          art={<RevenueArt />}
           loading={summary.loading}
         />
-        <MetricTile
-          icon={<IconOutflow />} iconClass="bg-orange-100 text-orange-700"
+        <StatWidget
+          gradient="bg-linear-to-br from-orange-400 to-orange-500"
           label="Running Fee"
           info="Total paid to campaigns and traffic sources in the selected period. This is a cost — a falling Running Fee is good news."
           value={s ? money(s.cost) : '—'}
-          delta={s?.deltas.cost} tone="down-good" caption={caption}
-          spark={sparks.cost} sparkId="spark-cost" sparkColor={C.cost}
+          delta={s?.deltas.cost}
+          chart={<Sparkline id="w-cost" data={sparks.cost} color="#fff" height={64} dots fillOpacity={0.22} />}
+          art={<CostArt />}
           loading={summary.loading}
         />
-        <MetricTile
-          icon={<IconPercent />} iconClass="bg-violet-100 text-violet-700"
+        <StatWidget
+          gradient="bg-linear-to-br from-violet-500 to-purple-600"
           label="Profit Margin"
           info="Profit as a share of revenue. Shown as a percentage-point change against the previous period."
           value={s ? `${s.margin_pct}%` : '—'}
-          delta={s?.point_deltas?.margin_pct} deltaSuffix="pp" tone="up-good" caption={caption}
-          spark={sparks.marginPct} sparkId="spark-margin" sparkColor={C.marginPct}
+          delta={s?.point_deltas?.margin_pct} deltaSuffix="pp"
+          chart={<Sparkline id="w-margin" data={sparks.marginPct} color="#fff" height={64} fillOpacity={0.3} />}
+          art={<ProfitArt />}
           loading={summary.loading}
         />
-        <MetricTile
-          icon={<IconTarget />} iconClass="bg-teal-100 text-teal-700"
+        <StatWidget
+          gradient="bg-linear-to-br from-teal-500 to-teal-600"
           label="Answer Rate"
           info="Answered calls as a share of answered + missed, buyer side. Shown as a percentage-point change against the previous period."
           value={s ? `${s.answer_rate}%` : '—'}
-          delta={s?.point_deltas?.answer_rate} deltaSuffix="pp" tone="up-good" caption={caption}
-          spark={sparks.answerRate} sparkId="spark-answer" sparkColor={C.answerRate}
+          delta={s?.point_deltas?.answer_rate} deltaSuffix="pp"
+          chart={<BarSpark data={sparks.answerRate} color="rgba(255,255,255,0.85)" height={64} />}
+          art={<AnswerArt />}
           loading={summary.loading}
         />
       </div>
 
-      {/* Volume metrics — counts rather than money. */}
-      {/* Four across only from xl — at lg the sidebar leaves ~720px, which squeezes
-          "Active Campaigns" against its icon. */}
-      <Panel className="mt-4 grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4 xl:divide-x xl:divide-slate-100">
-        <StripStat
-          icon={<IconPhone />} iconClass="bg-emerald-100 text-emerald-700"
+      {/* Volume cards — isometric 3D-style icon + bar sparkline. */}
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 wide:grid-cols-4">
+        <VolumeCard
+          icon={<Phone3D />}
           label="Counted Calls"
           info="Billable calls in the selected period. Not the same as answered calls."
           value={s ? num(s.counted) : '—'}
-          delta={s?.deltas.counted} tone="up-good" caption={caption} loading={summary.loading}
+          delta={s?.deltas.counted} tone="up-good" caption={caption}
+          bars={sparks.counted} barColor={C.answered} loading={summary.loading}
         />
-        <StripStat
-          icon={<IconUsers />} iconClass="bg-blue-100 text-blue-700"
+        <VolumeCard
+          icon={<People3D />}
           label="Active Buyers"
           info="Distinct buyers with recorded activity in the selected period."
           value={s ? num(s.active_buyers) : '—'}
-          delta={s?.deltas.active_buyers} tone="up-good" caption={caption} loading={summary.loading}
+          delta={s?.deltas.active_buyers} tone="up-good" caption={caption}
+          bars={sparks.counted} barColor={C.revenue} loading={summary.loading}
         />
-        <StripStat
-          icon={<IconMegaphone />} iconClass="bg-violet-100 text-violet-700"
+        <VolumeCard
+          icon={<Megaphone3D />}
           label="Active Campaigns"
           info="Distinct campaigns with recorded activity in the selected period."
           value={s ? num(s.active_campaigns) : '—'}
-          delta={s?.deltas.active_campaigns} tone="up-good" caption={caption} loading={summary.loading}
+          delta={s?.deltas.active_campaigns} tone="up-good" caption={caption}
+          bars={sparks.cost} barColor={C.marginPct} loading={summary.loading}
         />
-        <StripStat
-          icon={<IconPhoneIn />} iconClass="bg-amber-100 text-amber-700"
+        <VolumeCard
+          icon={<Headphones3D />}
           label="Answered Calls"
           info="Calls the buyer actually picked up, in the selected period."
           value={s ? num(s.answered) : '—'}
-          delta={s?.deltas.answered} tone="up-good" caption={caption} loading={summary.loading}
+          delta={s?.deltas.answered} tone="up-good" caption={caption}
+          bars={sparks.answered} barColor={C.cost} loading={summary.loading}
         />
-      </Panel>
+      </div>
 
-      {/* Below xl the trend chart takes a full row rather than squeezing the ranked
-          lists into a third of ~720px of usable width. */}
+      {/* Below xl the trend chart takes a full row rather than squeezing the ranked lists. */}
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
         {/* Money over time */}
         <Panel className="lg:col-span-2">
@@ -734,7 +969,7 @@ function DashboardPage() {
                     className={cx(
                       'rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
                       granularity === g.value
-                        ? 'bg-blue-600 text-white shadow-sm'
+                        ? 'bg-violet-600 text-white shadow-sm'
                         : 'text-slate-600 hover:bg-white hover:text-slate-900',
                     )}
                   >
@@ -760,17 +995,12 @@ function DashboardPage() {
                     <ReferenceLine y={0} stroke="#cbd5e1" strokeWidth={1} />
                     <Tooltip content={<SeriesTooltip format={money} />} />
                     <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="plainline" />
-                    {/* A single bucket draws no line at all, so its markers are enlarged to
-                        stay legible on their own. */}
                     <Line type="monotone" dataKey="revenue" name="Revenue (billed)" stroke={C.revenue} strokeWidth={2} dot={{ r: single ? 5 : 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
                     <Line type="monotone" dataKey="cost" name="Running Fee" stroke={C.cost} strokeWidth={2} dot={{ r: single ? 5 : 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
                     <Line type="monotone" dataKey="margin" name="Profit" stroke={C.profit} strokeWidth={2} dot={{ r: single ? 5 : 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
                   </LineChart>
                 </ResponsiveContainer>
 
-                {/* One bucket is not a trend. Rather than leave a near-empty plot, say why
-                    it is empty and what to do about it — usually the range is wider than
-                    the data actually covers. */}
                 {single && (
                   <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6">
                     <p className="max-w-xs rounded-xl border border-slate-200 bg-white/90 px-4 py-2.5 text-center text-xs leading-relaxed text-slate-500 shadow-sm backdrop-blur-sm">
@@ -784,9 +1014,7 @@ function DashboardPage() {
           </div>
         </Panel>
 
-        {/* Call quality mix. This panel sits beside the much taller trend chart, so its
-            body grows to fill the row and centres its content — otherwise the ring and
-            legend hug the header and leave a large dead area underneath. */}
+        {/* Call quality mix — grows to fill the row height beside the taller trend chart. */}
         <Panel className="flex flex-col">
           <PanelHeader
             title="Answered vs Missed Calls"
@@ -808,7 +1036,7 @@ function DashboardPage() {
               </div>
             ) : (
               <div className="flex w-full flex-col items-center gap-6 sm:flex-row sm:gap-5">
-                <div className="h-44 w-44 shrink-0">
+                <div className="relative h-44 w-44 shrink-0">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -824,9 +1052,11 @@ function DashboardPage() {
                           <Cell key={slice.name} fill={slice.color} />
                         ))}
                       </Pie>
-                      {/* No tooltip: both values and shares are already listed beside the ring. */}
                     </PieChart>
                   </ResponsiveContainer>
+                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-slate-400">
+                    <IconHeadphones />
+                  </span>
                 </div>
                 <dl className="w-full space-y-4">
                   {callMix.map((slice) => (
@@ -841,8 +1071,6 @@ function DashboardPage() {
                       </dd>
                     </div>
                   ))}
-                  {/* The figure the two slices add up to — closes the loop for the reader
-                      and gives the panel a natural bottom edge. */}
                   <div className="flex items-baseline justify-between border-t border-slate-100 pt-3">
                     <dt className="text-sm text-slate-500">Total delivered</dt>
                     <dd className="text-sm font-semibold tabular-nums text-slate-900">{num(callTotal)}</dd>
@@ -855,29 +1083,29 @@ function DashboardPage() {
 
         {/* Ranked buyers */}
         <RankPanel
-          title="Most Active Buyers"
-          subtitle="By revenue in the selected period"
+          title="Top Buyers"
           info="Top 5 buyers by revenue. The change compares each buyer against the same buyer in the previous period."
           rows={buyerRows}
           loading={topBuyers.loading}
           emptyMessage="No buyer activity in this period."
+          valueHead="Revenue"
           to="/buyers"
           perm="buyers"
-          linkLabel="View all buyers"
+          linkLabel="View all"
           caption={`Change shown ${caption}`}
         />
 
         {/* Ranked campaigns */}
         <RankPanel
           title="Top Campaigns"
-          subtitle="By spend in the selected period"
           info="Top 5 campaigns by Running Fee. The change compares each campaign against the same campaign in the previous period."
           rows={campaignRows}
           loading={topCampaigns.loading}
           emptyMessage="No campaign activity in this period."
+          valueHead="Spend"
           to="/campaigns"
           perm="campaigns"
-          linkLabel="View all campaigns"
+          linkLabel="View all"
           caption={`Change shown ${caption}`}
         />
 
@@ -915,7 +1143,7 @@ function DashboardPage() {
                       <div className="mt-1.5 flex items-center gap-3">
                         <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
                           <div
-                            className="h-full rounded-full bg-blue-600"
+                            className="h-full rounded-full bg-linear-to-r from-violet-500 to-fuchsia-500"
                             style={{ width: `${Math.max(share, share > 0 ? 1.5 : 0)}%` }}
                           />
                         </div>
@@ -954,9 +1182,7 @@ function DashboardPage() {
             onClick={retryAll}
             className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 sm:self-auto"
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-            </svg>
+            <IconRefresh />
             Retry
           </button>
         </div>
