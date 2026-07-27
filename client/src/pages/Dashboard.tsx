@@ -438,46 +438,73 @@ function BarSpark({ data, color, height = 40 }: { data: number[]; color: string;
   )
 }
 
-interface PieSlice { name: string; value: number; color: string; light: string; dark: string }
+interface PieSlice { name: string; value: number; color: string; light: string; dark: string; pull?: number }
 
 /**
  * A tilted, extruded 3D pie — hand-drawn SVG, since Recharts only renders flat charts.
- * Each slice's coloured side wall is drawn first, then its gradient top face, so paint order
- * gives the front rim its depth; a soft ground shadow and white slice seams modernise it.
+ * A slice with `pull` is exploded outward along its bisector and gets its radial side walls
+ * too, so it pops out in 3D (like a highlighted wedge). Non-pulled slices draw first; the
+ * pulled one draws last so it sits proud of the rest.
  */
-function Pie3D({ slices, size = 176, depth = 26, tilt = 0.5 }: {
+function Pie3D({ slices, size = 184, depth = 26, tilt = 0.5 }: {
   slices: PieSlice[]
   size?: number
   depth?: number
   tilt?: number
 }) {
   const total = slices.reduce((s, x) => s + x.value, 0) || 1
-  const rx = size / 2 - 10
+  const maxPull = slices.reduce((m, s) => Math.max(m, s.pull ?? 0), 0)
+  const rx = size / 2 - 10 - maxPull
   const ry = rx * tilt
   const cx = size / 2
-  const cy = ry + 12
+  const cy = ry + 12 + maxPull * tilt
   const h = Math.round(cy + ry + depth + 16)
 
-  const pt = (a: number, dy = 0): [number, number] => [cx + rx * Math.cos(a), cy + ry * Math.sin(a) + dy]
-
   // Slices start at the top (−90°) and sweep clockwise (increasing angle = clockwise on
-  // screen, since y grows downward). Cumulative starts computed functionally.
+  // screen, since y grows downward). Cumulative starts + explode offset computed functionally.
   const sweeps = slices.map((s) => (s.value / total) * Math.PI * 2)
   const segs = slices.map((s, i) => {
     const a0 = -Math.PI / 2 + sweeps.slice(0, i).reduce((x, y) => x + y, 0)
-    return { ...s, a0, a1: a0 + sweeps[i], large: sweeps[i] > Math.PI ? 1 : 0 }
+    const a1 = a0 + sweeps[i]
+    const mid = (a0 + a1) / 2
+    const pull = s.pull ?? 0
+    return {
+      ...s,
+      idx: i,
+      a0,
+      a1,
+      large: sweeps[i] > Math.PI ? 1 : 0,
+      // Offset the slice outward along its bisector, projected onto the tilted ellipse.
+      ox: pull * Math.cos(mid),
+      oy: pull * Math.sin(mid) * tilt,
+    }
   })
+  type Seg = (typeof segs)[number]
 
-  const topPath = (s: (typeof segs)[number]) => {
-    const [x0, y0] = pt(s.a0)
-    const [x1, y1] = pt(s.a1)
-    return `M ${cx} ${cy} L ${x0} ${y0} A ${rx} ${ry} 0 ${s.large} 1 ${x1} ${y1} Z`
+  const pt = (a: number, seg: Seg, dy = 0): [number, number] =>
+    [cx + seg.ox + rx * Math.cos(a), cy + seg.oy + ry * Math.sin(a) + dy]
+
+  const topPath = (seg: Seg) => {
+    const [x0, y0] = pt(seg.a0, seg)
+    const [x1, y1] = pt(seg.a1, seg)
+    return `M ${cx + seg.ox} ${cy + seg.oy} L ${x0} ${y0} A ${rx} ${ry} 0 ${seg.large} 1 ${x1} ${y1} Z`
   }
-  const sidePath = (s: (typeof segs)[number]) => {
-    const [x0, y0] = pt(s.a0)
-    const [x1, y1] = pt(s.a1)
-    return `M ${x0} ${y0} A ${rx} ${ry} 0 ${s.large} 1 ${x1} ${y1} L ${x1} ${y1 + depth} A ${rx} ${ry} 0 ${s.large} 0 ${x0} ${y0 + depth} Z`
+  const arcWall = (seg: Seg) => {
+    const [x0, y0] = pt(seg.a0, seg)
+    const [x1, y1] = pt(seg.a1, seg)
+    return `M ${x0} ${y0} A ${rx} ${ry} 0 ${seg.large} 1 ${x1} ${y1} L ${x1} ${y1 + depth} A ${rx} ${ry} 0 ${seg.large} 0 ${x0} ${y0 + depth} Z`
   }
+  // Straight (radial) wall from the slice centre to one arc endpoint — only exposed on a
+  // pulled-out slice, where the seam between neighbours opens up.
+  const radialWall = (seg: Seg, a: number) => {
+    const [xe, ye] = pt(a, seg)
+    const cxp = cx + seg.ox
+    const cyp = cy + seg.oy
+    return `M ${cxp} ${cyp} L ${xe} ${ye} L ${xe} ${ye + depth} L ${cxp} ${cyp + depth} Z`
+  }
+
+  const base = segs.filter((s) => !s.pull)
+  const pulled = segs.filter((s) => s.pull)
 
   return (
     <svg width={size} height={h} viewBox={`0 0 ${size} ${h}`} aria-hidden focusable="false" style={{ filter: 'drop-shadow(0 6px 8px rgba(15,23,42,0.15))' }}>
@@ -489,13 +516,21 @@ function Pie3D({ slices, size = 176, depth = 26, tilt = 0.5 }: {
           </linearGradient>
         ))}
       </defs>
-      {/* Coloured side walls (extrusion) — drawn first so the top faces overdraw the back. */}
-      {segs.map((s, i) => (
-        <path key={`w${i}`} d={sidePath(s)} fill={s.dark} />
+      {/* Non-pulled slices: side walls first, then gradient tops. */}
+      {base.map((s) => (
+        <path key={`bw${s.name}`} d={arcWall(s)} fill={s.dark} />
       ))}
-      {/* Gradient top faces with white seams. */}
-      {segs.map((s, i) => (
-        <path key={`t${i}`} d={topPath(s)} fill={`url(#p3d-${i})`} stroke="#fff" strokeWidth="1.5" strokeOpacity="0.75" strokeLinejoin="round" />
+      {base.map((s) => (
+        <path key={`bt${s.name}`} d={topPath(s)} fill={`url(#p3d-${s.idx})`} stroke="#fff" strokeWidth="1.5" strokeOpacity="0.75" strokeLinejoin="round" />
+      ))}
+      {/* Pulled slices on top: full extrusion (radial + arc walls) then the gradient top. */}
+      {pulled.map((s) => (
+        <g key={`pg${s.name}`}>
+          <path d={radialWall(s, s.a0)} fill={s.dark} />
+          <path d={radialWall(s, s.a1)} fill={s.dark} />
+          <path d={arcWall(s)} fill={s.dark} />
+          <path d={topPath(s)} fill={`url(#p3d-${s.idx})`} stroke="#fff" strokeWidth="1.5" strokeOpacity="0.85" strokeLinejoin="round" />
+        </g>
       ))}
     </svg>
   )
@@ -916,9 +951,10 @@ function DashboardPage() {
 
   const answered = s?.answered ?? 0
   const missed = s?.missed ?? 0
-  // light/dark shades drive the 3D pie's top-face gradient and side walls.
+  // light/dark shades drive the 3D pie's top-face gradient and side walls; `pull` explodes
+  // the Answered slice outward so it stands proud of the rest.
   const callMix: PieSlice[] = [
-    { name: 'Answered', value: answered, color: C.answered, light: '#4ade80', dark: '#15803d' },
+    { name: 'Answered', value: answered, color: C.answered, light: '#4ade80', dark: '#15803d', pull: 18 },
     { name: 'Missed', value: missed, color: C.missed, light: '#fb7185', dark: '#be123c' },
   ]
   const callTotal = answered + missed

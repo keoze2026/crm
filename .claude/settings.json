@@ -133,7 +133,9 @@
       "Bash(curl -s http://localhost:8000/api/vendors)",
       "Bash(grep -n \"^    <div>$\\\\|<div>\\\\s*$\" src/pages/Dashboard.tsx)",
       "Bash(sed -i \"s|clip: { x: 1130, y: 880, width: 480, height: 420 }|clip: { x: 980, y: 850, width: 730, height: 470 }|\" shot.mjs)",
-      "Bash(node shot.mjs pie3.png)"
+      "Bash(node shot.mjs pie3.png)",
+      "Bash(sed -i 's|url\\(#p3d-${slices.indexOf\\(s\\)}\\)|url\\(#p3d-${s.idx}\\)|g' src/pages/Dashboard.tsx)",
+      "Bash(grep -n \"p3d-\\\\${\" src/pages/Dashboard.tsx)"
     ],
     "additionalDirectories": [
       "C:\\Users\\hp 290 g4\\Desktop\\Dev Projects\\CRM\\client",
