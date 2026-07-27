@@ -1,4 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+/* Plus Jakarta Sans — used on the Dashboard page only (applied via an inline font-family
+   on that page's root); the rest of the app stays on Poppins. */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 @theme {

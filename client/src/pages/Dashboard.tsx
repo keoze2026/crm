@@ -340,10 +340,10 @@ function PanelHeader({ title, subtitle, info, action }: {
       <div className="min-w-0">
         {/* Titles wrap rather than truncate — the trend title is long. */}
         <div className="flex items-start gap-1.5">
-          <h3 className="font-semibold text-slate-900">{title}</h3>
+          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
           {info && <span className="mt-1"><InfoDot text={info} /></span>}
         </div>
-        {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
+        {subtitle && <p className="mt-0.5 text-base text-slate-500">{subtitle}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
@@ -369,7 +369,7 @@ function DeltaChip({ value, tone, suffix = '%', caption, className, hideWhenNull
 }) {
   if (value === undefined || value === null) {
     if (hideWhenNull) return null
-    return <span className={cx('text-xs text-slate-400', className)}>No comparable prior period</span>
+    return <span className={cx('text-sm text-slate-400', className)}>No comparable prior period</span>
   }
   const good = value === 0 ? null : tone === 'up-good' ? value > 0 : value < 0
   return (
@@ -457,13 +457,13 @@ function HeroBanner({ value, delta, caption, series, loading }: {
         {/* Left — the headline figure */}
         <div>
           <div className="flex items-center gap-1.5">
-            <span className="text-sm font-medium text-slate-500">Total Profit</span>
+            <span className="text-base font-medium text-slate-500">Total Profit</span>
             <InfoDot text="Revenue (billed) minus Running Fee for the selected period. Negative means the calls cost more than they billed." />
           </div>
           {loading ? (
             <Skeleton className="mt-2 h-11 w-52" />
           ) : (
-            <div className={cx('mt-1 text-4xl font-bold tracking-tight', negative ? 'text-red-600' : 'text-slate-900')}>
+            <div className={cx('mt-1 text-5xl font-bold tracking-tight', negative ? 'text-red-600' : 'text-slate-900')}>
               {value !== undefined ? money(value) : '—'}
             </div>
           )}
@@ -472,14 +472,14 @@ function HeroBanner({ value, delta, caption, series, loading }: {
 
         {/* Right — the large area chart */}
         <div className="relative h-44">
-          <div className="absolute right-0 top-0 z-10 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
+          <div className="absolute right-0 top-0 z-10 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-sm font-medium text-slate-500">
             Area Chart
           </div>
           {loading ? (
             <div className="flex h-full items-center justify-center"><Skeleton className="h-32 w-full" /></div>
           ) : !plottable ? (
             <div className="flex h-full items-center justify-center">
-              <span className="text-xs text-slate-400">Not enough data to plot a trend for this range.</span>
+              <span className="text-sm text-slate-400">Not enough data to plot a trend for this range.</span>
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
@@ -491,8 +491,8 @@ function HeroBanner({ value, delta, caption, series, loading }: {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
-                <XAxis dataKey="period" tickFormatter={formatPeriod} tick={{ fontSize: 11, fill: C.axis }} tickLine={false} axisLine={false} minTickGap={24} />
-                <YAxis tickFormatter={moneyCompact} tick={{ fontSize: 11, fill: C.axis }} tickLine={false} axisLine={false} width={48} />
+                <XAxis dataKey="period" tickFormatter={formatPeriod} tick={{ fontSize: 12, fill: C.axis }} tickLine={false} axisLine={false} minTickGap={24} />
+                <YAxis tickFormatter={moneyCompact} tick={{ fontSize: 12, fill: C.axis }} tickLine={false} axisLine={false} width={48} />
                 <Tooltip content={<SeriesTooltip format={money} />} />
                 <Area type="monotone" dataKey="margin" name="Profit" stroke={C.hero} strokeWidth={2.5} fill="url(#hero-area)" dot={false} activeDot={{ r: 5 }} />
               </AreaChart>
@@ -510,7 +510,7 @@ function EmptyHint({ message }: { message: string }) {
       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" className="text-slate-300">
         <path d="M3 3v18h18" /><path d="m7 15 3.5-3.5 3 3L21 7" />
       </svg>
-      <p className="max-w-[26ch] text-sm text-slate-400">{message}</p>
+      <p className="max-w-[26ch] text-base text-slate-400">{message}</p>
     </div>
   )
 }
@@ -558,13 +558,13 @@ function StatWidget({ gradient, label, info, value, delta, deltaSuffix = '%', ch
           <div className="h-7 w-24 animate-pulse rounded bg-white/25" />
         ) : (
           <div className="flex flex-wrap items-baseline gap-x-1.5">
-            <span className="text-xl font-bold tracking-tight">{value}</span>
+            <span className="text-2xl font-bold tracking-tight">{value}</span>
             {delta != null && (
-              <span className="text-xs font-medium text-white/85">({signed(delta, deltaSuffix)} {arrow})</span>
+              <span className="text-sm font-medium text-white/85">({signed(delta, deltaSuffix)} {arrow})</span>
             )}
           </div>
         )}
-        <div className="mt-0.5 truncate text-sm text-white/85">{label}</div>
+        <div className="mt-0.5 truncate text-base text-white/85">{label}</div>
       </div>
       {/* Chart bleeds to the card edges; the negative margins cancel the p-4. */}
       <div className="relative z-10 -mx-4 -mb-4 mt-3 h-16">{!loading && chart}</div>
@@ -590,13 +590,13 @@ function VolumeCard({ icon, label, info, value, delta, tone, caption, bars, barC
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-sm font-medium text-slate-600">{label}</span>
+            <span className="truncate text-base font-medium text-slate-600">{label}</span>
             <InfoDot text={info} />
           </div>
           {loading ? (
             <Skeleton className="mt-2 h-7 w-20" />
           ) : (
-            <div className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900">{value}</div>
+            <div className="mt-1.5 text-3xl font-bold tracking-tight text-slate-900">{value}</div>
           )}
           {!loading && <DeltaChip className="mt-1" value={delta} tone={tone} caption={caption} />}
         </div>
@@ -664,11 +664,11 @@ function RankPanel({ title, info, rows, loading, emptyMessage, valueHead, to, pe
     <Panel className="flex flex-col">
       <div className="flex items-center justify-between px-5 pb-1 pt-4">
         <div className="flex items-center gap-1.5">
-          <h3 className="font-semibold text-slate-900">{title}</h3>
+          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
           <InfoDot text={info} />
         </div>
         {canAccess(perm) && (
-          <Link to={to} className="text-xs font-medium text-blue-600 hover:text-blue-700">
+          <Link to={to} className="text-sm font-medium text-blue-600 hover:text-blue-700">
             {linkLabel}
           </Link>
         )}
@@ -701,7 +701,7 @@ function RankPanel({ title, info, rows, loading, emptyMessage, valueHead, to, pe
                   key={r.key}
                   className="flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-slate-50"
                 >
-                  <span className="w-4 shrink-0 text-right text-xs font-medium text-slate-400">{i + 1}</span>
+                  <span className="w-4 shrink-0 text-right text-sm font-medium text-slate-400">{i + 1}</span>
                   <span
                     className={cx(
                       'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold tracking-tight',
@@ -712,10 +712,10 @@ function RankPanel({ title, info, rows, loading, emptyMessage, valueHead, to, pe
                     {initialsFor(r.code)}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-slate-800">{r.code}</span>
-                    {r.name && <span className="block truncate text-xs text-slate-400">{r.name}</span>}
+                    <span className="block truncate text-base font-medium text-slate-800">{r.code}</span>
+                    {r.name && <span className="block truncate text-sm text-slate-400">{r.name}</span>}
                   </span>
-                  <span className="w-20 shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900">{money(r.value)}</span>
+                  <span className="w-20 shrink-0 text-right text-base font-semibold tabular-nums text-slate-900">{money(r.value)}</span>
                   <span className="w-12 shrink-0 text-right">
                     <DeltaChip value={r.delta} tone="up-good" className="justify-end" hideWhenNull />
                   </span>
@@ -741,7 +741,7 @@ interface TooltipProps {
 function SeriesTooltip({ active, payload, label, format }: TooltipProps & { format: (v: number) => string }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-lg">
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-lg">
       {label && <div className="mb-1 font-semibold text-slate-700">{formatPeriod(label)}</div>}
       {payload.map((p) => (
         <div key={p.dataKey} className="flex items-center gap-2">
@@ -854,7 +854,9 @@ function DashboardPage() {
   const heroSeries = useMemo(() => series.map((p) => ({ period: p.period, margin: p.margin })), [series])
 
   return (
-    <div>
+    // Plus Jakarta Sans, scoped to this page (inherited by children, incl. the shared
+    // PageHeader and the Recharts SVG text). Other pages keep the app-wide Poppins.
+    <div style={{ fontFamily: "'Plus Jakarta Sans', 'Poppins', ui-sans-serif, system-ui, sans-serif" }}>
       <PageHeader title="Dashboard" subtitle="Performance overview of calls, revenue and margin">
         {/* Dark date box on the light header, per the client's request. */}
         <DateRangeControl value={range} onChange={setRange} tone="dark" />
@@ -967,7 +969,7 @@ function DashboardPage() {
                     onClick={() => setGranularity(g.value)}
                     aria-pressed={granularity === g.value}
                     className={cx(
-                      'rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
+                      'rounded-lg px-2.5 py-1 text-sm font-medium transition-colors',
                       granularity === g.value
                         ? 'bg-violet-600 text-white shadow-sm'
                         : 'text-slate-600 hover:bg-white hover:text-slate-900',
@@ -989,12 +991,12 @@ function DashboardPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={series} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
-                    <XAxis dataKey="period" tickFormatter={formatPeriod} tick={{ fontSize: 12, fill: C.axis }} tickLine={false} axisLine={false} minTickGap={24} />
-                    <YAxis tickFormatter={moneyCompact} tick={{ fontSize: 12, fill: C.axis }} tickLine={false} axisLine={false} width={60} />
+                    <XAxis dataKey="period" tickFormatter={formatPeriod} tick={{ fontSize: 13, fill: C.axis }} tickLine={false} axisLine={false} minTickGap={24} />
+                    <YAxis tickFormatter={moneyCompact} tick={{ fontSize: 13, fill: C.axis }} tickLine={false} axisLine={false} width={60} />
                     {/* Zero baseline matters: profit legitimately runs negative. */}
                     <ReferenceLine y={0} stroke="#cbd5e1" strokeWidth={1} />
                     <Tooltip content={<SeriesTooltip format={money} />} />
-                    <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="plainline" />
+                    <Legend wrapperStyle={{ fontSize: 13, paddingTop: 8 }} iconType="plainline" />
                     <Line type="monotone" dataKey="revenue" name="Revenue (billed)" stroke={C.revenue} strokeWidth={2} dot={{ r: single ? 5 : 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
                     <Line type="monotone" dataKey="cost" name="Running Fee" stroke={C.cost} strokeWidth={2} dot={{ r: single ? 5 : 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
                     <Line type="monotone" dataKey="margin" name="Profit" stroke={C.profit} strokeWidth={2} dot={{ r: single ? 5 : 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
@@ -1003,7 +1005,7 @@ function DashboardPage() {
 
                 {single && (
                   <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6">
-                    <p className="max-w-xs rounded-xl border border-slate-200 bg-white/90 px-4 py-2.5 text-center text-xs leading-relaxed text-slate-500 shadow-sm backdrop-blur-sm">
+                    <p className="max-w-xs rounded-xl border border-slate-200 bg-white/90 px-4 py-2.5 text-center text-sm leading-relaxed text-slate-500 shadow-sm backdrop-blur-sm">
                       Only one {granularity === 'day' ? 'day' : granularity === '4day' ? '4-day block' : 'week'} in
                       this range has records, so there is no trend to plot yet. Widen the date range to compare periods.
                     </p>
@@ -1061,19 +1063,19 @@ function DashboardPage() {
                 <dl className="w-full space-y-4">
                   {callMix.map((slice) => (
                     <div key={slice.name}>
-                      <dt className="flex items-center gap-2 text-sm text-slate-500">
+                      <dt className="flex items-center gap-2 text-base text-slate-500">
                         <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: slice.color }} />
                         {slice.name}
                       </dt>
-                      <dd className="mt-0.5 text-xl font-bold tabular-nums text-slate-900">{num(slice.value)}</dd>
-                      <dd className="text-xs font-medium" style={{ color: slice.color }}>
+                      <dd className="mt-0.5 text-2xl font-bold tabular-nums text-slate-900">{num(slice.value)}</dd>
+                      <dd className="text-sm font-medium" style={{ color: slice.color }}>
                         {((slice.value / callTotal) * 100).toFixed(1)}% of calls
                       </dd>
                     </div>
                   ))}
                   <div className="flex items-baseline justify-between border-t border-slate-100 pt-3">
-                    <dt className="text-sm text-slate-500">Total delivered</dt>
-                    <dd className="text-sm font-semibold tabular-nums text-slate-900">{num(callTotal)}</dd>
+                    <dt className="text-base text-slate-500">Total delivered</dt>
+                    <dd className="text-base font-semibold tabular-nums text-slate-900">{num(callTotal)}</dd>
                   </div>
                 </dl>
               </div>
@@ -1135,8 +1137,8 @@ function DashboardPage() {
                   return (
                     <li key={row.name}>
                       <div className="flex items-baseline justify-between gap-3">
-                        <span className="truncate text-sm font-medium text-slate-700">{row.name}</span>
-                        <span className="shrink-0 text-xs text-slate-400">
+                        <span className="truncate text-base font-medium text-slate-700">{row.name}</span>
+                        <span className="shrink-0 text-sm text-slate-400">
                           {row.counted > 0 ? `${money(row.cost / row.counted)} / call` : '—'}
                         </span>
                       </div>
@@ -1147,10 +1149,10 @@ function DashboardPage() {
                             style={{ width: `${Math.max(share, share > 0 ? 1.5 : 0)}%` }}
                           />
                         </div>
-                        <span className="w-20 shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900">
+                        <span className="w-20 shrink-0 text-right text-base font-semibold tabular-nums text-slate-900">
                           {money(row.cost)}
                         </span>
-                        <span className="w-12 shrink-0 text-right text-xs tabular-nums text-slate-400">
+                        <span className="w-12 shrink-0 text-right text-sm tabular-nums text-slate-400">
                           {share.toFixed(1)}%
                         </span>
                       </div>
@@ -1172,7 +1174,7 @@ function DashboardPage() {
                 <circle cx="12" cy="12" r="10" /><path d="M12 8v5M12 16h.01" />
               </svg>
             </span>
-            <p className="text-sm text-red-700">
+            <p className="text-base text-red-700">
               {failed[0].error}
               {failed.length > 1 && ` (and ${failed.length - 1} other section${failed.length > 2 ? 's' : ''})`}
               . Is the PHP API running on port 8000?
@@ -1180,7 +1182,7 @@ function DashboardPage() {
           </div>
           <button
             onClick={retryAll}
-            className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 sm:self-auto"
+            className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-red-200 bg-white px-3 py-1.5 text-base font-medium text-red-600 transition-colors hover:bg-red-50 sm:self-auto"
           >
             <IconRefresh />
             Retry
