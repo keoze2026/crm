@@ -98,6 +98,13 @@ export function previousPeriod(from: string, to: string): { from: string; to: st
   return { from: iso(start), to: iso(end) }
 }
 
+/** N days before an ISO date (YYYY-MM-DD). Pure — used to anchor a window to real data. */
+export function daysBeforeIso(iso: string, n: number): string {
+  const d = new Date(iso + 'T00:00:00')
+  d.setDate(d.getDate() - n)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 /** Today as YYYY-MM-DD (local). */
 export function today(): string {
   return new Date().toISOString().slice(0, 10)

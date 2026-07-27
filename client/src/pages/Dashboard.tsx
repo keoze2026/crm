@@ -6,6 +6,7 @@
 // an isometric 3D-style icon + bar sparkline, then the trend/donut and ranked-list rows.
 // Report downloads (CSV/PDF) were removed; a lightweight KPI CSV export lives on this page.
 import { useMemo, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Area,
   AreaChart,
@@ -27,11 +28,11 @@ import {
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { DateRangeControl, type Range } from '../components/DateRange'
-import { PageHeader } from '../components/Layout'
 import { cx } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import {
   daysAgo,
+  daysBeforeIso,
   formatPeriod,
   money,
   moneyCompact,
@@ -761,8 +762,23 @@ export default function Dashboard() {
 }
 
 function DashboardPage() {
-  const [range, setRange] = useState<Range>({ from: daysAgo(6), to: today() })
+  // Default to the last 90 days rather than 7: a dashboard wants a meaningful trend window,
+  // and a 7-day default shows nothing whenever the most recent activity is older than a
+  // week (e.g. the seeded sample data, which ends before "today").
+  const [range, setRange] = useState<Range>({ from: daysAgo(89), to: today() })
   const [granularity, setGranularity] = useState<Granularity>('day')
+
+  // Anchor the initial window to the most recent record, so the dashboard always lands on
+  // real data even when the newest activity trails the current clock (e.g. fixed sample
+  // data). Adjust-state-during-render (guarded by `anchored`, runs once); the user's own
+  // range changes then take over. If the lookup fails, the 90-day default above stands.
+  const latestRecord = useAsync(() => api.records({ sort: 'record_date', dir: 'desc', per_page: 1 }), [])
+  const [anchored, setAnchored] = useState(false)
+  if (!anchored && latestRecord.data) {
+    setAnchored(true)
+    const last = latestRecord.data.data?.[0]?.record_date
+    if (last && last < range.to) setRange({ from: daysBeforeIso(last, 89), to: last })
+  }
 
   const prev = useMemo(() => previousPeriod(range.from, range.to), [range.from, range.to])
   const caption = comparisonLabel(range)
@@ -857,10 +873,33 @@ function DashboardPage() {
     // Plus Jakarta Sans, scoped to this page (inherited by children, incl. the shared
     // PageHeader and the Recharts SVG text). Other pages keep the app-wide Poppins.
     <div style={{ fontFamily: "'Plus Jakarta Sans', 'Poppins', ui-sans-serif, system-ui, sans-serif" }}>
-      <PageHeader title="Dashboard" subtitle="Performance overview of calls, revenue and margin">
+      {/* Light sky-blue backdrop for this page only, so the white panels stand out. Portalled
+          to <body> so it covers the whole viewport (incl. wide-screen gutters) and escapes the
+          layout's transformed animation wrapper; z-index:-1 keeps it behind the content. It
+          unmounts on navigation, so the other pages keep the app-wide gradient. */}
+      {createPortal(
+        <div
+          aria-hidden
+          className="fixed inset-0"
+          style={{
+            zIndex: -1,
+            background:
+              'radial-gradient(60rem 40rem at 50% -8%, #cfe8fb, transparent 60%), linear-gradient(180deg, #e2f2fd 0%, #eef7fe 100%)',
+          }}
+        />,
+        document.body,
+      )}
+
+      {/* Custom header (not the shared PageHeader) so the dashboard can carry its own
+          larger title, roomier title↔subtitle spacing, and a wider gap to the panel below. */}
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Dashboard</h1>
+          <p className="mt-2.5 text-base text-slate-500">Performance overview of calls, revenue and margin</p>
+        </div>
         {/* Dark date box on the light header, per the client's request. */}
         <DateRangeControl value={range} onChange={setRange} tone="dark" />
-      </PageHeader>
+      </div>
 
       {/* Total Profit hero — full-width banner with a large area chart. */}
       <HeroBanner
