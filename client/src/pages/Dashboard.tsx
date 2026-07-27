@@ -756,7 +756,9 @@ function RankPanel({ title, info, rows, loading, emptyMessage, valueHead, to, pe
 }) {
   const { canAccess } = useAuth()
   return (
-    <Panel className="flex flex-col">
+    // self-start: take natural content height instead of stretching to the tallest card in
+    // the row, so a short list never leaves an ugly blank gap at the bottom.
+    <Panel className="flex flex-col self-start">
       <div className="flex items-center justify-between px-5 pb-1 pt-4">
         <div className="flex items-center gap-1.5">
           <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
@@ -879,8 +881,8 @@ function DashboardPage() {
 
   const summary = useAsync(() => api.summary(range), [range.from, range.to])
   const trends = useAsync(() => api.trends({ ...range, granularity }), [range.from, range.to, granularity])
-  const topBuyers = useAsync(() => api.topBuyers({ ...range, limit: 5 }), [range.from, range.to])
-  const topCampaigns = useAsync(() => api.topCampaigns({ ...range, limit: 5 }), [range.from, range.to])
+  const topBuyers = useAsync(() => api.topBuyers({ ...range, limit: 8 }), [range.from, range.to])
+  const topCampaigns = useAsync(() => api.topCampaigns({ ...range, limit: 8 }), [range.from, range.to])
   const topSources = useAsync(() => api.topSources({ ...range, limit: 50 }), [range.from, range.to])
   // Ranked lists show a per-row change, which the ranking endpoints don't provide — so the
   // same ranking is pulled for the previous window and matched by id. A wider limit is used
@@ -1202,7 +1204,7 @@ function DashboardPage() {
         {/* Ranked buyers */}
         <RankPanel
           title="Top Buyers"
-          info="Top 5 buyers by revenue. The change compares each buyer against the same buyer in the previous period."
+          info="Top 8 buyers by revenue. The change compares each buyer against the same buyer in the previous period."
           rows={buyerRows}
           loading={topBuyers.loading}
           emptyMessage="No buyer activity in this period."
@@ -1216,7 +1218,7 @@ function DashboardPage() {
         {/* Ranked campaigns */}
         <RankPanel
           title="Top Campaigns"
-          info="Top 5 campaigns by Running Fee. The change compares each campaign against the same campaign in the previous period."
+          info="Top 8 campaigns by Running Fee. The change compares each campaign against the same campaign in the previous period."
           rows={campaignRows}
           loading={topCampaigns.loading}
           emptyMessage="No campaign activity in this period."
@@ -1228,7 +1230,7 @@ function DashboardPage() {
         />
 
         {/* Traffic sources */}
-        <Panel className="flex flex-col">
+        <Panel className="flex flex-col self-start">
           <PanelHeader
             title="Top Traffic Sources"
             subtitle="Campaign spend by source"
