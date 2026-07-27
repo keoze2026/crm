@@ -131,7 +131,9 @@
       "Bash(php database/seed_vendors.php)",
       "Bash(rm -f /tmp/verify.php)",
       "Bash(curl -s http://localhost:8000/api/vendors)",
-      "Bash(grep -n \"^    <div>$\\\\|<div>\\\\s*$\" src/pages/Dashboard.tsx)"
+      "Bash(grep -n \"^    <div>$\\\\|<div>\\\\s*$\" src/pages/Dashboard.tsx)",
+      "Bash(sed -i \"s|clip: { x: 1130, y: 880, width: 480, height: 420 }|clip: { x: 980, y: 850, width: 730, height: 470 }|\" shot.mjs)",
+      "Bash(node shot.mjs pie3.png)"
     ],
     "additionalDirectories": [
       "C:\\Users\\hp 290 g4\\Desktop\\Dev Projects\\CRM\\client",

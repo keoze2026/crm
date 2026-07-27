@@ -13,12 +13,9 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   Legend,
   Line,
   LineChart,
-  Pie,
-  PieChart,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -98,7 +95,6 @@ const svg = (children: ReactNode, size = 20) => (
   </svg>
 )
 
-const IconHeadphones = () => svg(<><path d="M3 14v-2a9 9 0 0 1 18 0v2" /><path d="M21 16a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2zM3 16a2 2 0 0 0 2 2h1v-6H5a2 2 0 0 0-2 2z" /></>)
 const IconRefresh = () => svg(<><path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" /></>, 14)
 
 // ─── Isometric 3D-style icons for the volume cards ─────────────────────────────
@@ -439,6 +435,69 @@ function BarSpark({ data, color, height = 40 }: { data: number[]; color: string;
         <Bar dataKey="v" fill={color} radius={[2, 2, 0, 0]} isAnimationActive={false} />
       </BarChart>
     </ResponsiveContainer>
+  )
+}
+
+interface PieSlice { name: string; value: number; color: string; light: string; dark: string }
+
+/**
+ * A tilted, extruded 3D pie — hand-drawn SVG, since Recharts only renders flat charts.
+ * Each slice's coloured side wall is drawn first, then its gradient top face, so paint order
+ * gives the front rim its depth; a soft ground shadow and white slice seams modernise it.
+ */
+function Pie3D({ slices, size = 176, depth = 26, tilt = 0.5 }: {
+  slices: PieSlice[]
+  size?: number
+  depth?: number
+  tilt?: number
+}) {
+  const total = slices.reduce((s, x) => s + x.value, 0) || 1
+  const rx = size / 2 - 10
+  const ry = rx * tilt
+  const cx = size / 2
+  const cy = ry + 12
+  const h = Math.round(cy + ry + depth + 16)
+
+  const pt = (a: number, dy = 0): [number, number] => [cx + rx * Math.cos(a), cy + ry * Math.sin(a) + dy]
+
+  // Slices start at the top (−90°) and sweep clockwise (increasing angle = clockwise on
+  // screen, since y grows downward). Cumulative starts computed functionally.
+  const sweeps = slices.map((s) => (s.value / total) * Math.PI * 2)
+  const segs = slices.map((s, i) => {
+    const a0 = -Math.PI / 2 + sweeps.slice(0, i).reduce((x, y) => x + y, 0)
+    return { ...s, a0, a1: a0 + sweeps[i], large: sweeps[i] > Math.PI ? 1 : 0 }
+  })
+
+  const topPath = (s: (typeof segs)[number]) => {
+    const [x0, y0] = pt(s.a0)
+    const [x1, y1] = pt(s.a1)
+    return `M ${cx} ${cy} L ${x0} ${y0} A ${rx} ${ry} 0 ${s.large} 1 ${x1} ${y1} Z`
+  }
+  const sidePath = (s: (typeof segs)[number]) => {
+    const [x0, y0] = pt(s.a0)
+    const [x1, y1] = pt(s.a1)
+    return `M ${x0} ${y0} A ${rx} ${ry} 0 ${s.large} 1 ${x1} ${y1} L ${x1} ${y1 + depth} A ${rx} ${ry} 0 ${s.large} 0 ${x0} ${y0 + depth} Z`
+  }
+
+  return (
+    <svg width={size} height={h} viewBox={`0 0 ${size} ${h}`} aria-hidden focusable="false" style={{ filter: 'drop-shadow(0 6px 8px rgba(15,23,42,0.15))' }}>
+      <defs>
+        {segs.map((s, i) => (
+          <linearGradient key={i} id={`p3d-${i}`} x1="0" y1="0" x2="0.2" y2="1">
+            <stop offset="0%" stopColor={s.light} />
+            <stop offset="100%" stopColor={s.color} />
+          </linearGradient>
+        ))}
+      </defs>
+      {/* Coloured side walls (extrusion) — drawn first so the top faces overdraw the back. */}
+      {segs.map((s, i) => (
+        <path key={`w${i}`} d={sidePath(s)} fill={s.dark} />
+      ))}
+      {/* Gradient top faces with white seams. */}
+      {segs.map((s, i) => (
+        <path key={`t${i}`} d={topPath(s)} fill={`url(#p3d-${i})`} stroke="#fff" strokeWidth="1.5" strokeOpacity="0.75" strokeLinejoin="round" />
+      ))}
+    </svg>
   )
 }
 
@@ -857,9 +916,10 @@ function DashboardPage() {
 
   const answered = s?.answered ?? 0
   const missed = s?.missed ?? 0
-  const callMix = [
-    { name: 'Answered', value: answered, color: C.answered },
-    { name: 'Missed', value: missed, color: C.missed },
+  // light/dark shades drive the 3D pie's top-face gradient and side walls.
+  const callMix: PieSlice[] = [
+    { name: 'Answered', value: answered, color: C.answered, light: '#4ade80', dark: '#15803d' },
+    { name: 'Missed', value: missed, color: C.missed, light: '#fb7185', dark: '#be123c' },
   ]
   const callTotal = answered + missed
 
@@ -1077,27 +1137,8 @@ function DashboardPage() {
               </div>
             ) : (
               <div className="flex w-full flex-col items-center gap-6 sm:flex-row sm:gap-5">
-                <div className="relative h-44 w-44 shrink-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={callMix}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius="62%"
-                        outerRadius="94%"
-                        paddingAngle={2}
-                        stroke="none"
-                      >
-                        {callMix.map((slice) => (
-                          <Cell key={slice.name} fill={slice.color} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-slate-400">
-                    <IconHeadphones />
-                  </span>
+                <div className="shrink-0">
+                  <Pie3D slices={callMix} />
                 </div>
                 <dl className="w-full space-y-4">
                   {callMix.map((slice) => (
