@@ -136,7 +136,8 @@
       "Bash(node shot.mjs pie3.png)",
       "Bash(sed -i 's|url\\(#p3d-${slices.indexOf\\(s\\)}\\)|url\\(#p3d-${s.idx}\\)|g' src/pages/Dashboard.tsx)",
       "Bash(grep -n \"p3d-\\\\${\" src/pages/Dashboard.tsx)",
-      "Bash(node shot.mjs rows.png)"
+      "Bash(node shot.mjs rows.png)",
+      "Bash(node shot.mjs layout2.png)"
     ],
     "additionalDirectories": [
       "C:\\Users\\hp 290 g4\\Desktop\\Dev Projects\\CRM\\client",

@@ -14,8 +14,6 @@ import {
   BarChart,
   CartesianGrid,
   Legend,
-  Line,
-  LineChart,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -1092,8 +1090,8 @@ function DashboardPage() {
 
       {/* Below xl the trend chart takes a full row rather than squeezing the ranked lists. */}
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
-        {/* Money over time */}
-        <Panel className="lg:col-span-2">
+        {/* Money over time — full-width row of its own. */}
+        <Panel className="lg:col-span-2 xl:col-span-3">
           <PanelHeader
             title="Revenue, Running Fee & Profit Over Time"
             subtitle="Income trend across the selected period"
@@ -1126,7 +1124,21 @@ function DashboardPage() {
             ) : (
               <>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={series} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
+                  <AreaChart data={series} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="area-rev" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={C.revenue} stopOpacity={0.4} />
+                        <stop offset="100%" stopColor={C.revenue} stopOpacity={0.02} />
+                      </linearGradient>
+                      <linearGradient id="area-cost" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={C.cost} stopOpacity={0.38} />
+                        <stop offset="100%" stopColor={C.cost} stopOpacity={0.02} />
+                      </linearGradient>
+                      <linearGradient id="area-profit" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={C.profit} stopOpacity={0.36} />
+                        <stop offset="100%" stopColor={C.profit} stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
                     <XAxis dataKey="period" tickFormatter={formatPeriod} tick={{ fontSize: 13, fill: C.axis }} tickLine={false} axisLine={false} minTickGap={24} />
                     <YAxis tickFormatter={moneyCompact} tick={{ fontSize: 13, fill: C.axis }} tickLine={false} axisLine={false} width={60} />
@@ -1134,10 +1146,11 @@ function DashboardPage() {
                     <ReferenceLine y={0} stroke="#cbd5e1" strokeWidth={1} />
                     <Tooltip content={<SeriesTooltip format={money} />} />
                     <Legend wrapperStyle={{ fontSize: 13, paddingTop: 8 }} iconType="plainline" />
-                    <Line type="monotone" dataKey="revenue" name="Revenue (billed)" stroke={C.revenue} strokeWidth={2} dot={{ r: single ? 5 : 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
-                    <Line type="monotone" dataKey="cost" name="Running Fee" stroke={C.cost} strokeWidth={2} dot={{ r: single ? 5 : 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
-                    <Line type="monotone" dataKey="margin" name="Profit" stroke={C.profit} strokeWidth={2} dot={{ r: single ? 5 : 3, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
-                  </LineChart>
+                    {/* Smooth gradient areas. A single bucket shows a marker so it stays visible. */}
+                    <Area type="monotone" dataKey="revenue" name="Revenue (billed)" stroke={C.revenue} strokeWidth={2.5} fill="url(#area-rev)" dot={single ? { r: 4, strokeWidth: 2, fill: '#fff' } : false} activeDot={{ r: 5 }} isAnimationActive={false} />
+                    <Area type="monotone" dataKey="cost" name="Running Fee" stroke={C.cost} strokeWidth={2.5} fill="url(#area-cost)" dot={single ? { r: 4, strokeWidth: 2, fill: '#fff' } : false} activeDot={{ r: 5 }} isAnimationActive={false} />
+                    <Area type="monotone" dataKey="margin" name="Profit" stroke={C.profit} strokeWidth={2.5} fill="url(#area-profit)" dot={single ? { r: 4, strokeWidth: 2, fill: '#fff' } : false} activeDot={{ r: 5 }} isAnimationActive={false} />
+                  </AreaChart>
                 </ResponsiveContainer>
 
                 {single && (
@@ -1153,14 +1166,43 @@ function DashboardPage() {
           </div>
         </Panel>
 
-        {/* Call quality mix — grows to fill the row height beside the taller trend chart. */}
-        <Panel className="flex flex-col">
+        {/* Ranked buyers */}
+        <RankPanel
+          title="Top Buyers"
+          info="Top 8 buyers by revenue. The change compares each buyer against the same buyer in the previous period."
+          rows={buyerRows}
+          loading={topBuyers.loading}
+          emptyMessage="No buyer activity in this period."
+          valueHead="Revenue"
+          to="/buyers"
+          perm="buyers"
+          linkLabel="View all"
+          caption={`Change shown ${caption}`}
+        />
+
+        {/* Ranked campaigns */}
+        <RankPanel
+          title="Top Campaigns"
+          info="Top 8 campaigns by Running Fee. The change compares each campaign against the same campaign in the previous period."
+          rows={campaignRows}
+          loading={topCampaigns.loading}
+          emptyMessage="No campaign activity in this period."
+          valueHead="Spend"
+          to="/campaigns"
+          perm="campaigns"
+          linkLabel="View all"
+          caption={`Change shown ${caption}`}
+        />
+
+        {/* Call quality mix — Answered vs Missed, beside Top Campaigns. self-start so it
+            takes its natural height rather than stretching to a taller neighbour. */}
+        <Panel className="flex flex-col self-start">
           <PanelHeader
             title="Answered vs Missed Calls"
             subtitle="Share of delivered calls, buyer side"
             info="Share of calls delivered to buyers that were picked up versus not picked up, across the whole period."
           />
-          <div className="flex flex-1 items-center px-5 pb-5 pt-2">
+          <div className="px-5 pb-5 pt-2">
             {summary.loading ? (
               <div className="flex w-full items-center gap-5 py-6">
                 <Skeleton className="h-32 w-32 rounded-full" />
@@ -1201,36 +1243,8 @@ function DashboardPage() {
           </div>
         </Panel>
 
-        {/* Ranked buyers */}
-        <RankPanel
-          title="Top Buyers"
-          info="Top 8 buyers by revenue. The change compares each buyer against the same buyer in the previous period."
-          rows={buyerRows}
-          loading={topBuyers.loading}
-          emptyMessage="No buyer activity in this period."
-          valueHead="Revenue"
-          to="/buyers"
-          perm="buyers"
-          linkLabel="View all"
-          caption={`Change shown ${caption}`}
-        />
-
-        {/* Ranked campaigns */}
-        <RankPanel
-          title="Top Campaigns"
-          info="Top 8 campaigns by Running Fee. The change compares each campaign against the same campaign in the previous period."
-          rows={campaignRows}
-          loading={topCampaigns.loading}
-          emptyMessage="No campaign activity in this period."
-          valueHead="Spend"
-          to="/campaigns"
-          perm="campaigns"
-          linkLabel="View all"
-          caption={`Change shown ${caption}`}
-        />
-
-        {/* Traffic sources */}
-        <Panel className="flex flex-col self-start">
+        {/* Traffic sources — full-width row of its own, below the ranked/donut row. */}
+        <Panel className="flex flex-col self-start lg:col-span-2 xl:col-span-3">
           <PanelHeader
             title="Top Traffic Sources"
             subtitle="Campaign spend by source"
@@ -1249,7 +1263,7 @@ function DashboardPage() {
             ) : sources.rows.length === 0 ? (
               <EmptyHint message="No campaign spend was recorded in this period." />
             ) : (
-              <ul className="space-y-4">
+              <ul className="grid grid-cols-1 gap-x-10 gap-y-4 lg:grid-cols-2">
                 {sources.rows.map((row) => {
                   const share = sources.total > 0 ? (row.cost / sources.total) * 100 : 0
                   return (
