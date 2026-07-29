@@ -28,6 +28,7 @@ import { useAuth } from '../auth/AuthContext'
 import {
   daysAgo,
   daysBeforeIso,
+  formatDmy,
   formatPeriod,
   money,
   moneyCompact,
@@ -94,6 +95,13 @@ const svg = (children: ReactNode, size = 20) => (
 )
 
 const IconRefresh = () => svg(<><path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" /></>, 14)
+// Icons for the redesigned Top Traffic Sources card.
+const IconBars = () => svg(<><line x1="6" y1="20" x2="6" y2="14" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="18" y1="20" x2="18" y2="10" /></>, 22)
+const IconGrid = () => svg(<><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></>, 18)
+const IconPie = () => svg(<><path d="M21.2 15.9A10 10 0 1 1 8 2.8" /><path d="M22 12A10 10 0 0 0 12 2v10z" /></>, 20)
+const IconArrowUR = () => svg(<><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></>, 16)
+const IconCal = () => svg(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></>, 15)
+const IconChevD = () => svg(<><polyline points="6 9 12 15 18 9" /></>, 15)
 
 // ─── Isometric 3D-style icons for the volume cards ─────────────────────────────
 //
@@ -856,6 +864,7 @@ export default function Dashboard() {
 }
 
 function DashboardPage() {
+  const { canAccess } = useAuth()
   // Default to the last 90 days rather than 7: a dashboard wants a meaningful trend window,
   // and a 7-day default shows nothing whenever the most recent activity is older than a
   // week (e.g. the seeded sample data, which ends before "today").
@@ -948,7 +957,10 @@ function DashboardPage() {
         counted: tail.reduce((sum, r) => sum + r.counted, 0),
       })
     }
-    return { rows, total }
+    const totalCounted = rows.reduce((sum, r) => sum + r.counted, 0)
+    const maxCost = rows.reduce((m, r) => Math.max(m, r.cost), 0)
+    const avgCpc = totalCounted > 0 ? total / totalCounted : 0
+    return { rows, total, totalCounted, maxCost, avgCpc }
   }, [topSources.data])
 
   const answered = s?.answered ?? 0
@@ -1218,11 +1230,11 @@ function DashboardPage() {
                 <EmptyHint message="No answered or missed calls were recorded in this period." />
               </div>
             ) : (
-              <div className="flex w-full flex-col items-center gap-6 sm:flex-row sm:gap-5">
+              <div className="flex w-full flex-col items-center gap-6 sm:flex-row sm:gap-4">
                 <div className="shrink-0">
-                  <Pie3D slices={callMix} />
+                  <Pie3D slices={callMix} size={150} />
                 </div>
-                <dl className="w-full space-y-4">
+                <dl className="w-full min-w-0 space-y-4">
                   {callMix.map((slice) => (
                     <div key={slice.name}>
                       <dt className="flex items-center gap-2 text-base text-slate-500">
@@ -1246,56 +1258,126 @@ function DashboardPage() {
         </Panel>
 
         {/* Traffic sources — full-width row of its own, below the ranked/donut row. */}
-        <Panel className="flex flex-col self-start lg:col-span-2 xl:col-span-3">
-          <PanelHeader
-            title="Top Traffic Sources"
-            subtitle="Campaign spend by source"
-            info="Share of Running Fee by traffic source. Sources beyond the top five are grouped into Others."
-          />
-          <div className="flex-1 px-5 pb-5 pt-2">
-            {topSources.loading ? (
-              <div className="space-y-5 py-2">
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <div key={i} className="space-y-2">
-                    <Skeleton className="h-3.5 w-24" />
-                    <Skeleton className="h-2 w-full" />
-                  </div>
-                ))}
+        <Panel className="overflow-hidden lg:col-span-2 xl:col-span-3">
+          {/* Header: icon + title, and a read-only period pill reflecting the global range. */}
+          <div className="flex flex-col gap-4 px-6 pt-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3.5">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
+                <IconBars />
+              </span>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="text-lg font-semibold text-slate-900">Top Traffic Sources</h3>
+                  <InfoDot text="Share of Running Fee by traffic source. Sources beyond the top five are grouped into Others. The period follows the date range at the top of the page." />
+                </div>
+                <p className="text-sm text-slate-500">Campaign spend by source</p>
               </div>
-            ) : sources.rows.length === 0 ? (
-              <EmptyHint message="No campaign spend was recorded in this period." />
-            ) : (
-              <ul className="grid grid-cols-1 gap-x-10 gap-y-4 lg:grid-cols-2">
-                {sources.rows.map((row) => {
-                  const share = sources.total > 0 ? (row.cost / sources.total) * 100 : 0
-                  return (
-                    <li key={row.name}>
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="truncate text-base font-medium text-slate-700">{row.name}</span>
-                        <span className="shrink-0 text-sm text-slate-400">
-                          {row.counted > 0 ? `${money(row.cost / row.counted)} / call` : '—'}
-                        </span>
-                      </div>
-                      <div className="mt-1.5 flex items-center gap-3">
-                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className="h-full rounded-full bg-linear-to-r from-violet-500 to-fuchsia-500"
-                            style={{ width: `${Math.max(share, share > 0 ? 1.5 : 0)}%` }}
-                          />
-                        </div>
-                        <span className="w-20 shrink-0 text-right text-base font-semibold tabular-nums text-slate-900">
-                          {money(row.cost)}
-                        </span>
-                        <span className="w-12 shrink-0 text-right text-sm tabular-nums text-slate-400">
-                          {share.toFixed(1)}%
-                        </span>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
+            </div>
+            <span className="inline-flex items-center gap-2 self-start rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-600 shadow-sm">
+              <span className="text-slate-400"><IconCal /></span>
+              {formatDmy(range.from)} – {formatDmy(range.to)}
+              <span className="text-slate-400"><IconChevD /></span>
+            </span>
           </div>
+
+          {topSources.loading ? (
+            <div className="grid gap-5 px-6 pb-6 pt-5 lg:grid-cols-2">
+              {[0, 1].map((c) => (
+                <div key={c} className="space-y-5 rounded-2xl border border-slate-200/80 p-4">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <Skeleton className="h-11 w-11 rounded-xl" />
+                      <Skeleton className="h-4 flex-1" />
+                      <Skeleton className="h-8 w-20" />
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : sources.rows.length === 0 ? (
+            <div className="px-6 pb-6 pt-2">
+              <EmptyHint message="No campaign spend was recorded in this period." />
+            </div>
+          ) : (
+            <>
+              {/* Two bordered columns of source rows. */}
+              <div className="grid gap-5 px-6 pt-5 lg:grid-cols-2">
+                {[
+                  sources.rows.slice(0, Math.ceil(sources.rows.length / 2)),
+                  sources.rows.slice(Math.ceil(sources.rows.length / 2)),
+                ].map((col, ci) =>
+                  col.length === 0 ? null : (
+                    <div key={ci} className="divide-y divide-slate-100 rounded-2xl border border-slate-200/80">
+                      {col.map((row) => {
+                        const share = sources.total > 0 ? (row.cost / sources.total) * 100 : 0
+                        const barW = sources.maxCost > 0 ? (row.cost / sources.maxCost) * 100 : 0
+                        const isOthers = row.name.startsWith('Others')
+                        const badge = row.name.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || '?'
+                        return (
+                          <div key={row.name} className="flex items-center gap-4 px-4 py-4">
+                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-sm font-bold text-violet-600 ring-1 ring-inset ring-violet-100">
+                              {isOthers ? <IconGrid /> : badge}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate font-bold uppercase tracking-wide text-slate-800">{row.name}</div>
+                              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                                <div
+                                  className="h-full rounded-full bg-linear-to-r from-violet-500 to-fuchsia-500"
+                                  style={{ width: `${Math.max(barW, barW > 0 ? 4 : 0)}%` }}
+                                />
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <div className="text-xs text-slate-400">
+                                {row.counted > 0 ? `${money(row.cost / row.counted)} / call` : '—'}
+                              </div>
+                              <div className="text-lg font-bold tabular-nums text-slate-900">{money(row.cost)}</div>
+                              <div className="mt-1 inline-flex rounded-lg bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-700">
+                                {share.toFixed(1)}%
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ),
+                )}
+              </div>
+
+              {/* Summary footer bar. */}
+              <div className="mt-6 flex flex-col items-stretch gap-4 border-t border-slate-200/70 bg-violet-50/50 px-6 py-4 lg:flex-row lg:items-center">
+                <div className="flex flex-1 items-center gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-violet-600 shadow-sm">
+                    <IconPie />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-slate-700">Total Spend</div>
+                    <div className="text-xs text-slate-400">Across all sources</div>
+                  </div>
+                  <div className="ml-auto text-2xl font-bold tabular-nums text-slate-900 lg:ml-6">{money(sources.total)}</div>
+                </div>
+                <div className="hidden w-px self-stretch bg-slate-200 lg:block" />
+                <div className="flex flex-col px-1">
+                  <div className="text-lg font-bold tabular-nums text-slate-900">${sources.avgCpc.toFixed(1)} <span className="text-sm font-medium text-slate-400">/ call</span></div>
+                  <div className="text-xs text-slate-400">Average CPC</div>
+                </div>
+                <div className="hidden w-px self-stretch bg-slate-200 lg:block" />
+                <div className="flex flex-col px-1">
+                  <div className="text-lg font-bold text-violet-600">100%</div>
+                  <div className="text-xs text-slate-400">Total Share</div>
+                </div>
+                {canAccess('campaigns') && (
+                  <Link
+                    to="/campaigns"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-violet-200 bg-white px-4 py-2.5 text-sm font-semibold text-violet-700 shadow-sm transition-colors hover:bg-violet-50 lg:ml-2"
+                  >
+                    <IconArrowUR />
+                    View Full Report
+                  </Link>
+                )}
+              </div>
+            </>
+          )}
         </Panel>
       </div>
 
