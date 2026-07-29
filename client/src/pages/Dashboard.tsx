@@ -110,7 +110,7 @@ const IconCrown = () => (
     <path d="M3 8l4.4 3L12 5l4.6 6L21 8l-1.5 9.2a1 1 0 0 1-1 .8H5.5a1 1 0 0 1-1-.8L3 8z" />
   </svg>
 )
-const IconPhoneCall = () => svg(<><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></>, 24)
+const IconPhoneCall = () => svg(<><path d="M14.05 2a9 9 0 0 1 8 7.94" opacity="0.55" /><path d="M14.05 6A5 5 0 0 1 18 10" opacity="0.55" /><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.8 12.8 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.8 12.8 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></>, 26)
 const IconPhoneFwd = () => svg(<><polyline points="16 3 21 3 21 8" /><line x1="14" y1="10" x2="21" y2="3" /><path d="M20.5 16.9v2.6a2 2 0 0 1-2.2 2A18 18 0 0 1 3.5 6.2 2 2 0 0 1 5.5 4h2.4a2 2 0 0 1 2 1.7c.1.8.3 1.6.6 2.4a2 2 0 0 1-.5 2.1L8.3 11.6a14 14 0 0 0 5.3 5.3l1.4-1.2a2 2 0 0 1 2.1-.5c.8.3 1.6.5 2.4.6a2 2 0 0 1 1.7 2z" /></>, 18)
 
 // ─── Isometric 3D-style icons for the volume cards ─────────────────────────────
@@ -1260,15 +1260,15 @@ function DashboardPage() {
               </div>
             ) : (
               <>
-                <div className="flex flex-1 items-center gap-3">
-                  {/* 3D pie made to read as a donut: a raised white call-button in the middle,
-                      with a faint dashed orbit and two accent dots. */}
-                  <div className="relative shrink-0">
-                    <span className="pointer-events-none absolute left-1/2 top-[42%] -z-0 h-[132px] w-[132px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-slate-200" />
-                    <span className="absolute right-[8px] top-[16px] h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
-                    <span className="absolute bottom-[24px] left-[6px] h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
-                    <Pie3D slices={callMix} size={150} />
-                    <span className="absolute left-1/2 top-[40%] flex h-[54px] w-[54px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-emerald-500 shadow-[0_6px_16px_rgba(15,23,42,0.18)]">
+                <div className="flex flex-1 items-center gap-2">
+                  {/* 3D pie made to read as a donut: a large raised white call-button in the
+                      middle, with a faint dashed orbit and two accent dots. */}
+                  <div className="relative shrink-0" style={{ width: 168 }}>
+                    <span className="pointer-events-none absolute left-1/2 top-[44%] -z-0 h-[158px] w-[158px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-slate-200" />
+                    <span className="absolute right-[4px] top-[20px] h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+                    <span className="absolute bottom-[26px] left-[2px] h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
+                    <Pie3D slices={callMix} size={168} depth={32} />
+                    <span className="absolute left-1/2 top-[43%] flex h-[66px] w-[66px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-emerald-500 shadow-[0_8px_20px_rgba(15,23,42,0.22)]">
                       <IconPhoneCall />
                     </span>
                   </div>
