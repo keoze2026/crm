@@ -106,11 +106,18 @@ const IconTrendUp = () => svg(<><polyline points="22 7 13.5 15.5 8.5 10.5 2 17" 
 const IconTrendDown = () => svg(<><polyline points="22 17 13.5 8.5 8.5 13.5 2 7" /><polyline points="16 17 22 17 22 11" /></>, 18)
 const IconMinus = () => svg(<><line x1="5" y1="12" x2="19" y2="12" /></>, 18)
 const IconCrown = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden focusable="false">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden focusable="false">
     <path d="M3 8l4.4 3L12 5l4.6 6L21 8l-1.5 9.2a1 1 0 0 1-1 .8H5.5a1 1 0 0 1-1-.8L3 8z" />
   </svg>
 )
-const IconPhoneCall = () => svg(<><path d="M14.05 2a9 9 0 0 1 8 7.94" opacity="0.55" /><path d="M14.05 6A5 5 0 0 1 18 10" opacity="0.55" /><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.8 12.8 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.8 12.8 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></>, 26)
+// Green handset with grey signal arcs, for the donut's centre button.
+const IconPhoneCall = () => (
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" aria-hidden focusable="false">
+    <path d="M14.05 2a9 9 0 0 1 8 7.94" stroke="#cbd5e1" strokeWidth="2" />
+    <path d="M14.05 6A5 5 0 0 1 18 10" stroke="#cbd5e1" strokeWidth="2" />
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.8 12.8 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.8 12.8 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" strokeWidth="2" />
+  </svg>
+)
 const IconPhoneFwd = () => svg(<><polyline points="16 3 21 3 21 8" /><line x1="14" y1="10" x2="21" y2="3" /><path d="M20.5 16.9v2.6a2 2 0 0 1-2.2 2A18 18 0 0 1 3.5 6.2 2 2 0 0 1 5.5 4h2.4a2 2 0 0 1 2 1.7c.1.8.3 1.6.6 2.4a2 2 0 0 1-.5 2.1L8.3 11.6a14 14 0 0 0 5.3 5.3l1.4-1.2a2 2 0 0 1 2.1-.5c.8.3 1.6.5 2.4.6a2 2 0 0 1 1.7 2z" /></>, 18)
 
 // ─── Isometric 3D-style icons for the volume cards ─────────────────────────────
@@ -457,8 +464,8 @@ function BarSpark({ data, color, height = 40 }: { data: number[]; color: string;
 interface PieSlice { name: string; value: number; color: string }
 
 /**
- * A flat 2D donut ring: the red "missed" ring underneath, with the green "answered" arc
- * (rounded ends) overlaid from the top, so the ring reflects the answered/missed split.
+ * A flat 2D donut ring: two rounded arcs — green "answered" and red "missed" — separated by
+ * small gaps, so the ring reflects the answered/missed split (per the mock).
  */
 function DonutRing2D({ answered, missed, size = 172, stroke = 24 }: {
   answered: number
@@ -468,9 +475,11 @@ function DonutRing2D({ answered, missed, size = 172, stroke = 24 }: {
 }) {
   const total = answered + missed || 1
   const aFrac = answered / total
+  const mFrac = missed / total
   const c = size / 2
   const r = c - stroke / 2 - 2
   const circ = 2 * Math.PI * r
+  const gap = circ * 0.03
   return (
     <svg
       width={size}
@@ -480,16 +489,14 @@ function DonutRing2D({ answered, missed, size = 172, stroke = 24 }: {
       focusable="false"
       style={{ transform: 'rotate(-90deg)', filter: 'drop-shadow(0 6px 10px rgba(15,23,42,0.10))' }}
     >
-      <circle cx={c} cy={c} r={r} fill="none" stroke={C.missed} strokeWidth={stroke} />
       <circle
-        cx={c}
-        cy={c}
-        r={r}
-        fill="none"
-        stroke={C.answered}
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        strokeDasharray={`${aFrac * circ} ${circ}`}
+        cx={c} cy={c} r={r} fill="none" stroke={C.answered} strokeWidth={stroke} strokeLinecap="round"
+        strokeDasharray={`${Math.max(0.1, aFrac * circ - gap)} ${circ}`}
+      />
+      <circle
+        cx={c} cy={c} r={r} fill="none" stroke={C.missed} strokeWidth={stroke} strokeLinecap="round"
+        strokeDasharray={`${Math.max(0.1, mFrac * circ - gap)} ${circ}`}
+        strokeDashoffset={-(aFrac * circ)}
       />
     </svg>
   )
@@ -716,7 +723,7 @@ function TrendChip({ delta }: { delta: number | null }) {
  * left, then avatar, name, value and a trend chip. Rows flex to fill the card height so a
  * short list (e.g. 4 campaigns) leaves no empty space at the bottom.
  */
-function RankPanel({ title, info, rows, loading, emptyMessage, valueHead, to, perm, linkLabel, caption, rankGradients }: {
+function RankPanel({ title, info, rows, loading, emptyMessage, valueHead, to, perm, linkLabel, caption, rankGradients, ribbonLabel, ribbonClass }: {
   title: string
   info: string
   rows: RankRow[]
@@ -730,6 +737,9 @@ function RankPanel({ title, info, rows, loading, emptyMessage, valueHead, to, pe
   caption: string
   /** Per-rank badge gradients (index 0 = #1). The last entry repeats for lower ranks. */
   rankGradients: string[]
+  /** Corner ribbon text + colour shown on the #1 row (e.g. "Top Buyer"). */
+  ribbonLabel: string
+  ribbonClass: string
 }) {
   const { canAccess } = useAuth()
   return (
@@ -768,12 +778,19 @@ function RankPanel({ title, info, rows, loading, emptyMessage, valueHead, to, pe
             <li
               key={r.key}
               className={cx(
-                'flex min-h-[3.5rem] flex-1 items-stretch overflow-hidden rounded-2xl shadow-sm ring-1',
+                'relative flex min-h-[3.5rem] flex-1 items-stretch overflow-hidden rounded-2xl shadow-sm ring-1',
                 i === 0 ? 'ring-violet-200' : 'ring-slate-100',
               )}
             >
+              {/* Diagonal corner ribbon on the #1 row — kept high in the corner so it clears
+                  the change chip. */}
+              {i === 0 && (
+                <span className={cx('pointer-events-none absolute -right-[44px] top-[11px] z-10 w-[136px] rotate-45 py-[3px] text-center text-[7.5px] font-bold uppercase leading-none tracking-tight text-white shadow-sm', ribbonClass)}>
+                  {ribbonLabel}
+                </span>
+              )}
               {/* Rank badge with crown on #1. */}
-              <div className={cx('flex w-12 shrink-0 flex-col items-center justify-center gap-0.5 bg-linear-to-b text-white', rankGradients[Math.min(i, rankGradients.length - 1)])}>
+              <div className={cx('flex w-12 shrink-0 flex-col items-center justify-center gap-1 bg-linear-to-b text-white', rankGradients[Math.min(i, rankGradients.length - 1)])}>
                 <span className="text-lg font-bold leading-none">{i + 1}</span>
                 {i === 0 && <span className="text-amber-300"><IconCrown /></span>}
               </div>
@@ -1159,6 +1176,8 @@ function DashboardPage() {
           linkLabel="View all"
           caption={`Change shown ${caption}`}
           rankGradients={['from-violet-500 to-purple-600', 'from-blue-500 to-blue-600', 'from-blue-400 to-blue-500', 'from-sky-400 to-blue-400', 'from-sky-300 to-sky-400']}
+          ribbonLabel="Top Buyer"
+          ribbonClass="bg-linear-to-r from-violet-500 to-purple-600"
         />
 
         {/* Ranked campaigns */}
@@ -1174,6 +1193,8 @@ function DashboardPage() {
           linkLabel="View all"
           caption={`Change shown ${caption}`}
           rankGradients={['from-amber-400 to-amber-500', 'from-slate-400 to-slate-500', 'from-orange-400 to-orange-500', 'from-slate-300 to-slate-400']}
+          ribbonLabel="Top Campaign"
+          ribbonClass="bg-linear-to-r from-amber-400 to-amber-500"
         />
 
         {/* Call quality mix — Answered vs Missed, beside Top Campaigns. Its content sets the
@@ -1203,11 +1224,8 @@ function DashboardPage() {
               <>
                 <div className="flex flex-1 items-center gap-2">
                   {/* 2D donut ring reflecting the answered/missed split, with a raised white
-                      call-button in the middle and a faint dashed orbit + two accent dots. */}
+                      call-button in the middle. */}
                   <div className="relative shrink-0" style={{ width: 172, height: 172 }}>
-                    <span className="pointer-events-none absolute left-1/2 top-1/2 -z-0 h-[196px] w-[196px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-slate-200" />
-                    <span className="absolute right-[-8px] top-[18px] h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
-                    <span className="absolute bottom-[18px] left-[-8px] h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
                     <DonutRing2D answered={answered} missed={missed} size={172} />
                     <span className="absolute left-1/2 top-1/2 flex h-[74px] w-[74px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-emerald-500 shadow-[0_8px_20px_rgba(15,23,42,0.18)]">
                       <IconPhoneCall />
