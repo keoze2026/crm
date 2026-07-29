@@ -526,15 +526,26 @@ function Pie3D({ slices, size = 184, depth = 26, tilt = 0.5 }: {
     <svg width={size} height={h} viewBox={`0 0 ${size} ${h}`} aria-hidden focusable="false" style={{ filter: 'drop-shadow(0 6px 8px rgba(15,23,42,0.15))' }}>
       <defs>
         {segs.map((s, i) => (
-          <linearGradient key={i} id={`p3d-${i}`} x1="0" y1="0" x2="0.2" y2="1">
-            <stop offset="0%" stopColor={s.light} />
-            <stop offset="100%" stopColor={s.color} />
-          </linearGradient>
+          <g key={i}>
+            {/* Glossy top face: a bright highlight to the upper-left fading to the base. */}
+            <radialGradient id={`p3d-${i}`} cx="38%" cy="30%" r="80%">
+              <stop offset="0%" stopColor="#fff" stopOpacity="0.65" />
+              <stop offset="28%" stopColor={s.light} />
+              <stop offset="100%" stopColor={s.color} />
+            </radialGradient>
+            {/* Side wall: base colour at the top of the wall fading down to the dark shade,
+                so the extrusion reads as a rounded, glossy cylinder rather than a flat band. */}
+            <linearGradient id={`p3d-side-${i}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={s.color} />
+              <stop offset="55%" stopColor={s.dark} />
+              <stop offset="100%" stopColor={s.dark} />
+            </linearGradient>
+          </g>
         ))}
       </defs>
       {/* Non-pulled slices: side walls first, then gradient tops. */}
       {base.map((s) => (
-        <path key={`bw${s.name}`} d={arcWall(s)} fill={s.dark} />
+        <path key={`bw${s.name}`} d={arcWall(s)} fill={`url(#p3d-side-${s.idx})`} />
       ))}
       {base.map((s) => (
         <path key={`bt${s.name}`} d={topPath(s)} fill={`url(#p3d-${s.idx})`} stroke="#fff" strokeWidth="1.5" strokeOpacity="0.75" strokeLinejoin="round" />
@@ -544,7 +555,7 @@ function Pie3D({ slices, size = 184, depth = 26, tilt = 0.5 }: {
         <g key={`pg${s.name}`}>
           <path d={radialWall(s, s.a0)} fill={s.dark} />
           <path d={radialWall(s, s.a1)} fill={s.dark} />
-          <path d={arcWall(s)} fill={s.dark} />
+          <path d={arcWall(s)} fill={`url(#p3d-side-${s.idx})`} />
           <path d={topPath(s)} fill={`url(#p3d-${s.idx})`} stroke="#fff" strokeWidth="1.5" strokeOpacity="0.85" strokeLinejoin="round" />
         </g>
       ))}
@@ -1263,12 +1274,12 @@ function DashboardPage() {
                 <div className="flex flex-1 items-center gap-2">
                   {/* 3D pie made to read as a donut: a large raised white call-button in the
                       middle, with a faint dashed orbit and two accent dots. */}
-                  <div className="relative shrink-0" style={{ width: 168 }}>
-                    <span className="pointer-events-none absolute left-1/2 top-[44%] -z-0 h-[158px] w-[158px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-slate-200" />
-                    <span className="absolute right-[4px] top-[20px] h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
-                    <span className="absolute bottom-[26px] left-[2px] h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
-                    <Pie3D slices={callMix} size={168} depth={32} />
-                    <span className="absolute left-1/2 top-[43%] flex h-[66px] w-[66px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-emerald-500 shadow-[0_8px_20px_rgba(15,23,42,0.22)]">
+                  <div className="relative shrink-0" style={{ width: 172 }}>
+                    <span className="pointer-events-none absolute left-1/2 top-[42%] -z-0 h-[168px] w-[168px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-slate-200" />
+                    <span className="absolute right-[2px] top-[26px] h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+                    <span className="absolute bottom-[22px] left-[2px] h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
+                    <Pie3D slices={callMix} size={172} depth={46} tilt={0.68} />
+                    <span className="absolute left-1/2 top-[38%] flex h-[66px] w-[66px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-emerald-500 shadow-[0_8px_20px_rgba(15,23,42,0.22)]">
                       <IconPhoneCall />
                     </span>
                   </div>
