@@ -110,6 +110,8 @@ const IconCrown = () => (
     <path d="M3 8l4.4 3L12 5l4.6 6L21 8l-1.5 9.2a1 1 0 0 1-1 .8H5.5a1 1 0 0 1-1-.8L3 8z" />
   </svg>
 )
+const IconPhoneCall = () => svg(<><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></>, 24)
+const IconPhoneFwd = () => svg(<><polyline points="16 3 21 3 21 8" /><line x1="14" y1="10" x2="21" y2="3" /><path d="M20.5 16.9v2.6a2 2 0 0 1-2.2 2A18 18 0 0 1 3.5 6.2 2 2 0 0 1 5.5 4h2.4a2 2 0 0 1 2 1.7c.1.8.3 1.6.6 2.4a2 2 0 0 1-.5 2.1L8.3 11.6a14 14 0 0 0 5.3 5.3l1.4-1.2a2 2 0 0 1 2.1-.5c.8.3 1.6.5 2.4.6a2 2 0 0 1 1.7 2z" /></>, 18)
 
 // ─── Isometric 3D-style icons for the volume cards ─────────────────────────────
 //
@@ -1241,7 +1243,9 @@ function DashboardPage() {
             subtitle="Share of delivered calls, buyer side"
             info="Share of calls delivered to buyers that were picked up versus not picked up, across the whole period."
           />
-          <div className="px-5 pb-5 pt-2">
+          {/* flex-1 + flex-col so the Total-delivered box is pinned to the bottom and the
+              card has no empty space beneath it. */}
+          <div className="flex flex-1 flex-col px-5 pb-5 pt-2">
             {summary.loading ? (
               <div className="flex w-full items-center gap-5 py-6">
                 <Skeleton className="h-32 w-32 rounded-full" />
@@ -1255,29 +1259,43 @@ function DashboardPage() {
                 <EmptyHint message="No answered or missed calls were recorded in this period." />
               </div>
             ) : (
-              <div className="flex w-full flex-col items-center gap-6 sm:flex-row sm:gap-4">
-                <div className="shrink-0">
-                  <Pie3D slices={callMix} size={150} />
-                </div>
-                <dl className="w-full min-w-0 space-y-4">
-                  {callMix.map((slice) => (
-                    <div key={slice.name}>
-                      <dt className="flex items-center gap-2 text-base text-slate-500">
-                        <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: slice.color }} />
-                        {slice.name}
-                      </dt>
-                      <dd className="mt-0.5 text-2xl font-bold tabular-nums text-slate-900">{num(slice.value)}</dd>
-                      <dd className="text-sm font-medium" style={{ color: slice.color }}>
-                        {((slice.value / callTotal) * 100).toFixed(1)}% of calls
-                      </dd>
-                    </div>
-                  ))}
-                  <div className="flex items-baseline justify-between border-t border-slate-100 pt-3">
-                    <dt className="text-base text-slate-500">Total delivered</dt>
-                    <dd className="text-base font-semibold tabular-nums text-slate-900">{num(callTotal)}</dd>
+              <>
+                <div className="flex flex-1 items-center gap-3">
+                  {/* 3D pie made to read as a donut: a raised white call-button in the middle,
+                      with a faint dashed orbit and two accent dots. */}
+                  <div className="relative shrink-0">
+                    <span className="pointer-events-none absolute left-1/2 top-[42%] -z-0 h-[132px] w-[132px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-slate-200" />
+                    <span className="absolute right-[8px] top-[16px] h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+                    <span className="absolute bottom-[24px] left-[6px] h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
+                    <Pie3D slices={callMix} size={150} />
+                    <span className="absolute left-1/2 top-[40%] flex h-[54px] w-[54px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-emerald-500 shadow-[0_6px_16px_rgba(15,23,42,0.18)]">
+                      <IconPhoneCall />
+                    </span>
                   </div>
-                </dl>
-              </div>
+                  <dl className="min-w-0 flex-1 space-y-2.5">
+                    {callMix.map((slice, i) => (
+                      <div key={slice.name} className={cx(i > 0 && 'border-t border-slate-100 pt-2.5')}>
+                        <dt className="flex items-center gap-2 text-base text-slate-500">
+                          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: slice.color }} />
+                          {slice.name}
+                        </dt>
+                        <dd className="mt-0.5 text-2xl font-bold tabular-nums text-slate-900">{num(slice.value)}</dd>
+                        <dd className="text-sm font-medium" style={{ color: slice.color }}>
+                          {((slice.value / callTotal) * 100).toFixed(1)}% of calls
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+                {/* Total delivered — its own rounded box at the bottom of the card. */}
+                <div className="mt-4 flex items-center gap-3 rounded-2xl bg-violet-50 px-4 py-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-violet-600 shadow-sm">
+                    <IconPhoneFwd />
+                  </span>
+                  <span className="text-base font-medium leading-tight text-slate-500">Total<br />delivered</span>
+                  <span className="ml-auto text-2xl font-bold tabular-nums text-slate-900">{num(callTotal)}</span>
+                </div>
+              </>
             )}
           </div>
         </Panel>
