@@ -140,7 +140,10 @@
       "Bash(node shot.mjs layout2.png)",
       "Bash(node shot.mjs eq.png)",
       "Bash(grep -n 'title=\"Top Buyers\"\\\\|title=\"Top Campaigns\"\\\\|caption={`Change shown' src/pages/Dashboard.tsx)",
-      "Bash(grep -n \"id={\\\\`p3d-\\\\|d={arcWall\\(s\\)}\\\\|d={radialWall\\\\|d={sidePath\\\\|<defs>\" src/pages/Dashboard.tsx)"
+      "Bash(grep -n \"id={\\\\`p3d-\\\\|d={arcWall\\(s\\)}\\\\|d={radialWall\\\\|d={sidePath\\\\|<defs>\" src/pages/Dashboard.tsx)",
+      "Bash(grep -n \"^interface PieSlice\\\\|^function Pie3D\\\\|^/\\\\*\\\\*\\\\|const callMix\" src/pages/Dashboard.tsx)",
+      "Bash(awk 'NR>=465 && /^}/ {print NR\": \"$0; c++; if\\(c>=1\\) exit}' src/pages/Dashboard.tsx)",
+      "Bash(awk 'NR>=550 && NR<=575 {print NR\": \"$0}' src/pages/Dashboard.tsx)"
     ],
     "additionalDirectories": [
       "C:\\Users\\hp 290 g4\\Desktop\\Dev Projects\\CRM\\client",
