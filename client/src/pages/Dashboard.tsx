@@ -102,6 +102,14 @@ const IconPie = () => svg(<><path d="M21.2 15.9A10 10 0 1 1 8 2.8" /><path d="M2
 const IconArrowUR = () => svg(<><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></>, 16)
 const IconCal = () => svg(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></>, 15)
 const IconChevD = () => svg(<><polyline points="6 9 12 15 18 9" /></>, 15)
+const IconTrendUp = () => svg(<><polyline points="22 7 13.5 15.5 8.5 10.5 2 17" /><polyline points="16 7 22 7 22 13" /></>, 18)
+const IconTrendDown = () => svg(<><polyline points="22 17 13.5 8.5 8.5 13.5 2 7" /><polyline points="16 17 22 17 22 11" /></>, 18)
+const IconMinus = () => svg(<><line x1="5" y1="12" x2="19" y2="12" /></>, 18)
+const IconCrown = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden focusable="false">
+    <path d="M3 8l4.4 3L12 5l4.6 6L21 8l-1.5 9.2a1 1 0 0 1-1 .8H5.5a1 1 0 0 1-1-.8L3 8z" />
+  </svg>
+)
 
 // ─── Isometric 3D-style icons for the volume cards ─────────────────────────────
 //
@@ -746,8 +754,24 @@ interface RankRow {
   delta: number | null
 }
 
-/** A ranked table (Rank · Name · Value · Change) matching the reference's bottom cards. */
-function RankPanel({ title, info, rows, loading, emptyMessage, valueHead, to, perm, linkLabel, caption }: {
+/** Trend chip for the Change column: green up / red down / grey flat, matching the mock. */
+function TrendChip({ delta }: { delta: number | null }) {
+  const dir = delta == null ? 0 : delta > 0 ? 1 : delta < 0 ? -1 : 0
+  const cls = dir > 0 ? 'bg-emerald-50 text-emerald-500' : dir < 0 ? 'bg-red-50 text-red-500' : 'bg-slate-100 text-slate-400'
+  const title = delta == null ? 'No comparable prior period' : `${signed(delta, '%')} vs previous period`
+  return (
+    <span title={title} className={cx('inline-flex h-9 w-9 items-center justify-center rounded-xl', cls)}>
+      {dir > 0 ? <IconTrendUp /> : dir < 0 ? <IconTrendDown /> : <IconMinus />}
+    </span>
+  )
+}
+
+/**
+ * A ranked list where each row is its own card: a gradient rank badge (crown on #1) on the
+ * left, then avatar, name, value and a trend chip. Rows flex to fill the card height so a
+ * short list (e.g. 4 campaigns) leaves no empty space at the bottom.
+ */
+function RankPanel({ title, info, rows, loading, emptyMessage, valueHead, to, perm, linkLabel, caption, rankGradients }: {
   title: string
   info: string
   rows: RankRow[]
@@ -759,11 +783,11 @@ function RankPanel({ title, info, rows, loading, emptyMessage, valueHead, to, pe
   perm: string
   linkLabel: string
   caption: string
+  /** Per-rank badge gradients (index 0 = #1). The last entry repeats for lower ranks. */
+  rankGradients: string[]
 }) {
   const { canAccess } = useAuth()
   return (
-    // Stretch to the row's height so Top Buyers / Top Campaigns line up with the donut card
-    // beside them (equal-height row).
     <Panel className="flex flex-col">
       <div className="flex items-center justify-between px-5 pb-1 pt-4">
         <div className="flex items-center gap-1.5">
@@ -776,58 +800,57 @@ function RankPanel({ title, info, rows, loading, emptyMessage, valueHead, to, pe
           </Link>
         )}
       </div>
-      <div className="flex-1 px-2 pb-3 pt-1">
-        {loading ? (
-          <ul className="space-y-1 px-3 py-2">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <li key={i} className="flex items-center gap-3 py-1.5">
-                <Skeleton className="h-8 w-8 rounded-full" />
-                <Skeleton className="h-4 flex-1" />
-                <Skeleton className="h-4 w-16" />
-              </li>
-            ))}
-          </ul>
-        ) : rows.length === 0 ? (
-          <EmptyHint message={emptyMessage} />
-        ) : (
-          <>
-            {/* Column headers, echoing the reference's Buyer / Revenue / Change layout. */}
-            <div className="flex items-center gap-3 px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
-              <span className="w-4 text-right">#</span>
-              <span className="flex-1">Name</span>
-              <span className="w-20 text-right">{valueHead}</span>
-              <span className="w-12 text-right">Change</span>
-            </div>
-            <ol className="px-1">
-              {rows.map((r, i) => (
-                <li
-                  key={r.key}
-                  className="flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-slate-50"
-                >
-                  <span className="w-4 shrink-0 text-right text-sm font-medium text-slate-400">{i + 1}</span>
-                  <span
-                    className={cx(
-                      'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold tracking-tight',
-                      tintFor(r.code),
-                    )}
-                    aria-hidden
-                  >
-                    {initialsFor(r.code)}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-base font-medium text-slate-800">{r.code}</span>
-                    {r.name && <span className="block truncate text-sm text-slate-400">{r.name}</span>}
-                  </span>
-                  <span className="w-20 shrink-0 text-right text-base font-semibold tabular-nums text-slate-900">{money(r.value)}</span>
-                  <span className="w-12 shrink-0 text-right">
-                    <DeltaChip value={r.delta} tone="up-good" className="justify-end" hideWhenNull />
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </>
-        )}
+      {/* Column headers. */}
+      <div className="flex items-center gap-3 px-5 pb-1.5 pt-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+        <span className="w-6">#</span>
+        <span className="flex-1 pl-11">Name</span>
+        <span className="w-24 text-right">{valueHead}</span>
+        <span className="w-12 text-right">Change</span>
       </div>
+      {loading ? (
+        <div className="flex flex-1 flex-col gap-3 px-4 pb-4">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-16 flex-1 rounded-2xl" />
+          ))}
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="flex-1 px-4 pb-4">
+          <EmptyHint message={emptyMessage} />
+        </div>
+      ) : (
+        <ol className="flex flex-1 flex-col gap-3 px-4 pb-4">
+          {rows.map((r, i) => (
+            <li
+              key={r.key}
+              className={cx(
+                'flex min-h-[3.5rem] flex-1 items-stretch overflow-hidden rounded-2xl shadow-sm ring-1',
+                i === 0 ? 'ring-violet-200' : 'ring-slate-100',
+              )}
+            >
+              {/* Rank badge with crown on #1. */}
+              <div className={cx('flex w-12 shrink-0 flex-col items-center justify-center gap-0.5 bg-linear-to-b text-white', rankGradients[Math.min(i, rankGradients.length - 1)])}>
+                <span className="text-lg font-bold leading-none">{i + 1}</span>
+                {i === 0 && <span className="text-amber-300"><IconCrown /></span>}
+              </div>
+              {/* Content. */}
+              <div className="flex flex-1 items-center gap-3 bg-white px-3">
+                <span
+                  className={cx('inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[10px] font-bold tracking-tight', tintFor(r.code))}
+                  aria-hidden
+                >
+                  {initialsFor(r.code)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-base font-semibold text-slate-800">{r.code}</span>
+                  {r.name && <span className="block truncate text-sm text-slate-400">{r.name}</span>}
+                </span>
+                <span className="w-24 shrink-0 text-right text-base font-bold tabular-nums text-slate-900">{money(r.value)}</span>
+                <TrendChip delta={r.delta} />
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
       <p className="sr-only">{caption}</p>
     </Panel>
   )
@@ -966,10 +989,10 @@ function DashboardPage() {
   const answered = s?.answered ?? 0
   const missed = s?.missed ?? 0
   // light/dark shades drive the 3D pie's top-face gradient and side walls; `pull` explodes
-  // the Answered slice outward so it stands proud of the rest.
+  // the Missed slice outward so the small red wedge stands proud of the green, per the mock.
   const callMix: PieSlice[] = [
-    { name: 'Answered', value: answered, color: C.answered, light: '#4ade80', dark: '#15803d', pull: 18 },
-    { name: 'Missed', value: missed, color: C.missed, light: '#fb7185', dark: '#be123c' },
+    { name: 'Answered', value: answered, color: C.answered, light: '#4ade80', dark: '#15803d' },
+    { name: 'Missed', value: missed, color: C.missed, light: '#fb7185', dark: '#be123c', pull: 18 },
   ]
   const callTotal = answered + missed
 
@@ -1192,6 +1215,7 @@ function DashboardPage() {
           perm="buyers"
           linkLabel="View all"
           caption={`Change shown ${caption}`}
+          rankGradients={['from-violet-500 to-purple-600', 'from-blue-500 to-blue-600', 'from-blue-400 to-blue-500', 'from-sky-400 to-blue-400', 'from-sky-300 to-sky-400']}
         />
 
         {/* Ranked campaigns */}
@@ -1206,6 +1230,7 @@ function DashboardPage() {
           perm="campaigns"
           linkLabel="View all"
           caption={`Change shown ${caption}`}
+          rankGradients={['from-amber-400 to-amber-500', 'from-slate-400 to-slate-500', 'from-orange-400 to-orange-500', 'from-slate-300 to-slate-400']}
         />
 
         {/* Call quality mix — Answered vs Missed, beside Top Campaigns. Its content sets the
