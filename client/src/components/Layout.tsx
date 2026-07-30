@@ -210,9 +210,18 @@ export default function Layout() {
           Full-bleed: no max-width cap, so the content always fills the space to the
           right of the sidebar. Zooming the browser out widens the viewport in CSS
           pixels — with a cap the page would stay narrow and centred instead.
+
+          The height chain is min-h-screen (column) → grow (main) → grow (wrapper) →
+          grow on the page root, so a short page still reaches the bottom of the viewport
+          instead of ending under its last card. `*:` targets whatever the route renders,
+          since page roots are plain divs with no height of their own.
+
+          `grow`, not `flex-1`: flex-1 sets flex-basis to 0, which would make a page
+          taller than the viewport overflow rather than stretch the container. grow keeps
+          basis auto — content sets the height, and any leftover space is absorbed.
         */}
-        <main className="w-full min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
-          <div className="animate-fade-in-up">
+        <main className="flex w-full min-w-0 grow flex-col px-4 py-6 sm:px-6 lg:px-8">
+          <div className="animate-fade-in-up flex grow flex-col *:grow">
             <Outlet />
           </div>
         </main>
