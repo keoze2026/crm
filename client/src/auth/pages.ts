@@ -16,7 +16,7 @@ export const PAGES: PageDef[] = [
   { key: 'dashboard', label: 'Dashboard', path: '/' },
   { key: 'buyers', label: 'Buyers', path: '/buyers' },
   { key: 'campaigns', label: 'Campaigns', path: '/campaigns' },
-  { key: 'vendors', label: 'Vendors', path: '/vendors' },
+  { key: 'vendors', label: 'Traffic Source', path: '/vendors' },
   { key: 'portal-expenses', label: 'Portal Expenses', path: '/portal-expenses' },
   { key: 'attendance', label: 'Attendance', path: '/attendance' },
   { key: 'users', label: 'Users', path: '/users' },

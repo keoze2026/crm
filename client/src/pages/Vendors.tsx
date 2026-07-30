@@ -38,7 +38,7 @@ export default function Vendors() {
 
   return (
     <div>
-      <PageHeader title="Vendors" subtitle="Per traffic-source payment sheets — converted calls, payments and dues">
+      <PageHeader title="Traffic Source" subtitle="Per traffic-source payment sheets — converted calls, payments and dues">
         <DateRangeControl value={range} onChange={setRange} />
       </PageHeader>
 
