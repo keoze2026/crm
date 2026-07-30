@@ -206,7 +206,12 @@ export default function Layout() {
           <BrandMark />
         </header>
 
-        <main className="mx-auto w-full min-w-0 max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        {/*
+          Full-bleed: no max-width cap, so the content always fills the space to the
+          right of the sidebar. Zooming the browser out widens the viewport in CSS
+          pixels — with a cap the page would stay narrow and centred instead.
+        */}
+        <main className="w-full min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
           <div className="animate-fade-in-up">
             <Outlet />
           </div>
