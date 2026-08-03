@@ -60,7 +60,7 @@ const C = {
 }
 
 /**
- * Whether a rising number is good news for this metric. Running Fee is a cost, so it
+ * Whether a rising number is good news for this metric. Expenses is a cost, so it
  * is the one metric where falling is good — the arrow follows the raw sign, the colour
  * follows the meaning.
  */
@@ -517,7 +517,7 @@ function HeroBanner({ value, delta, caption, series, loading }: {
         <div>
           <div className="flex items-center gap-1.5">
             <span className="text-base font-medium text-slate-500">Total Profit</span>
-            <InfoDot text="Revenue (billed) minus Running Fee for the selected period. Negative means the Leads cost more than they billed." />
+            <InfoDot text="Revenue (billed) minus Expenses for the selected period. Negative means the Leads cost more than they billed." />
           </div>
           {loading ? (
             <Skeleton className="mt-2 h-11 w-52" />
@@ -1005,8 +1005,8 @@ function DashboardPage() {
         />
         <StatWidget
           gradient="bg-linear-to-br from-orange-400 to-orange-500"
-          label="Running Fee"
-          info="Total paid to campaigns and traffic sources in the selected period. This is a cost — a falling Running Fee is good news."
+          label="Expenses"
+          info="Total paid to campaigns and traffic sources in the selected period. This is a cost — falling Expenses is good news."
           value={s ? money(s.cost) : '—'}
           delta={s?.deltas.cost}
           chart={<Sparkline id="w-cost" data={sparks.cost} color="#fff" height={64} dots fillOpacity={0.22} />}
@@ -1076,9 +1076,9 @@ function DashboardPage() {
         {/* Money over time — full-width row of its own. */}
         <Panel className="lg:col-span-2 xl:col-span-3">
           <PanelHeader
-            title="Revenue, Running Fee & Profit Over Time"
+            title="Revenue, Expenses & Profit Over Time"
             subtitle="Income trend across the selected period"
-            info="Profit is Revenue minus Running Fee and crosses zero, so this chart can run below the baseline."
+            info="Profit is Revenue minus Expenses and crosses zero, so this chart can run below the baseline."
             action={
               <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-0.5" role="group" aria-label="Time bucket">
                 {GRANULARITIES.map((g) => (
@@ -1131,7 +1131,7 @@ function DashboardPage() {
                     <Legend wrapperStyle={{ fontSize: 13, paddingTop: 8 }} iconType="plainline" />
                     {/* Smooth gradient areas. A single bucket shows a marker so it stays visible. */}
                     <Area type="monotone" dataKey="revenue" name="Revenue (billed)" stroke={C.revenue} strokeWidth={2.5} fill="url(#area-rev)" dot={single ? { r: 4, strokeWidth: 2, fill: '#fff' } : false} activeDot={{ r: 5 }} isAnimationActive={false} />
-                    <Area type="monotone" dataKey="cost" name="Running Fee" stroke={C.cost} strokeWidth={2.5} fill="url(#area-cost)" dot={single ? { r: 4, strokeWidth: 2, fill: '#fff' } : false} activeDot={{ r: 5 }} isAnimationActive={false} />
+                    <Area type="monotone" dataKey="cost" name="Expenses" stroke={C.cost} strokeWidth={2.5} fill="url(#area-cost)" dot={single ? { r: 4, strokeWidth: 2, fill: '#fff' } : false} activeDot={{ r: 5 }} isAnimationActive={false} />
                     <Area type="monotone" dataKey="margin" name="Profit" stroke={C.profit} strokeWidth={2.5} fill="url(#area-profit)" dot={single ? { r: 4, strokeWidth: 2, fill: '#fff' } : false} activeDot={{ r: 5 }} isAnimationActive={false} />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -1169,7 +1169,7 @@ function DashboardPage() {
         {/* Ranked campaigns */}
         <RankPanel
           title="Top Campaigns"
-          info="Top 5 campaigns by Running Fee. The change compares each campaign against the same campaign in the previous period."
+          info="Top 5 campaigns by Expenses. The change compares each campaign against the same campaign in the previous period."
           rows={campaignRows}
           loading={topCampaigns.loading}
           emptyMessage="No campaign activity in this period."
@@ -1256,7 +1256,7 @@ function DashboardPage() {
               <div>
                 <div className="flex items-center gap-1.5">
                   <h3 className="text-lg font-semibold text-slate-900">Top Traffic Sources</h3>
-                  <InfoDot text="Share of Running Fee by traffic source. Sources beyond the top five are grouped into Others. The period follows the date range at the top of the page." />
+                  <InfoDot text="Share of Expenses by traffic source. Sources beyond the top five are grouped into Others. The period follows the date range at the top of the page." />
                 </div>
                 <p className="text-sm text-slate-500">Campaign spend by source</p>
               </div>

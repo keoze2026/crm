@@ -293,7 +293,7 @@ export default function Reports() {
 
   const RECORDS_HEAD = ['Date', 'Type', 'Buyer', 'Campaign', 'Answered', 'Missed', 'Counted', 'Rate', 'Total Bill']
   const BUYER_HEAD = ['Destination', 'Name', 'Answered', 'Missed', 'Counted', 'Revenue']
-  const MONTHLY_HEAD = ['Month', 'Revenue', 'Running Fee', 'Profit', 'Counted', 'Answered', 'Missed']
+  const MONTHLY_HEAD = ['Month', 'Revenue', 'Expenses', 'Profit', 'Counted', 'Answered', 'Missed']
   const monthlyRows = (): AnyRow[] =>
     (monthly.data ?? []).map((m) => [formatPeriod(m.period), m.revenue, m.cost, m.margin, m.counted, m.answered, m.missed])
 
@@ -441,7 +441,7 @@ export default function Reports() {
           <div className="text-sm text-blue-100">Profit this period</div>
           <div className="mt-1 text-3xl font-bold">{s ? money(s.margin) : '—'}</div>
           <div className="mt-1 text-sm text-blue-100">
-            {s ? `${money(s.revenue)} revenue − ${money(s.cost)} running fee` : ''}
+            {s ? `${money(s.revenue)} revenue − ${money(s.cost)} expenses` : ''}
           </div>
         </Card>
       </div>
@@ -450,7 +450,7 @@ export default function Reports() {
       <Card className="mt-6">
         <CardHeader
           title="Monthly breakdown"
-          subtitle="Revenue, running fee and profit by month"
+          subtitle="Revenue, expenses and profit by month"
           action={
             <div className="flex gap-2">
               <CsvButton onClick={downloadMonthlyCsv} />
@@ -462,7 +462,7 @@ export default function Reports() {
         <Table
           loading={monthly.loading}
           empty={(monthly.data?.length ?? 0) === 0}
-          head={['Month', 'Revenue', 'Running Fee', 'Profit', 'Counted', 'Answered', 'Missed']}
+          head={['Month', 'Revenue', 'Expenses', 'Profit', 'Counted', 'Answered', 'Missed']}
           rows={(monthly.data ?? []).map((m) => [
             formatPeriod(m.period),
             money(m.revenue),
@@ -499,11 +499,11 @@ export default function Reports() {
         </Card>
 
         <Card>
-          <CardHeader title="Top campaigns" subtitle="By running fee" />
+          <CardHeader title="Top campaigns" subtitle="By expenses" />
           <Table
             loading={topCampaigns.loading}
             empty={(topCampaigns.data?.length ?? 0) === 0}
-            head={['Campaign', 'Running Fee', 'Counted', 'Answered']}
+            head={['Campaign', 'Expenses', 'Counted', 'Answered']}
             rows={(topCampaigns.data ?? []).map((c) => [c.code, money(c.cost), num(c.counted), num(c.answered)])}
             numericFrom={1}
           />
@@ -515,7 +515,7 @@ export default function Reports() {
         <Table
           loading={topSources.loading}
           empty={(topSources.data?.length ?? 0) === 0}
-          head={['Destination', 'Running Fee', 'Counted', 'Avg. fee / Lead']}
+          head={['Destination', 'Expenses', 'Counted', 'Avg. fee / Lead']}
           rows={(topSources.data ?? []).map((s) => [
             s.source,
             money(s.cost),
