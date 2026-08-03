@@ -6,6 +6,7 @@ import { PageHeader } from '../components/Layout'
 import BuyersSheet from '../components/BuyersSheet'
 import {
   Card,
+  EmptyState,
   Input,
   PageLoader,
 } from '../components/ui'
@@ -29,8 +30,15 @@ function BuyersPage() {
   // const openNew = () => { setEditing(null); setModalOpen(true) }
   // const onSaved = () => { setModalOpen(false); buyers.reload() }
 
-  // Always sort by rate high → low.
-  const list = (buyers.data ?? []).slice().sort((a, b) => b.rate - a.rate)
+  // Only buyers that actually bought Leads in the selected range reach the sheet — a row
+  // of zeroes is noise, and `counted` here IS the sheet's "Total Leads Bought" column, so
+  // hiding counted === 0 hides exactly the rows that would read 0. Filtered here rather
+  // than in the API because GET /buyers also feeds the Daily Sheet's destination picker,
+  // which must keep listing every buyer (including brand-new ones with no records yet).
+  // Then always sort by rate high → low.
+  const list = (buyers.data ?? [])
+    .filter((b) => Number(b.counted) > 0)
+    .sort((a, b) => b.rate - a.rate)
 
   return (
     <div>
@@ -53,9 +61,13 @@ function BuyersPage() {
         <Card className="overflow-hidden">
           <div className="border-b border-white/50 px-5 py-4">
             <h2 className="font-semibold text-slate-900">Monthly Sheet</h2>
-            <p className="mt-0.5 text-sm text-slate-500">Total Leads Bought auto-populates from the Daily Sheet for the selected date range; edit a buyer code or Rate inline (Total, Average &amp; Amount auto-calculate). New buyers appear here once used on the Daily Sheet.</p>
+            <p className="mt-0.5 text-sm text-slate-500">Only buyers with Leads bought in the selected date range are listed; Total Leads Bought auto-populates from the Daily Sheet for that range. Edit a buyer code or Rate inline (Total, Average &amp; Amount auto-calculate). New buyers appear here once used on the Daily Sheet.</p>
           </div>
-          <BuyersSheet buyers={list} onChanged={() => buyers.reload()} />
+          {list.length === 0 ? (
+            <EmptyState message="No buyers bought Leads in this date range — widen the date filter to see more." />
+          ) : (
+            <BuyersSheet buyers={list} onChanged={() => buyers.reload()} />
+          )}
         </Card>
       )}
 

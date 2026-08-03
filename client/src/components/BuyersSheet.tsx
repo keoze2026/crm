@@ -16,6 +16,10 @@ import { Input, cx } from './ui'
  * server only aggregates weekday (Mon–Fri) records. New buyers show up here once they're
  * used on the Daily Sheet page, so there is no add row. Rows auto-save on blur. Colors match
  * the Daily Sheet.
+ *
+ * The caller passes only buyers with Leads in the selected range (counted > 0) — see
+ * Buyers.tsx. So every total below is over that filtered set, and `buyers.length` in the
+ * footer is a count of *active* buyers for the range, not of every buyer on file.
  */
 export default function BuyersSheet({ buyers, onChanged }: { buyers: Buyer[]; onChanged: () => void }) {
   const totals = buyers.reduce(
