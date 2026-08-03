@@ -35,7 +35,7 @@ function CampaignsPage() {
   return (
     <div>
       {/* Page header retired — the Campaigns sheet below carries its own title.
-      <PageHeader title="Campaigns" subtitle="Media-buying campaigns that source calls (cost side)">
+      <PageHeader title="Campaigns" subtitle="Media-buying campaigns that source Leads (cost side)">
         <DateRangeFilter from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
         <div className="w-full sm:w-auto">
           <Input placeholder="Search by name…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full sm:w-48" />
@@ -63,7 +63,7 @@ function CampaignsPage() {
       <RecordsSection
         type="campaign"
         title="Campaigns sheet"
-        subtitle="Campaign call records — billing sheet"
+        subtitle="Campaign Lead records — billing sheet"
         theme="navy"
       />
 

@@ -7,7 +7,7 @@ import {
   buyerCols, campCols, buyerTableData, campTableData,
 } from '../components/ReportTable'
 import { Card, cx, EmptyState, PageLoader } from '../components/ui'
-import { daysAgo, money2, today } from '../lib/format'
+import { money2, todayRange } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { CompleteReport } from '../types'
 
@@ -18,7 +18,7 @@ export default function CompleteReportPage() {
 }
 
 function CompleteReportView() {
-  const [range, setRange] = useState<Range>({ from: daysAgo(6), to: today() })
+  const [range, setRange] = useState<Range>(todayRange)
   const report = useAsync(() => api.completeReport(range), [range.from, range.to])
   const data = report.data
 

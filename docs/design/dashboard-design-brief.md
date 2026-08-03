@@ -13,11 +13,11 @@ Users, System Logs) are out of scope.
 
 ## 1. What this page is for
 
-Platform-CRM is an internal pay-per-call / call-forwarding operations system. The business
+Platform-CRM is an internal pay-per-Lead / Lead-forwarding operations system. The business
 sits between two sides:
 
-- **Buyer side — money in.** We deliver phone calls to buyers and bill them per call.
-- **Campaign side — money out.** We buy those calls from traffic sources / campaigns.
+- **Buyer side — money in.** We deliver Leads to buyers and bill them per Lead.
+- **Campaign side — money out.** We buy those Leads from traffic sources / campaigns.
 
 The business is the spread between the two. The Dashboard is the single page that shows
 whether that spread is healthy over a chosen period.
@@ -38,7 +38,7 @@ In priority order — this is the hierarchy the design should express:
 1. **Are we making money this period, and is that better or worse than before?**
 2. **How much came in, how much went out?**
 3. **Is the money trend stable or volatile across the period?**
-4. **Is call quality holding** (are the calls we deliver actually being answered)?
+4. **Is Lead quality holding** (are the Leads we deliver actually being answered)?
 5. **Which buyers account for the revenue?**
 6. **Which traffic sources are absorbing the spend?**
 
@@ -58,11 +58,11 @@ be renamed** without our sign-off — staff use them verbally every day.
 | **Revenue (billed)** | What we bill buyers. Money in. |
 | **Running Fee** | What we pay campaigns / traffic sources. Money out. It is a **cost**, despite the neutral-sounding name. |
 | **Profit** | Revenue − Running Fee. |
-| **Counted** | Calls that are **billable**. This is the commercial volume figure. |
-| **Answered** | Calls the buyer actually picked up. |
-| **Missed** | Calls that reached the buyer and were not picked up. |
-| **Buyer** | A customer we sell calls to. Identified on screen by a short code (`L48`, `RTG 04`, `HOZ`). |
-| **Campaign / Traffic source** | Where the calls come from. Sources are named (`Priority Y`, `XXD`, `PDSO`). |
+| **Counted** | Leads that are **billable**. This is the commercial volume figure. |
+| **Answered** | Leads the buyer actually picked up. |
+| **Missed** | Leads that reached the buyer and were not picked up. |
+| **Buyer** | A customer we sell Leads to. Identified on screen by a short code (`L48`, `RTG 04`, `HOZ`). |
+| **Campaign / Traffic source** | Where the Leads come from. Sources are named (`Priority Y`, `XXD`, `PDSO`). |
 
 Two traps worth designing around:
 
@@ -87,7 +87,7 @@ date range (§5).
 | Revenue (billed) | Total billed to buyers in the range | Up is good |
 | Running Fee | Total paid to campaigns in the range | **Down is good** |
 | Profit | Revenue − Running Fee | Up is good. **Frequently negative in real operation** |
-| Counted Calls | Total billable calls in the range | Up is good. A count, not money |
+| Counted Leads | Total billable Leads in the range | Up is good. A count, not money |
 
 Each carries a **comparison against the immediately preceding period of the same length**
 (a 7-day range compares to the 7 days before it), expressed as a percentage change. The
@@ -98,7 +98,7 @@ must handle a metric with no comparison without looking broken.
 
 | Metric | Definition | Notes |
 |---|---|---|
-| Answer Rate | Answered ÷ (Answered + Missed), as a percentage | Quality indicator. 0 when there are no calls |
+| Answer Rate | Answered ÷ (Answered + Missed), as a percentage | Quality indicator. 0 when there are no Leads |
 | Profit Margin | Profit ÷ Revenue, as a percentage | **Can be negative.** 0 when there is no revenue |
 | Active Buyers | Number of distinct buyers with activity in the range | A small integer |
 | Active Campaigns | Number of distinct campaigns with activity in the range | A small integer |
@@ -127,10 +127,10 @@ together**, so the viewer can see the spread and its volatility.
   detail-on-demand treatment.
 - Purely informational — there is no click-through to a buyer page from this screen today.
 
-### 3.5 Call quality over time
+### 3.5 Lead quality over time
 
 A time series over the same range and the same bucket control as 3.3, showing **Answered
-and Missed call counts**.
+and Missed Lead counts**.
 
 - Two series, counts not currency.
 - In healthy operation these two are **wildly different in magnitude** — answered runs in
@@ -142,11 +142,11 @@ and Missed call counts**.
 
 **Up to 6 traffic sources, ranked by spend** in the range.
 
-- Each has: source name, total spend, and counted calls.
+- Each has: source name, total spend, and counted Leads.
 - Spend is extremely **top-heavy** — the leading source can be several times the second and
   orders of magnitude above the tail, so a linear comparison renders the smallest sources as
   invisible slivers.
-- Cost-per-call (spend ÷ counted) is derivable and was considered useful; include it if your
+- Cost-per-Lead (spend ÷ counted) is derivable and was considered useful; include it if your
   design has room.
 - A source with no name recorded appears as the literal string `(none)`.
 
@@ -177,7 +177,7 @@ an awkward result in the current build.
 Colour or iconography indicating "good" and "bad" must follow the **meaning** of each
 metric, not the direction of its change:
 
-- Revenue up = good. Profit up = good. Counted Calls up = good.
+- Revenue up = good. Profit up = good. Counted Leads up = good.
 - **Running Fee up = bad, Running Fee down = good.**
 - Profit and Profit Margin below zero = bad regardless of direction of change.
 
@@ -247,7 +247,7 @@ These are fixed. Everything not listed here is open.
 - The app has a shared visual language across all nine pages and shared components,
   including the date-range control, which is reused elsewhere. **The Dashboard may lead a
   visual refresh, but it cannot diverge from the rest of the app in isolation.** If your
-  direction implies changes to shared elements, call them out separately.
+  direction implies changes to shared elements, Lead them out separately.
 
 **Accessibility**
 - **WCAG AA contrast for all text and meaningful UI boundaries**, verified against the
@@ -270,14 +270,14 @@ today; each would require backend work:
 - **Targets, budgets or goals** — there is nothing to show progress against.
 - **Forecasts or projections.**
 - **Per-metric history for the headline figures** — there is no sparkline-ready series
-  behind Revenue, Running Fee, Profit or Counted Calls individually. The only time series
+  behind Revenue, Running Fee, Profit or Counted Leads individually. The only time series
   available are the two described in §3.3 and §3.5.
 - **Trend history per buyer or per traffic source** — rankings are a single total per entity
   for the range, with no time dimension.
 - **Comparison against arbitrary periods** — only the immediately preceding period of equal
   length.
 - **Any segmentation** beyond buyer and traffic source: no geography, no time-of-day, no
-  call duration, no agent or team breakdown.
+  Lead duration, no agent or team breakdown.
 - **Alerts, thresholds, anomaly flags or annotations.**
 - **Real-time or streaming updates.**
 

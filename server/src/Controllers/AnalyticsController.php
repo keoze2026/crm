@@ -214,6 +214,13 @@ final class AnalyticsController
      * full cost side (per campaign + destination), with grand totals and profit.
      * Unlike the ranked endpoints this is unlimited — it returns *every* row so
      * the frontend can render the formatted "Complete Report" download.
+     *
+     * Rows with zero counted Leads are dropped (`HAVING SUM(counted) > 0`): a buyer
+     * or campaign that billed nothing in the period is noise on a billing report.
+     * Both totals footers are computed from these filtered rows, so the TOTAL band,
+     * the destination / camp counts and the profit figure all stay in step — and
+     * because revenue and cost only come from `total_bill`, which is zero whenever
+     * counted is zero, dropping the rows can never move the profit number.
      */
     public function completeReport(): void
     {
@@ -235,6 +242,7 @@ final class AnalyticsController
             JOIN buyers b ON b.id = r.buyer_id
             WHERE r.record_type = 'buyer' {$where}
             GROUP BY b.id, b.code
+            HAVING COALESCE(SUM(r.counted), 0) > 0
             ORDER BY rate DESC, total_bill DESC, b.code
         ";
         $stmt = $pdo->prepare($buyerSql);
@@ -276,6 +284,7 @@ final class AnalyticsController
             WHERE r.record_type = 'campaign' {$where}
             GROUP BY upper(regexp_replace(c.code, '[^A-Za-z0-9]', '', 'g')),
                      upper(regexp_replace(COALESCE(r.source, ''), '[^A-Za-z0-9]', '', 'g'))
+            HAVING COALESCE(SUM(r.counted), 0) > 0
             ORDER BY rate DESC, total_bill DESC, camp
         ";
         $stmt = $pdo->prepare($campSql);

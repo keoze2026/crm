@@ -183,7 +183,7 @@ final class RecordController
         })();
 
         Http::csv(
-            'call-records.csv',
+            'lead-records.csv',
             ['Date', 'Type', 'Buyer', 'Campaign', 'Answered', 'Missed', 'Replacement', 'Counted', 'Rate', 'Total Bill'],
             $rows
         );

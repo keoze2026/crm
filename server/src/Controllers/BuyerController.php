@@ -17,10 +17,10 @@ final class BuyerController
         $to     = Http::query('to');
         $params = [];
 
-        // "Total Calls Bought" (counted) always auto-populates from the leads records —
+        // "Total Leads Bought" (counted) always auto-populates from the leads records —
         // the SUM of counted within the selected date range — so it changes as the date
         // range changes. record_days = how many days that buyer has records in the range,
-        // used for the Average Calls a Day column (N/A when 0). The range scopes the join.
+        // used for the Average Leads a Day column (N/A when 0). The range scopes the join.
         //
         // Weekends (Sat/Sun) are NOT working days, so they are excluded entirely: no
         // weekend record contributes to the totals, and weekend dates don't count toward
@@ -107,7 +107,7 @@ final class BuyerController
             Http::error('Buyer not found', 404);
         }
 
-        // Keep the definite rate in sync across this buyer's call records so the
+        // Keep the definite rate in sync across this buyer's Lead records so the
         // stored total_bill (counted * rate) stays exactly rate * counted.
         if ($rate !== null) {
             $re = $pdo->prepare('UPDATE call_records SET rate = :r, updated_at = now() WHERE buyer_id = :id');

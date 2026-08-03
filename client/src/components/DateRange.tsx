@@ -7,6 +7,8 @@ export interface Range {
   from: string
   to: string
 }
+// The default value for a Range is `todayRange()` in lib/format — it lives there rather
+// than here because this module may only export components (react-refresh).
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

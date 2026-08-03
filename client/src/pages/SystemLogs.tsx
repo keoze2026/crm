@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import { DateRangeControl, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
 import { Badge, Button, Card, EmptyState, Input, PageLoader, Select } from '../components/ui'
+import { todayRange } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { AuditFilters, AuditLog } from '../types'
 
@@ -10,7 +11,7 @@ const PAGE = 50
 
 /** Admin-only audit trail: who did what, when. Rows expand to show the full change detail. */
 export default function SystemLogs() {
-  const [range, setRange] = useState<Range>({ from: '', to: '' })
+  const [range, setRange] = useState<Range>(todayRange)
   const [action, setAction] = useState('')
   const [q, setQ] = useState('')
   const [offset, setOffset] = useState(0)

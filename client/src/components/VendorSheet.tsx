@@ -8,7 +8,7 @@ import { Input, PageLoader, cx } from './ui'
 
 /**
  * Editable per-vendor payment sheet for the Vendors page, mirroring the client spreadsheet:
- * Date · Traffic Source · Converted call · Price (Usd) · Payments · Initial Advance ·
+ * Date · Traffic Source · Converted Lead · Price (Usd) · Payments · Initial Advance ·
  * Amount paid.
  *
  * Everything is manual entry except three auto-derived columns: Traffic Source (always the
@@ -18,8 +18,8 @@ import { Input, PageLoader, cx } from './ui'
  * balance, the same number the summary shows.
  * The date-range filter is owned by the page and passed in — it scopes the fetched rows and
  * therefore the totals. Below the table:
- *   • Average Calls a Day = round(Σ converted ÷ days worked) — days worked being the
- *     distinct dates that actually have converted calls, mirroring the Buyers sheet's
+ *   • Average Leads a Day = round(Σ converted ÷ days worked) — days worked being the
+ *     distinct dates that actually have converted Leads, mirroring the Buyers sheet's
  *     `counted ÷ record_days` rather than counting idle days in the range.
  *   • Initial Advance = the balance the period OPENS with. Only the very first one is
  *     typed (stored as `vendors.opening_advance`); after that the server carries it
@@ -41,17 +41,17 @@ export default function VendorSheet({
 
   const totals = rows.reduce(
     (a, p) => ({
-      calls: a.calls + p.converted_calls,
+      leads: a.leads + p.converted_calls,
       payments: a.payments + p.converted_calls * p.price,
       paid: a.paid + p.amount_paid,
     }),
-    { calls: 0, payments: 0, paid: 0 },
+    { leads: 0, payments: 0, paid: 0 },
   )
 
-  // Days worked = distinct dates with at least one converted call, so a pure payment row
-  // (0 calls) never drags the average down.
+  // Days worked = distinct dates with at least one converted Lead, so a pure payment row
+  // (0 Leads) never drags the average down.
   const daysWorked = new Set(rows.filter((p) => p.converted_calls > 0).map((p) => p.entry_date)).size
-  const avg = daysWorked > 0 ? Math.round(totals.calls / daysWorked) : null
+  const avg = daysWorked > 0 ? Math.round(totals.leads / daysWorked) : null
 
   // The Initial Advance column is a running balance: every row OPENS where the previous one
   // closed, seeded by the figure carried into this period. Walking it once here (rather than
@@ -96,7 +96,7 @@ export default function VendorSheet({
                 <tr className="bg-[#1a3654] text-center text-xs font-bold uppercase tracking-wide text-white">
                   <th className={headCls}>Date</th>
                   <th className={headCls}>Traffic Source</th>
-                  <th className={headCls}>Converted call</th>
+                  <th className={headCls}>Converted Lead</th>
                   <th className={headCls}>Price (Usd)</th>
                   <th className={headCls}>Payments</th>
                   <th className={headCls} title="The balance this row opens with — the previous row's closing balance">
@@ -135,7 +135,7 @@ export default function VendorSheet({
               <tfoot>
                 <tr className="bg-[#1a3654] font-bold text-white">
                   <td className="px-3 py-2.5 text-center text-xs font-bold uppercase" colSpan={2}>Total</td>
-                  <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.calls)}</td>
+                  <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.leads)}</td>
                   <td className="px-3 py-2.5" />
                   <td className="px-3 py-2.5 text-center tabular-nums">{money2(totals.payments)}</td>
                   {/* The column runs on past the last row: this is what the period closes at. */}
@@ -153,12 +153,12 @@ export default function VendorSheet({
           <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex flex-col gap-3 self-start">
               <div className="glass-input inline-flex items-center gap-3 self-start rounded-xl border border-white/70 px-4 py-2.5">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Average Calls a Day</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Average Leads a Day</span>
                 <span className="text-2xl font-bold tabular-nums text-[#1a3654]">{avg ?? '—'}</span>
                 <span className="text-xs text-slate-400">
                   {daysWorked > 0
-                    ? `${num(totals.calls)} ÷ ${daysWorked} day${daysWorked === 1 ? '' : 's'} worked`
-                    : 'no converted calls in range'}
+                    ? `${num(totals.leads)} ÷ ${daysWorked} day${daysWorked === 1 ? '' : 's'} worked`
+                    : 'no converted Leads in range'}
                 </span>
               </div>
 
@@ -206,20 +206,20 @@ function PaymentRow({
   payment, vendorName, opening, onChanged,
 }: { payment: VendorPayment; vendorName: string; opening: number; onChanged: () => void }) {
   const [date, setDate] = useState(payment.entry_date)
-  const [calls, setCalls] = useState(String(payment.converted_calls))
+  const [leads, setLeads] = useState(String(payment.converted_calls))
   const [price, setPrice] = useState(String(payment.price))
   const [paid, setPaid] = useState(String(payment.amount_paid))
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
 
-  const nCalls = Number(calls) || 0
+  const nLeads = Number(leads) || 0
   const nPrice = Number(price) || 0
   const nPaid = Number(paid) || 0
-  const rowPayments = nCalls * nPrice
+  const rowPayments = nLeads * nPrice
 
   const dirty =
     date !== payment.entry_date ||
-    nCalls !== payment.converted_calls ||
+    nLeads !== payment.converted_calls ||
     nPrice !== payment.price ||
     nPaid !== payment.amount_paid
 
@@ -229,7 +229,7 @@ function PaymentRow({
     try {
       await api.updateVendorPayment(payment.id, {
         entry_date: date,
-        converted_calls: nCalls,
+        converted_calls: nLeads,
         price: nPrice,
         amount_paid: nPaid,
       })
@@ -254,8 +254,8 @@ function PaymentRow({
       <td className={cellCls}><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></td>
       <td className={cx(cellCls, 'text-center font-medium text-[#1a3654]')}>{vendorName}</td>
       <td className={cellCls}>
-        <Input type="number" min="0" step="1" value={calls} className="text-right"
-          onChange={(e) => setCalls(e.target.value)} />
+        <Input type="number" min="0" step="1" value={leads} className="text-right"
+          onChange={(e) => setLeads(e.target.value)} />
       </td>
       <td className={cellCls}>
         <Input type="number" min="0" step="0.01" value={price} className="text-right"
@@ -284,24 +284,24 @@ function AddRow({
   vendorName, defaultDate, defaultPrice, opening, onChanged,
 }: { vendorName: string; defaultDate: string; defaultPrice: string; opening: number; onChanged: () => void }) {
   const [date, setDate] = useState(defaultDate)
-  const [calls, setCalls] = useState('')
+  const [leads, setLeads] = useState('')
   const [price, setPrice] = useState(defaultPrice)
   const [paid, setPaid] = useState('')
   const saving = useRef(false)
 
-  const nCalls = Number(calls) || 0
+  const nLeads = Number(leads) || 0
   const nPrice = Number(price) || 0
   const nPaid = Number(paid) || 0
-  const rowPayments = nCalls * nPrice
+  const rowPayments = nLeads * nPrice
 
   const add = async () => {
-    if (saving.current || !date || calls.trim() === '') return
+    if (saving.current || !date || leads.trim() === '') return
     saving.current = true
     try {
       await api.createVendorPayment({
         vendor: vendorName,
         entry_date: date,
-        converted_calls: nCalls,
+        converted_calls: nLeads,
         price: nPrice,
         amount_paid: nPaid,
       })
@@ -315,14 +315,14 @@ function AddRow({
     <tr className="bg-[#eaf5fa] text-[#0f172a]" onKeyDown={onKeyDown}>
       <td className={cellCls}><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></td>
       <td className={cx(cellCls, 'text-center font-medium text-slate-400')}>{vendorName}</td>
-      <td className={cellCls}><Input type="number" min="0" step="1" value={calls} placeholder="0" className="text-right" onChange={(e) => setCalls(e.target.value)} /></td>
+      <td className={cellCls}><Input type="number" min="0" step="1" value={leads} placeholder="0" className="text-right" onChange={(e) => setLeads(e.target.value)} /></td>
       <td className={cellCls}><Input type="number" min="0" step="0.01" value={price} placeholder="0.00" className="text-right" onChange={(e) => setPrice(e.target.value)} /></td>
-      <td className={roCell}>{calls.trim() === '' ? '—' : money2(rowPayments)}</td>
+      <td className={roCell}>{leads.trim() === '' ? '—' : money2(rowPayments)}</td>
       {/* What a new entry would open with = where the ledger currently stands. */}
       <td className={cx(roCell, 'text-slate-400')}>{money2(opening)}</td>
       <td className={cellCls}><Input type="number" min="0" step="0.01" value={paid} placeholder="0.00" className="text-right" onChange={(e) => setPaid(e.target.value)} /></td>
       <td className="p-0 text-center">
-        <button onClick={add} disabled={!date || calls.trim() === ''} title="Add entry"
+        <button onClick={add} disabled={!date || leads.trim() === ''} title="Add entry"
           className="mx-auto flex h-7 w-7 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-100 disabled:opacity-30 disabled:hover:bg-transparent">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M12 5v14M5 12h14" />

@@ -9,6 +9,7 @@ import {
   Input,
   PageLoader,
 } from '../components/ui'
+import { todayRange } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 // import type { Buyer } from '../types'  // only used by the retired Add-buyer modal
 
@@ -18,7 +19,7 @@ export default function Buyers() {
 
 function BuyersPage() {
   const [search, setSearch] = useState('')
-  const [range, setRange] = useState<Range>({ from: '', to: '' })
+  const [range, setRange] = useState<Range>(todayRange)
   // Add-buyer modal retired — add buyers inline on the Monthly Sheet's bottom row.
   // const [modalOpen, setModalOpen] = useState(false)
   // const [editing, setEditing] = useState<Buyer | null>(null)
@@ -33,7 +34,7 @@ function BuyersPage() {
 
   return (
     <div>
-      <PageHeader title="Buyers" subtitle="Customers who purchase forwarded calls (revenue side)">
+      <PageHeader title="Buyers" subtitle="Customers who purchase forwarded Leads (revenue side)">
         <DateRangeControl value={range} onChange={setRange} />
         <div className="w-full sm:w-auto">
           <Input placeholder="Search by name…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full sm:w-48" />
@@ -52,7 +53,7 @@ function BuyersPage() {
         <Card className="overflow-hidden">
           <div className="border-b border-white/50 px-5 py-4">
             <h2 className="font-semibold text-slate-900">Monthly Sheet</h2>
-            <p className="mt-0.5 text-sm text-slate-500">Total Calls Bought auto-populates from the Daily Sheet for the selected date range; edit a buyer code or Rate inline (Total, Average &amp; Amount auto-calculate). New buyers appear here once used on the Daily Sheet.</p>
+            <p className="mt-0.5 text-sm text-slate-500">Total Leads Bought auto-populates from the Daily Sheet for the selected date range; edit a buyer code or Rate inline (Total, Average &amp; Amount auto-calculate). New buyers appear here once used on the Daily Sheet.</p>
           </div>
           <BuyersSheet buyers={list} onChanged={() => buyers.reload()} />
         </Card>
@@ -61,7 +62,7 @@ function BuyersPage() {
       {buyers.error && <p className="mt-4 text-sm text-red-600">{buyers.error}</p>}
 
       {/* Revenue billing section retired — it duplicates the Leads Records page.
-      <RecordsSection type="buyer" title="Revenue billing" subtitle="Buyer call records — billing sheet" compact theme="navy" onChange={() => buyers.reload()} />
+      <RecordsSection type="buyer" title="Revenue billing" subtitle="Buyer Lead records — billing sheet" compact theme="navy" onChange={() => buyers.reload()} />
       */}
 
       {/* Add-buyer modal retired — see BuyerForm below (also commented out).
@@ -109,7 +110,7 @@ function BuyerForm({ editing, onSaved, onCancel }: { editing: Buyer | null; onSa
       </div>
       <div className="grid grid-cols-2 gap-3">
         <Input label="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
-        <Input label="Rate ($/call)" type="number" min="0" step="0.01" placeholder="e.g. 55.00" value={rate} onChange={(e) => setRate(e.target.value)} required />
+        <Input label="Rate ($/Lead)" type="number" min="0" step="0.01" placeholder="e.g. 55.00" value={rate} onChange={(e) => setRate(e.target.value)} required />
       </div>
       <label className="block">
         <span className="mb-1 block text-sm font-medium text-slate-700">Notes</span>

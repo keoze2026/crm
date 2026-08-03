@@ -6,11 +6,11 @@ import { Input, cx } from './ui'
 
 /**
  * "Monthly Sheet" of buyers (revenue side), matching the client layout:
- * Sr. No. · Buyers · Total Calls Bought · Average Calls a Day · Rates · Amount Received.
+ * Sr. No. · Buyers · Total Leads Bought · Average Leads a Day · Rates · Amount Received.
  *
- * "Total Calls Bought" always auto-populates from the Daily Sheet (the SUM of counted
- * calls in the selected date range), so it changes as the date range changes — it's
- * read-only here. The buyer code and Rates stay editable. Average Calls a Day (= total ÷
+ * "Total Leads Bought" always auto-populates from the Daily Sheet (the SUM of counted
+ * Leads in the selected date range), so it changes as the date range changes — it's
+ * read-only here. The buyer code and Rates stay editable. Average Leads a Day (= total ÷
  * the buyer's working days with records, N/A when none) and Amount Received (= rate × total)
  * are auto-calculated. Weekends (Sat/Sun) are excluded from every total on this sheet — the
  * server only aggregates weekday (Mon–Fri) records. New buyers show up here once they're
@@ -23,7 +23,7 @@ export default function BuyersSheet({ buyers, onChanged }: { buyers: Buyer[]; on
     { counted: 0, revenue: 0 },
   )
   const avgRate = totals.counted > 0 ? totals.revenue / totals.counted : 0
-  // Divisor for the grand "calls a day" = the most active buyer's day count, i.e. the
+  // Divisor for the grand "Leads a day" = the most active buyer's day count, i.e. the
   // number of business days present in the range.
   const maxDays = buyers.reduce((m, b) => Math.max(m, b.record_days), 0)
   const totalAvgPerDay = maxDays > 0 ? Math.round(totals.counted / maxDays) : 0
@@ -39,8 +39,8 @@ export default function BuyersSheet({ buyers, onChanged }: { buyers: Buyer[]; on
         <colgroup>
           <col style={{ width: '11.76%' }} />{/* Sr. No. — −40% */}
           <col style={{ width: '14.71%' }} />{/* Buyers — −25% */}
-          <col style={{ width: '19.61%' }} />{/* Total Calls Bought */}
-          <col style={{ width: '19.61%' }} />{/* Average Calls a Day */}
+          <col style={{ width: '19.61%' }} />{/* Total Leads Bought */}
+          <col style={{ width: '19.61%' }} />{/* Average Leads a Day */}
           <col style={{ width: '14.71%' }} />{/* Rates — −25% */}
           <col style={{ width: '19.60%' }} />{/* Amount Received */}
         </colgroup>
@@ -48,8 +48,8 @@ export default function BuyersSheet({ buyers, onChanged }: { buyers: Buyer[]; on
           <tr>
             <th className={headCls}>Sr. No.</th>
             <th className={headCls}>Buyers</th>
-            <th className={headCls}>Total Calls Bought</th>
-            <th className={headCls}>Average Calls a Day</th>
+            <th className={headCls}>Total Leads Bought</th>
+            <th className={headCls}>Average Leads a Day</th>
             <th className={headCls}>Rates</th>
             <th className={headCls}>Amount Received</th>
           </tr>
@@ -63,13 +63,13 @@ export default function BuyersSheet({ buyers, onChanged }: { buyers: Buyer[]; on
             <td className="px-3 py-2.5 text-center tabular-nums">{num(buyers.length)}</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.counted)}</td>
             <td className="px-3 py-2.5 text-center text-white/70">—</td>
-            <td className="px-3 py-2.5 text-center tabular-nums" title="Average rate = Amount Received ÷ Total Calls Bought">{money2(avgRate)}</td>
+            <td className="px-3 py-2.5 text-center tabular-nums" title="Average rate = Amount Received ÷ Total Leads Bought">{money2(avgRate)}</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{money(totals.revenue)}</td>
           </tr>
         </tfoot>
       </table>
       <div className="mt-2 inline-block rounded bg-[#1a3654] px-3 py-1.5 text-sm font-semibold text-white">
-        Total Average Calls a Day - {num(totalAvgPerDay)}
+        Total Average Leads a Day - {num(totalAvgPerDay)}
       </div>
     </div>
   )
@@ -94,7 +94,7 @@ function BuyerRow({ index, buyer, onChanged }: { index: number; buyer: Buyer; on
     if (saving.current || !dirty || code.trim() === '') return
     saving.current = true
     try {
-      // Name doubles as the code, so keep them in sync. Total Calls Bought is never sent
+      // Name doubles as the code, so keep them in sync. Total Leads Bought is never sent
       // — it always auto-derives from the Daily Sheet records for the selected range.
       await api.updateBuyer(buyer.id, { code: code.trim(), name: code.trim(), rate: rateNum })
       onChanged()

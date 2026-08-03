@@ -5,17 +5,12 @@ import { DateRangeControl, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
 import VendorSheet from '../components/VendorSheet'
 import { Button, Card, CardHeader, EmptyState, PageLoader, Spinner, cx } from '../components/ui'
-import { today } from '../lib/format'
+import { todayRange } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
-
-/** Default range: 1st of the current month → today. */
-function defaultRange(): Range {
-  return { from: `${today().slice(0, 7)}-01`, to: today() }
-}
 
 export default function Vendors() {
   // One top-level filter for every vendor tab — changing it re-queries the active tab live.
-  const [range, setRange] = useState<Range>(defaultRange)
+  const [range, setRange] = useState<Range>(todayRange)
   const vendors = useAsync(() => api.vendors(), [])
   const list = vendors.data ?? []
 
@@ -38,7 +33,7 @@ export default function Vendors() {
 
   return (
     <div>
-      <PageHeader title="Traffic Source" subtitle="Per traffic-source payment sheets — converted calls, payments and dues">
+      <PageHeader title="Traffic Source" subtitle="Per traffic-source payment sheets — converted Leads, payments and dues">
         <DateRangeControl value={range} onChange={setRange} />
       </PageHeader>
 

@@ -26,7 +26,7 @@ final class CampaignController
 
         // Answered/Missed/Counted and the Total Bill (`cost`) are now keyed in directly
         // on the Monthly Sheet and stored on the campaign, so they come straight off the
-        // row (independent of call records). The join only feeds the records/sources
+        // row (independent of Lead records). The join only feeds the records/sources
         // counts + last activity; the date range still scopes those.
         $sql = "
             SELECT c.id, c.code, c.name, c.status, c.notes, c.created_at,
@@ -59,7 +59,7 @@ final class CampaignController
     public function sources(array $params): void
     {
         // Sources come from the destinations linked to this campaign, so the rates are
-        // always listed and editable even when the campaign has no call records yet.
+        // always listed and editable even when the campaign has no Lead records yet.
         $sql = "
             SELECT d.id AS destination_id,
                    d.name                         AS name,

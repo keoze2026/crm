@@ -5,7 +5,7 @@ import { api } from '../api/client'
 import { DateRangeControl, DownloadButton, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
 import { Button, Card, CardHeader, EmptyState, PageLoader, Spinner } from '../components/ui'
-import { daysAgo, fileDateRange, formatDmy, formatPeriod, money, money2, num, today } from '../lib/format'
+import { fileDateRange, formatDmy, formatPeriod, money, money2, num, todayRange } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import { saveCsv, saveXlsx, type XlsxSheet } from '../lib/xlsx'
 import { Link } from 'react-router-dom'
@@ -261,7 +261,7 @@ function completeReportSheets(data: CompleteReport): XlsxSheet[] {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function Reports() {
-  const [range, setRange] = useState<Range>({ from: daysAgo(6), to: today() })
+  const [range, setRange] = useState<Range>(todayRange)
   const [pdfLoading, setPdfLoading] = useState<Record<string, boolean>>({})
 
   const summary      = useAsync(() => api.summary(range),                              [range.from, range.to])
@@ -284,7 +284,7 @@ export default function Reports() {
 
   // All downloads share one naming scheme: AHT_<Report>_<date or range>.<ext>
   const fileTag = fileDateRange(range.from, range.to)
-  const recordsName = `AHT_Call_Records_${fileTag}`
+  const recordsName = `AHT_Lead_Records_${fileTag}`
   const buyerName = `AHT_Buyer_Performance_${fileTag}`
   const monthlyName = `AHT_Monthly_Breakdown_${fileTag}`
 
@@ -303,13 +303,13 @@ export default function Reports() {
       r.record_date, r.record_type, r.buyer_code ?? '', r.campaign_code ?? '',
       r.answered, r.missed, r.counted, `$${r.rate.toFixed(2)}`, `$${r.total_bill.toFixed(2)}`,
     ])
-    buildPdf('Call Records Export', rangeLabel, RECORDS_HEAD, rows).save(`${recordsName}.pdf`)
+    buildPdf('Lead Records Export', rangeLabel, RECORDS_HEAD, rows).save(`${recordsName}.pdf`)
   })
 
   const downloadRecordsXlsx = withPdfLoading('records-xlsx', async () => {
     const records = await fetchRecords()
     saveXlsx(`${recordsName}.xlsx`, [{
-      name: 'Call Records',
+      name: 'Lead Records',
       head: RECORDS_HEAD,
       formats: ['text', 'text', 'text', 'text', 'integer', 'integer', 'integer', 'currency', 'currency'],
       rows: records.map((r) => [
@@ -418,8 +418,8 @@ export default function Reports() {
       {/* Download cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <DownloadCard
-          title="Call records export"
-          desc="Every call record in the selected range — dates, buyers, campaigns and billing."
+          title="Lead records export"
+          desc="Every Lead record in the selected range — dates, buyers, campaigns and billing."
           csvHref={api.recordsExportUrl({ from: range.from, to: range.to })}
           csvName={`${recordsName}.csv`}
           onXlsx={downloadRecordsXlsx}
@@ -515,7 +515,7 @@ export default function Reports() {
         <Table
           loading={topSources.loading}
           empty={(topSources.data?.length ?? 0) === 0}
-          head={['Destination', 'Running Fee', 'Counted', 'Avg. fee / call']}
+          head={['Destination', 'Running Fee', 'Counted', 'Avg. fee / Lead']}
           rows={(topSources.data ?? []).map((s) => [
             s.source,
             money(s.cost),

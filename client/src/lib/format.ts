@@ -93,26 +93,44 @@ export function previousPeriod(from: string, to: string): { from: string; to: st
   end.setDate(end.getDate() - 1)
   const start = new Date(end)
   start.setDate(start.getDate() - (days - 1))
-  const iso = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  return { from: iso(start), to: iso(end) }
+  return { from: isoLocal(start), to: isoLocal(end) }
 }
 
 /** N days before an ISO date (YYYY-MM-DD). Pure — used to anchor a window to real data. */
 export function daysBeforeIso(iso: string, n: number): string {
   const d = new Date(iso + 'T00:00:00')
   d.setDate(d.getDate() - n)
+  return isoLocal(d)
+}
+
+/** An ISO YYYY-MM-DD string from a Date's *local* parts (never UTC-shifted). */
+function isoLocal(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-/** Today as YYYY-MM-DD (local). */
+/**
+ * Today as YYYY-MM-DD (local). Uses local date parts rather than `toISOString()`,
+ * which reports the UTC day and so rolls over to "tomorrow" for US users every
+ * evening — the default filter window must match the day the user is actually on.
+ */
 export function today(): string {
-  return new Date().toISOString().slice(0, 10)
+  return isoLocal(new Date())
 }
 
-/** N days ago as YYYY-MM-DD. */
+/**
+ * The app-wide default filter window: the current day only. Every page that carries a
+ * date filter opens on today, so the CRM always lands on "what happened today" and a
+ * wider window is an explicit choice (a preset or a calendar pick), never the default.
+ * The shape matches `Range` in components/DateRange.
+ */
+export function todayRange(): { from: string; to: string } {
+  const d = today()
+  return { from: d, to: d }
+}
+
+/** N days ago as YYYY-MM-DD (local). */
 export function daysAgo(n: number): string {
   const d = new Date()
   d.setDate(d.getDate() - n)
-  return d.toISOString().slice(0, 10)
+  return isoLocal(d)
 }

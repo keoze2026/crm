@@ -165,9 +165,9 @@
     <div class="hero" id="intro">
       <div class="kicker">Platform-CRM</div>
       <h1>User Manual</h1>
-      <p class="lede">Platform-CRM is a pay-per-call / call-forwarding CRM. Your team records the daily
-      call volumes for <b>buyers</b> (the revenue side — calls sold and forwarded to customers) and
-      <b>campaigns</b> (the cost side — the media buying that sources those calls). The gap between the
+      <p class="lede">Platform-CRM is a pay-per-Lead / Lead-forwarding CRM. Your team records the daily
+      Lead volumes for <b>buyers</b> (the revenue side — Leads sold and forwarded to customers) and
+      <b>campaigns</b> (the cost side — the media buying that sources those Leads). The gap between the
       two is your <b>profit</b>. This guide walks through every page and the controls you'll use daily.</p>
       <div class="meta">
         <span class="pill">8 working pages</span>
@@ -184,11 +184,11 @@
       <table class="def">
         <thead><tr><th>Term</th><th>What it means</th></tr></thead>
         <tbody>
-          <tr><td><b>Buyer</b></td><td>A customer who <i>buys</i> forwarded calls from you — the <b>revenue</b> side. Buyers have a short code such as <code>RTG 04</code> or <code>L48</code>.</td></tr>
-          <tr><td><b>Campaign</b></td><td>A media-buying campaign that <i>sources</i> calls — the <b>cost</b> side. Campaigns have codes like <code>C-05</code> and a traffic <b>destination / source</b> such as <code>XXD</code>.</td></tr>
-          <tr><td><b>Answered / Missed</b></td><td>Calls that connected vs. calls that rang out, for a single day and destination.</td></tr>
-          <tr><td><b>Counted</b></td><td>The billable number of calls for that row (answered plus any counted replacements).</td></tr>
-          <tr><td><b>Rate</b></td><td>The price per counted call, in dollars.</td></tr>
+          <tr><td><b>Buyer</b></td><td>A customer who <i>buys</i> forwarded Leads from you — the <b>revenue</b> side. Buyers have a short code such as <code>RTG 04</code> or <code>L48</code>.</td></tr>
+          <tr><td><b>Campaign</b></td><td>A media-buying campaign that <i>sources</i> Leads — the <b>cost</b> side. Campaigns have codes like <code>C-05</code> and a traffic <b>destination / source</b> such as <code>XXD</code>.</td></tr>
+          <tr><td><b>Answered / Missed</b></td><td>Leads that connected vs. Leads that rang out, for a single day and destination.</td></tr>
+          <tr><td><b>Counted</b></td><td>The billable number of Leads for that row (answered plus any counted replacements).</td></tr>
+          <tr><td><b>Rate</b></td><td>The price per counted Lead, in dollars.</td></tr>
           <tr><td><b>Total&nbsp;bill</b></td><td>Calculated automatically as <code>Counted × Rate</code>. You never type this — it updates as you edit.</td></tr>
           <tr><td><b>Profit / Margin</b></td><td>Revenue (from buyers) minus Cost (from campaigns). A negative number is shown in <span class="tag-red">red</span>.</td></tr>
         </tbody>
@@ -208,9 +208,9 @@
         <div class="card">
           <h3>The eight pages</h3>
           <p><b>Dashboard</b> — the at-a-glance performance overview.</p>
-          <p><b>Daily Sheet</b> — enter and review buyer (revenue) call records.</p>
+          <p><b>Daily Sheet</b> — enter and review buyer (revenue) Lead records.</p>
           <p><b>Buyers</b> — a per-buyer monthly summary with editable rates.</p>
-          <p><b>Campaigns</b> — enter and review campaign (cost) call records.</p>
+          <p><b>Campaigns</b> — enter and review campaign (cost) Lead records.</p>
           <p><b>Vendors</b> — per-traffic-source payment ledgers.</p>
           <p><b>Portal Expenses</b> — monthly provider expense sheet.</p>
           <p><b>Complete Report</b> — revenue, cost and profit side by side.</p>
@@ -260,10 +260,10 @@
       <ul class="legend">
         <li><span class="badge">1</span><div><b>Navigation sidebar</b> — jump to any page; the current page is highlighted.</div></li>
         <li><span class="badge">2</span><div><b>Date range</b> — sets the reporting period for every card and chart on the page.</div></li>
-        <li><span class="badge">3</span><div><b>KPI cards</b> — Revenue (billed), Running Fee, Profit and Counted Calls, plus Answer Rate, Profit Margin, Active Buyers and Active Campaigns. Each headline shows the change <i>vs. the previous period</i>.</div></li>
+        <li><span class="badge">3</span><div><b>KPI cards</b> — Revenue (billed), Running Fee, Profit and Counted Leads, plus Answer Rate, Profit Margin, Active Buyers and Active Campaigns. Each headline shows the change <i>vs. the previous period</i>.</div></li>
         <li><span class="badge">4</span><div><b>Revenue, running fee &amp; profit over time</b> — the income trend. Toggle <b>Daily / 4 Days / Weekly</b> at the top-right to change the grouping.</div></li>
         <li><span class="badge">5</span><div><b>Most active buyers</b> — your buyers ranked by revenue for the period.</div></li>
-        <li><span class="badge">6</span><div><b>Answered vs missed calls</b> — call-quality trend on the buyer side; a healthy chart hugs the top (answered) line.</div></li>
+        <li><span class="badge">6</span><div><b>Answered vs missed Leads</b> — Lead-quality trend on the buyer side; a healthy chart hugs the top (answered) line.</div></li>
         <li><span class="badge">7</span><div><b>Top traffic sources</b> — campaign spend broken down by traffic source.</div></li>
       </ul>
       <div class="callout"><span class="h">Reading the KPIs</span>
@@ -275,11 +275,11 @@
     <!-- DAILY SHEET -->
     <section id="daily-sheet">
       <h2>Daily Sheet</h2>
-      <p>Your day-to-day workhorse for the <b>revenue</b> side. Each row is one destination's calls for one
+      <p>Your day-to-day workhorse for the <b>revenue</b> side. Each row is one destination's Leads for one
       day. The <b>Total</b> column and the navy totals bar update automatically from Counted × Rate.</p>
       <figure>
         <img src="./images/daily-sheet.webp" alt="Daily Sheet with numbered callouts" width="1600" height="1638" loading="lazy" decoding="async" />
-        <figcaption>The Daily Sheet — buyer call records for the selected period.</figcaption>
+        <figcaption>The Daily Sheet — buyer Lead records for the selected period.</figcaption>
       </figure>
       <ul class="legend">
         <li><span class="badge">1</span><div><b>Search</b> — filter rows by destination code (e.g. type <code>RTG</code>).</div></li>
@@ -308,10 +308,10 @@
         <thead><tr><th>Column</th><th>Meaning</th></tr></thead>
         <tbody>
           <tr><td><b>Buyers</b></td><td>The buyer code. Editable — rename a buyer inline.</td></tr>
-          <tr><td><b>Total Calls Bought</b></td><td>Auto-summed from the Daily Sheet for the chosen date range.</td></tr>
-          <tr><td><b>Average Calls a Day</b></td><td>Total calls divided by the active days in the period.</td></tr>
-          <tr><td><b>Rates</b></td><td>Price per call. <b>Editable</b> — click the cell and type a new value.</td></tr>
-          <tr><td><b>Amount Received</b></td><td>Calculated automatically (calls × rate).</td></tr>
+          <tr><td><b>Total Leads Bought</b></td><td>Auto-summed from the Daily Sheet for the chosen date range.</td></tr>
+          <tr><td><b>Average Leads a Day</b></td><td>Total Leads divided by the active days in the period.</td></tr>
+          <tr><td><b>Rates</b></td><td>Price per Lead. <b>Editable</b> — click the cell and type a new value.</td></tr>
+          <tr><td><b>Amount Received</b></td><td>Calculated automatically (Leads × rate).</td></tr>
         </tbody>
       </table>
       <div class="callout note"><span class="h">Where do new buyers come from?</span>
@@ -323,11 +323,11 @@
     <!-- CAMPAIGNS -->
     <section id="campaigns">
       <h2>Campaigns</h2>
-      <p>The mirror image of the Daily Sheet, for the <b>cost</b> side. Each row is a campaign's calls for one
+      <p>The mirror image of the Daily Sheet, for the <b>cost</b> side. Each row is a campaign's Leads for one
       day at a given traffic destination. This is where your media-buying spend is recorded.</p>
       <figure>
         <img src="./images/campaigns.webp" alt="Campaigns sheet" width="1600" height="1638" loading="lazy" decoding="async" />
-        <figcaption>Campaigns — campaign call records (the cost / billing sheet).</figcaption>
+        <figcaption>Campaigns — campaign Lead records (the cost / billing sheet).</figcaption>
       </figure>
       <p>The controls match the Daily Sheet: <b>Search</b> by campaign code, a <b>Date</b> range, a
       <b>Campaign</b> dropdown, sortable headers, per-row edit / delete, a navy <b>TOTAL</b> bar and paging.
@@ -343,11 +343,11 @@
       <h2>Vendors</h2>
       <p>A running <b>payment ledger for each traffic source</b>. The page opens with one <b>tab per traffic
       source</b> — the same sources you buy on the <a href="#campaigns">Campaigns</a> sheet (e.g. <code>DXTST</code>,
-      <code>RGR</code>) — so you can track, per vendor, how many calls converted, what that comes to, and how much
+      <code>RGR</code>) — so you can track, per vendor, how many Leads converted, what that comes to, and how much
       has actually been paid.</p>
       <figure>
         <img src="./images/vendors.webp" alt="Vendors page showing the DXTST payment ledger" width="2400" height="1304" loading="lazy" decoding="async" />
-        <figcaption>Vendors — the DXTST tab: a dated ledger with auto Payments, an Average calls a day, and the colour-coded Due / Advance balance.</figcaption>
+        <figcaption>Vendors — the DXTST tab: a dated ledger with auto Payments, an Average Leads a day, and the colour-coded Due / Advance balance.</figcaption>
       </figure>
       <h3>Tabs &amp; the shared date filter</h3>
       <p>Click a tab along the top to switch vendors. The <b>+</b> tab adds a vendor that isn't in Campaigns —
@@ -358,26 +358,26 @@
         <tbody>
           <tr><td><b>Date</b></td><td>The day the entry is for — one row per day you record.</td></tr>
           <tr><td><b>Traffic Source</b></td><td>Filled in for you — always the current tab's vendor.</td></tr>
-          <tr><td><b>Converted call</b></td><td>How many calls converted that day. You type this.</td></tr>
-          <tr><td><b>Price (Usd)</b></td><td>Price per converted call, in dollars. You type this; new rows pre-fill the last price used.</td></tr>
-          <tr><td><b>Payments</b></td><td>Calculated automatically as <code>Converted call × Price</code>. You never type this.</td></tr>
+          <tr><td><b>Converted Lead</b></td><td>How many Leads converted that day. You type this.</td></tr>
+          <tr><td><b>Price (Usd)</b></td><td>Price per converted Lead, in dollars. You type this; new rows pre-fill the last price used.</td></tr>
+          <tr><td><b>Payments</b></td><td>Calculated automatically as <code>Converted Lead × Price</code>. You never type this.</td></tr>
           <tr><td><b>Amount paid</b></td><td>How much has actually been paid for that day. You type this.</td></tr>
         </tbody>
       </table>
       <h3>Adding &amp; editing rows</h3>
       <ol class="steps">
-        <li>On the bottom (blank) row, set the <b>Date</b>, then type the <b>Converted call</b> count, the <b>Price</b>, and any <b>Amount paid</b>.</li>
+        <li>On the bottom (blank) row, set the <b>Date</b>, then type the <b>Converted Lead</b> count, the <b>Price</b>, and any <b>Amount paid</b>.</li>
         <li>Press <kbd>Enter</kbd> or click the <b>+</b> at the end of the row to save it.</li>
         <li>Edit any saved row in place — changes save when you click away; the <b>trash</b> icon removes a row.</li>
       </ol>
       <h3>The figures below the sheet</h3>
       <div class="grid2">
-        <div class="card"><h3>Average Calls a Day</h3><p>Total converted calls ÷ the number of <b>weekdays</b> (Mon–Fri) in the selected date range — calculated for you.</p></div>
+        <div class="card"><h3>Average Leads a Day</h3><p>Total converted Leads ÷ the number of <b>weekdays</b> (Mon–Fri) in the selected date range — calculated for you.</p></div>
         <div class="card"><h3>Amount Due / Advance</h3><p>A balance <b>you type in</b> for the vendor. Pick <span class="tag-red">Due</span> (they owe you — shown red) or <span class="tag-green">Advance</span> (paid ahead — shown green) and enter the amount. It starts at&nbsp;0.</p></div>
       </div>
       <div class="callout"><span class="h">Payments vs. Amount paid</span>
-        <p><b>Payments</b> is what the calls come to (calls × price); <b>Amount paid</b> is what has actually been
-        settled. The navy <b>Total</b> bar sums Converted calls, Payments and Amount paid for the period.</p>
+        <p><b>Payments</b> is what the Leads come to (Leads × price); <b>Amount paid</b> is what has actually been
+        settled. The navy <b>Total</b> bar sums Converted Leads, Payments and Amount paid for the period.</p>
       </div>
     </section>
 
@@ -394,7 +394,7 @@
         <thead><tr><th>Column</th><th>Meaning</th></tr></thead>
         <tbody>
           <tr><td><b>Name</b></td><td>The provider / expense line. Type to add or rename.</td></tr>
-          <tr><td><b>Voice Minutes · Rejected calls · Rent values · Payout expenses</b></td><td>The component amounts that make up the bill. You type each.</td></tr>
+          <tr><td><b>Voice Minutes · Rejected Leads · Rent values · Payout expenses</b></td><td>The component amounts that make up the bill. You type each.</td></tr>
           <tr><td><b>Total Amount (Usd)</b></td><td>Defaults to the sum of the four components, but you can <b>override</b> it for a flat fee.</td></tr>
           <tr><td><b>% of Total</b></td><td>That row's share of the month's grand total — calculated for you.</td></tr>
         </tbody>
@@ -421,7 +421,7 @@
         <thead><tr><th>Section</th><th>What it shows</th></tr></thead>
         <tbody>
           <tr><td><b>REVENUE</b><br><span style="color:var(--muted)">buyer destinations</span></td><td>Every buyer's answered, missed, counted and total bill, ending in a navy total row.</td></tr>
-          <tr><td><b>COST</b><br><span style="color:var(--muted)">campaign destinations</span></td><td>The same breakdown for your campaigns — money spent to source the calls.</td></tr>
+          <tr><td><b>COST</b><br><span style="color:var(--muted)">campaign destinations</span></td><td>The same breakdown for your campaigns — money spent to source the Leads.</td></tr>
           <tr><td><b>COMPLETE</b><br><span style="color:var(--muted)">revenue − cost = profit</span></td><td>Three summary cards. When cost exceeds revenue the Profit card turns <span class="tag-red">red</span> and shows a negative figure.</td></tr>
         </tbody>
       </table>
@@ -480,7 +480,7 @@
 
     <footer>
       Platform-CRM User Manual · Screens captured from sample data on 11 Jul 2026.<br>
-      A pay-per-call / call-forwarding CRM — Dashboard, Daily Sheet, Buyers, Campaigns, Vendors, Portal Expenses, Complete Report &amp; Attendance.
+      A pay-per-Lead / Lead-forwarding CRM — Dashboard, Daily Sheet, Buyers, Campaigns, Vendors, Portal Expenses, Complete Report &amp; Attendance.
     </footer>
   </main>
 </div>

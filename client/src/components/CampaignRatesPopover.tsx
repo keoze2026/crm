@@ -123,7 +123,7 @@ function RatesDropdown({ campaign, pos, onClose, onSaved }: {
             {list.map((s) => (
               <div key={s.name} className="flex items-center gap-2 border-b border-slate-100 py-0.5 last:border-0">
                 <span className="flex-1 truncate text-xs font-medium text-[#0f172a]" title={s.name}>{s.name}</span>
-                <span className="tabular-nums text-[10px] text-slate-400" title="Calls">{num(s.counted)}</span>
+                <span className="tabular-nums text-[10px] text-slate-400" title="Leads">{num(s.counted)}</span>
                 <input
                   type="number" min="0" step="0.01" value={rateValue(s)} disabled={s.destination_id == null}
                   onChange={(e) => s.destination_id != null && setRates((r) => ({ ...r, [s.destination_id!]: e.target.value }))}

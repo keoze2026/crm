@@ -5,7 +5,7 @@ export default function Records() {
     <RecordsSection
       type="buyer"
       title="Daily Sheet"
-      subtitle="Revenue — buyer call records"
+      subtitle="Revenue — buyer Lead records"
       theme="navy"
     />
   )

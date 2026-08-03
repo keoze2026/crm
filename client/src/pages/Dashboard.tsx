@@ -1,4 +1,4 @@
-// Dashboard — performance overview of calls, revenue and margin.
+// Dashboard — performance overview of Leads, revenue and margin.
 //
 // Light theme (flat white panels on the app's soft gradient), matching the rest of the app.
 // Layout mirrors the client's reference mock: a full-width Total Profit hero with a large
@@ -26,8 +26,6 @@ import { DateRangeControl, type Range } from '../components/DateRange'
 import { cx } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
 import {
-  daysAgo,
-  daysBeforeIso,
   formatDmy,
   formatPeriod,
   money,
@@ -35,7 +33,7 @@ import {
   num,
   previousPeriod,
   rangeDays,
-  today,
+  todayRange,
 } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 
@@ -519,7 +517,7 @@ function HeroBanner({ value, delta, caption, series, loading }: {
         <div>
           <div className="flex items-center gap-1.5">
             <span className="text-base font-medium text-slate-500">Total Profit</span>
-            <InfoDot text="Revenue (billed) minus Running Fee for the selected period. Negative means the calls cost more than they billed." />
+            <InfoDot text="Revenue (billed) minus Running Fee for the selected period. Negative means the Leads cost more than they billed." />
           </div>
           {loading ? (
             <Skeleton className="mt-2 h-11 w-52" />
@@ -850,23 +848,11 @@ export default function Dashboard() {
 
 function DashboardPage() {
   const { canAccess } = useAuth()
-  // Default to the last 90 days rather than 7: a dashboard wants a meaningful trend window,
-  // and a 7-day default shows nothing whenever the most recent activity is older than a
-  // week (e.g. the seeded sample data, which ends before "today").
-  const [range, setRange] = useState<Range>({ from: daysAgo(89), to: today() })
+  // Open on today, like every other date filter in the CRM. Previously this defaulted to a
+  // 90-day window and then re-anchored itself to the newest record on load; both are gone —
+  // the dashboard now shows the current day until the user widens the range themselves.
+  const [range, setRange] = useState<Range>(todayRange)
   const [granularity, setGranularity] = useState<Granularity>('day')
-
-  // Anchor the initial window to the most recent record, so the dashboard always lands on
-  // real data even when the newest activity trails the current clock (e.g. fixed sample
-  // data). Adjust-state-during-render (guarded by `anchored`, runs once); the user's own
-  // range changes then take over. If the lookup fails, the 90-day default above stands.
-  const latestRecord = useAsync(() => api.records({ sort: 'record_date', dir: 'desc', per_page: 1 }), [])
-  const [anchored, setAnchored] = useState(false)
-  if (!anchored && latestRecord.data) {
-    setAnchored(true)
-    const last = latestRecord.data.data?.[0]?.record_date
-    if (last && last < range.to) setRange({ from: daysBeforeIso(last, 89), to: last })
-  }
 
   const prev = useMemo(() => previousPeriod(range.from, range.to), [range.from, range.to])
   const caption = comparisonLabel(range)
@@ -988,7 +974,7 @@ function DashboardPage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Dashboard</h1>
-          <p className="mt-2.5 text-base text-slate-500">Performance overview of calls, revenue and margin</p>
+          <p className="mt-2.5 text-base text-slate-500">Performance overview of Leads, revenue and margin</p>
         </div>
         {/* Dark date box on the light header, per the client's request. */}
         <DateRangeControl value={range} onChange={setRange} tone="dark" />
@@ -1010,7 +996,7 @@ function DashboardPage() {
         <StatWidget
           gradient="bg-linear-to-br from-blue-500 to-blue-600"
           label="Revenue (billed)"
-          info="Total billed to buyers for calls delivered in the selected period."
+          info="Total billed to buyers for Leads delivered in the selected period."
           value={s ? money(s.revenue) : '—'}
           delta={s?.deltas.revenue}
           chart={<Sparkline id="w-revenue" data={sparks.revenue} color="#fff" height={64} dots fillOpacity={0.22} />}
@@ -1040,7 +1026,7 @@ function DashboardPage() {
         <StatWidget
           gradient="bg-linear-to-br from-teal-500 to-teal-600"
           label="Answer Rate"
-          info="Answered calls as a share of answered + missed, buyer side. Shown as a percentage-point change against the previous period."
+          info="Answered Leads as a share of answered + missed, buyer side. Shown as a percentage-point change against the previous period."
           value={s ? `${s.answer_rate}%` : '—'}
           delta={s?.point_deltas?.answer_rate} deltaSuffix="pp"
           chart={<BarSpark data={sparks.answerRate} color="rgba(255,255,255,0.85)" height={64} />}
@@ -1053,8 +1039,8 @@ function DashboardPage() {
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 wide:grid-cols-4">
         <VolumeCard
           icon={<Phone3D />}
-          label="Counted Calls"
-          info="Billable calls in the selected period. Not the same as answered calls."
+          label="Counted Leads"
+          info="Billable Leads in the selected period. Not the same as answered Leads."
           value={s ? num(s.counted) : '—'}
           delta={s?.deltas.counted} tone="up-good" caption={caption}
           bars={sparks.counted} barColor={C.answered} loading={summary.loading}
@@ -1077,8 +1063,8 @@ function DashboardPage() {
         />
         <VolumeCard
           icon={<Headphones3D />}
-          label="Answered Calls"
-          info="Calls the buyer actually picked up, in the selected period."
+          label="Answered Leads"
+          info="Leads the buyer actually picked up, in the selected period."
           value={s ? num(s.answered) : '—'}
           delta={s?.deltas.answered} tone="up-good" caption={caption}
           bars={sparks.answered} barColor={C.cost} loading={summary.loading}
@@ -1117,7 +1103,7 @@ function DashboardPage() {
             {trends.loading ? (
               <ChartSkeleton />
             ) : series.length === 0 ? (
-              <EmptyHint message="No calls were recorded in this period. Try a wider date range." />
+              <EmptyHint message="No Leads were recorded in this period. Try a wider date range." />
             ) : (
               <>
                 <ResponsiveContainer width="100%" height="100%">
@@ -1197,13 +1183,13 @@ function DashboardPage() {
           ribbonClass="bg-linear-to-r from-amber-400 to-amber-500"
         />
 
-        {/* Call quality mix — Answered vs Missed, beside Top Campaigns. Its content sets the
+        {/* Lead quality mix — Answered vs Missed, beside Top Campaigns. Its content sets the
             height the three cards in this row share. */}
         <Panel className="flex flex-col">
           <PanelHeader
-            title="Answered vs Missed Calls"
-            subtitle="Share of delivered calls, buyer side"
-            info="Share of calls delivered to buyers that were picked up versus not picked up, across the whole period."
+            title="Answered vs Missed Leads"
+            subtitle="Share of delivered Leads, buyer side"
+            info="Share of Leads delivered to buyers that were picked up versus not picked up, across the whole period."
           />
           {/* flex-1 + flex-col so the Total-delivered box is pinned to the bottom and the
               card has no empty space beneath it. */}
@@ -1218,7 +1204,7 @@ function DashboardPage() {
               </div>
             ) : callTotal === 0 ? (
               <div className="w-full">
-                <EmptyHint message="No answered or missed calls were recorded in this period." />
+                <EmptyHint message="No answered or missed Leads were recorded in this period." />
               </div>
             ) : (
               <>
@@ -1240,7 +1226,7 @@ function DashboardPage() {
                         </dt>
                         <dd className="mt-0.5 text-2xl font-bold tabular-nums text-slate-900">{num(slice.value)}</dd>
                         <dd className="text-sm font-medium" style={{ color: slice.color }}>
-                          {((slice.value / callTotal) * 100).toFixed(1)}% of calls
+                          {((slice.value / callTotal) * 100).toFixed(1)}% of Leads
                         </dd>
                       </div>
                     ))}
@@ -1331,7 +1317,7 @@ function DashboardPage() {
                             </div>
                             <div className="shrink-0 text-right">
                               <div className="text-xs text-slate-400">
-                                {row.counted > 0 ? `${money(row.cost / row.counted)} / call` : '—'}
+                                {row.counted > 0 ? `${money(row.cost / row.counted)} / Lead` : '—'}
                               </div>
                               <div className="text-lg font-bold tabular-nums text-slate-900">{money(row.cost)}</div>
                               <div className="mt-1 inline-flex rounded-lg bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-700">
@@ -1360,7 +1346,7 @@ function DashboardPage() {
                 </div>
                 <div className="hidden w-px self-stretch bg-slate-200 lg:block" />
                 <div className="flex flex-col px-1">
-                  <div className="text-lg font-bold tabular-nums text-slate-900">${sources.avgCpc.toFixed(1)} <span className="text-sm font-medium text-slate-400">/ call</span></div>
+                  <div className="text-lg font-bold tabular-nums text-slate-900">${sources.avgCpc.toFixed(1)} <span className="text-sm font-medium text-slate-400">/ Lead</span></div>
                   <div className="text-xs text-slate-400">Average CPC</div>
                 </div>
                 <div className="hidden w-px self-stretch bg-slate-200 lg:block" />

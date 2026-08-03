@@ -14,7 +14,7 @@ const COLORS = ['#2563eb', '#16a34a', '#f59e0b', '#f43f5e', '#8b5cf6']
 
 const METRICS = [
   { key: 'voice_minutes', label: 'Voice Minutes', money: false },
-  { key: 'rejected_calls', label: 'Rejected Calls', money: false },
+  { key: 'rejected_calls', label: 'Rejected Leads', money: false },
   { key: 'rent_values', label: 'Rent Values', money: false },
   { key: 'payout_expenses', label: 'Payout Expenses', money: true },
   { key: 'total_amount', label: 'Total Amount (USD)', money: true },
@@ -54,7 +54,7 @@ export default function PortalExpenses() {
           <Card>
             <CardHeader
               title={`${monthLabel} Portal Expenses`}
-              subtitle="Total Amount defaults to Voice Minutes + Rejected calls + Rent values + Payout expenses, but can be overridden for flat fees. % of Total and the charts update as you edit. Rows auto-save on blur."
+              subtitle="Total Amount defaults to Voice Minutes + Rejected Leads + Rent values + Payout expenses, but can be overridden for flat fees. % of Total and the charts update as you edit. Rows auto-save on blur."
             />
             <div className="p-4">
               <PortalExpensesSheet month={month} expenses={rows} onChanged={() => expenses.reload()} />
@@ -72,7 +72,7 @@ export default function PortalExpenses() {
                 <EmptyState message={`No expenses for ${monthLabel} — add a provider above.`} />
               ) : (
                 // One panel per metric, each independently scaled, so small-magnitude
-                // metrics (Payout, Rejected calls) stay legible next to the large ones.
+                // metrics (Payout, Rejected Leads) stay legible next to the large ones.
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
                   {METRICS.map((m) => (
                     <MetricChart

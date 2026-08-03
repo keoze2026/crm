@@ -139,7 +139,7 @@ function CampaignRow({ campaign, onChanged }: {
     if (rowRef.current && !rowRef.current.contains(document.activeElement)) save()
   }, 0)
   const del = async () => {
-    if (!confirm(`Delete campaign ${campaign.code}? This also deletes its ${num(campaign.records)} call records.`)) return
+    if (!confirm(`Delete campaign ${campaign.code}? This also deletes its ${num(campaign.records)} Lead records.`)) return
     await api.deleteCampaign(campaign.id); onChanged()
   }
 

@@ -394,7 +394,7 @@ export interface VendorPayment {
   /** Entry date, YYYY-MM-DD. */
   entry_date: string
   converted_calls: number
-  /** USD per converted call. */
+  /** USD per converted Lead. */
   price: number
   /** USD actually paid. */
   amount_paid: number

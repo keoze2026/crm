@@ -11,7 +11,7 @@ const sumComponents = (vm: number, rc: number, rv: number, payout: number) => vm
 
 /**
  * Editable "Portal Expenses" sheet for a single month, mirroring the client
- * spreadsheet: Sr. No. · Name · Voice Minutes · Rejected calls · Rent values ·
+ * spreadsheet: Sr. No. · Name · Voice Minutes · Rejected Leads · Rent values ·
  * Payout expenses · Total Amount (Usd) · % of Total.
  *
  * Total Amount defaults to the sum of the component columns (Voice + Rejected + Rent +
@@ -52,7 +52,7 @@ export default function PortalExpensesSheet({
             <th className={headCls}>Sr. No.</th>
             <th className={headCls}>Name</th>
             <th className={headCls}>Voice Minutes</th>
-            <th className={headCls}>Rejected calls</th>
+            <th className={headCls}>Rejected Leads</th>
             <th className={headCls}>Rent values</th>
             <th className={headCls}>Payout expenses (USD)</th>
             <th className={headCls}>Total Amount (Usd)</th>

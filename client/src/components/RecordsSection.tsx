@@ -470,7 +470,7 @@ export default function RecordsSection({
               </svg>
             </div>
             <p className="text-base font-semibold text-slate-700">Select a date to view records</p>
-            <p className="max-w-sm text-sm text-slate-400">Pick a day or date range with the <span className="font-medium text-slate-500">Date</span> picker above to load call records.</p>
+            <p className="max-w-sm text-sm text-slate-400">Pick a day or date range with the <span className="font-medium text-slate-500">Date</span> picker above to load Lead records.</p>
           </div>
         ) : isSingleDay ? (
           allRecords.loading ? (
