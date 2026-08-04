@@ -145,7 +145,8 @@
       "Bash(awk 'NR>=465 && /^}/ {print NR\": \"$0; c++; if\\(c>=1\\) exit}' src/pages/Dashboard.tsx)",
       "Bash(awk 'NR>=550 && NR<=575 {print NR\": \"$0}' src/pages/Dashboard.tsx)",
       "Bash(sed -i \"s|clip:{x:250,y:1080,width:1200,height:600}|clip:{x:250,y:1120,width:1010,height:220}|\" rank.mjs)",
-      "Bash(node rank.mjs)"
+      "Bash(node rank.mjs)",
+      "PowerShell(php -l \"server/src/Controllers/PortalExpenseController.php\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\hp 290 g4\\Desktop\\Dev Projects\\CRM\\client",

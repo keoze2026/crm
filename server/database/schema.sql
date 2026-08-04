@@ -155,7 +155,7 @@ CREATE INDEX idx_call_records_type_date   ON call_records (record_type, record_d
 -- 40-day retention job (database/cleanup.php) never touches it — data is kept
 -- indefinitely (like users / destinations). `month` = first day of the month.
 -- `total_amount` is stored, not derived: a row can be a flat lump sum (e.g. BYOC)
--- independent of the three component columns.
+-- independent of the component columns.
 CREATE TABLE IF NOT EXISTS portal_expenses (
     id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     month          DATE           NOT NULL,                 -- first day of the month, e.g. 2026-03-01
@@ -163,7 +163,9 @@ CREATE TABLE IF NOT EXISTS portal_expenses (
     voice_minutes   NUMERIC(16, 4) NOT NULL DEFAULT 0 CHECK (voice_minutes   >= 0),
     rejected_calls  NUMERIC(16, 4) NOT NULL DEFAULT 0 CHECK (rejected_calls  >= 0),
     rent_values     NUMERIC(16, 4) NOT NULL DEFAULT 0 CHECK (rent_values     >= 0),
-    payout_expenses NUMERIC(16, 4) NOT NULL DEFAULT 0 CHECK (payout_expenses >= 0),  -- USD
+    call_recording  NUMERIC(16, 4) NOT NULL DEFAULT 0 CHECK (call_recording  >= 0),  -- USD
+    voip_shield     NUMERIC(16, 4) NOT NULL DEFAULT 0 CHECK (voip_shield     >= 0),  -- USD
+    other_expenses  NUMERIC(16, 4) NOT NULL DEFAULT 0 CHECK (other_expenses  >= 0),  -- USD, catch-all (payout, fixed float, …)
     total_amount    NUMERIC(16, 4) NOT NULL DEFAULT 0 CHECK (total_amount    >= 0),
     sort_order     INTEGER        NOT NULL DEFAULT 0,
     created_at     TIMESTAMPTZ    NOT NULL DEFAULT now(),

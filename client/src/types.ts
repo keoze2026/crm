@@ -363,8 +363,12 @@ export interface PortalExpense {
   voice_minutes: number
   rejected_calls: number
   rent_values: number
-  /** Payout expenses, USD. */
-  payout_expenses: number
+  /** Call recording, USD. */
+  call_recording: number
+  /** Voip shield, USD. */
+  voip_shield: number
+  /** Catch-all for the remaining expenses (payout, fixed float, …), USD. */
+  other_expenses: number
   total_amount: number
   sort_order: number
   created_at: string

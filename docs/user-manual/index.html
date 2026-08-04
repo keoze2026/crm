@@ -394,15 +394,15 @@
         <thead><tr><th>Column</th><th>Meaning</th></tr></thead>
         <tbody>
           <tr><td><b>Name</b></td><td>The provider / expense line. Type to add or rename.</td></tr>
-          <tr><td><b>Voice Minutes · Rejected Leads · Rent values · Payout expenses</b></td><td>The component amounts that make up the bill. You type each.</td></tr>
-          <tr><td><b>Total Amount (Usd)</b></td><td>Defaults to the sum of the four components, but you can <b>override</b> it for a flat fee.</td></tr>
+          <tr><td><b>Voice Minutes · Rejected Leads · Rent values · Call Recording (USD) · Voip Shield (USD) · Other expenses (USD)</b></td><td>The component amounts that make up the bill. You type each — numbers only. <b>Other expenses</b> is the catch-all for everything left over (payout, fixed float, …).</td></tr>
+          <tr><td><b>Total Amount (Usd)</b></td><td>Defaults to the sum of the component columns, but you can <b>override</b> it for a flat fee.</td></tr>
           <tr><td><b>% of Total</b></td><td>That row's share of the month's grand total — calculated for you.</td></tr>
         </tbody>
       </table>
       <p>Rows auto-save when you click away, and the bottom row adds a new provider. Below the sheet, a per-metric
       chart panel compares providers and a navy band shows the month's <b>Total Expenses</b>.</p>
       <div class="callout note"><span class="h">Auto total, with an override</span>
-        <p>Leave <b>Total Amount</b> alone and it tracks the four component columns; type a value to pin a flat
+        <p>Leave <b>Total Amount</b> alone and it tracks the component columns; type a value to pin a flat
         amount (e.g. a fixed fee) independent of them.</p>
       </div>
     </section>

@@ -21,7 +21,8 @@ final class PortalExpenseController
         $month = $this->normaliseMonth(Http::query('month'));
 
         $sql = 'SELECT id, to_char(month, \'YYYY-MM-DD\') AS month, name,
-                       voice_minutes, rejected_calls, rent_values, payout_expenses, total_amount,
+                       voice_minutes, rejected_calls, rent_values,
+                       call_recording, voip_shield, other_expenses, total_amount,
                        sort_order, created_at, updated_at
                   FROM portal_expenses';
         $params = [];
@@ -55,21 +56,25 @@ final class PortalExpenseController
 
         $stmt = Database::connection()->prepare(
             'INSERT INTO portal_expenses
-                (month, name, voice_minutes, rejected_calls, rent_values, payout_expenses, total_amount, sort_order)
-             VALUES (:month, :name, :vm, :rc, :rv, :payout, :total, :sort)
+                (month, name, voice_minutes, rejected_calls, rent_values,
+                 call_recording, voip_shield, other_expenses, total_amount, sort_order)
+             VALUES (:month, :name, :vm, :rc, :rv, :cr, :vs, :other, :total, :sort)
              RETURNING id, to_char(month, \'YYYY-MM-DD\') AS month, name,
-                       voice_minutes, rejected_calls, rent_values, payout_expenses, total_amount,
+                       voice_minutes, rejected_calls, rent_values,
+                       call_recording, voip_shield, other_expenses, total_amount,
                        sort_order, created_at, updated_at'
         );
         $stmt->execute([
             ':month' => $month,
             ':name'  => $name,
-            ':vm'     => $this->money($body['voice_minutes']   ?? 0),
-            ':rc'     => $this->money($body['rejected_calls']  ?? 0),
-            ':rv'     => $this->money($body['rent_values']     ?? 0),
-            ':payout' => $this->money($body['payout_expenses'] ?? 0),
-            ':total'  => $this->money($body['total_amount']    ?? 0),
-            ':sort'   => $sortOrder,
+            ':vm'    => $this->money($body['voice_minutes']  ?? 0),
+            ':rc'    => $this->money($body['rejected_calls'] ?? 0),
+            ':rv'    => $this->money($body['rent_values']    ?? 0),
+            ':cr'    => $this->money($body['call_recording'] ?? 0),
+            ':vs'    => $this->money($body['voip_shield']    ?? 0),
+            ':other' => $this->money($body['other_expenses'] ?? 0),
+            ':total' => $this->money($body['total_amount']   ?? 0),
+            ':sort'  => $sortOrder,
         ]);
         Http::json($this->cast([$stmt->fetch()])[0], 201);
     }
@@ -81,27 +86,32 @@ final class PortalExpenseController
         $stmt = Database::connection()->prepare(
             'UPDATE portal_expenses SET
                 name           = COALESCE(:name, name),
-                voice_minutes   = COALESCE(:vm, voice_minutes),
-                rejected_calls  = COALESCE(:rc, rejected_calls),
-                rent_values     = COALESCE(:rv, rent_values),
-                payout_expenses = COALESCE(:payout, payout_expenses),
-                total_amount    = COALESCE(:total, total_amount),
-                sort_order      = COALESCE(:sort, sort_order),
+                voice_minutes  = COALESCE(:vm, voice_minutes),
+                rejected_calls = COALESCE(:rc, rejected_calls),
+                rent_values    = COALESCE(:rv, rent_values),
+                call_recording = COALESCE(:cr, call_recording),
+                voip_shield    = COALESCE(:vs, voip_shield),
+                other_expenses = COALESCE(:other, other_expenses),
+                total_amount   = COALESCE(:total, total_amount),
+                sort_order     = COALESCE(:sort, sort_order),
                 updated_at     = now()
              WHERE id = :id
              RETURNING id, to_char(month, \'YYYY-MM-DD\') AS month, name,
-                       voice_minutes, rejected_calls, rent_values, payout_expenses, total_amount,
+                       voice_minutes, rejected_calls, rent_values,
+                       call_recording, voip_shield, other_expenses, total_amount,
                        sort_order, created_at, updated_at'
         );
         $stmt->execute([
             ':id'    => (int) $params['id'],
             ':name'  => isset($body['name']) ? trim((string) $body['name']) : null,
-            ':vm'     => isset($body['voice_minutes'])   ? $this->money($body['voice_minutes'])   : null,
-            ':rc'     => isset($body['rejected_calls'])  ? $this->money($body['rejected_calls'])  : null,
-            ':rv'     => isset($body['rent_values'])     ? $this->money($body['rent_values'])     : null,
-            ':payout' => isset($body['payout_expenses']) ? $this->money($body['payout_expenses']) : null,
-            ':total'  => isset($body['total_amount'])    ? $this->money($body['total_amount'])    : null,
-            ':sort'   => isset($body['sort_order'])      ? (int) $body['sort_order'] : null,
+            ':vm'    => isset($body['voice_minutes'])  ? $this->money($body['voice_minutes'])  : null,
+            ':rc'    => isset($body['rejected_calls']) ? $this->money($body['rejected_calls']) : null,
+            ':rv'    => isset($body['rent_values'])    ? $this->money($body['rent_values'])    : null,
+            ':cr'    => isset($body['call_recording']) ? $this->money($body['call_recording']) : null,
+            ':vs'    => isset($body['voip_shield'])    ? $this->money($body['voip_shield'])    : null,
+            ':other' => isset($body['other_expenses']) ? $this->money($body['other_expenses']) : null,
+            ':total' => isset($body['total_amount'])   ? $this->money($body['total_amount'])   : null,
+            ':sort'  => isset($body['sort_order'])     ? (int) $body['sort_order'] : null,
         ]);
         $row = $stmt->fetch();
         if (!$row) {
@@ -159,11 +169,13 @@ final class PortalExpenseController
                 continue;
             }
             $r['id']             = (int) $r['id'];
-            $r['voice_minutes']   = (float) $r['voice_minutes'];
-            $r['rejected_calls']  = (float) $r['rejected_calls'];
-            $r['rent_values']     = (float) $r['rent_values'];
-            $r['payout_expenses'] = (float) $r['payout_expenses'];
-            $r['total_amount']    = (float) $r['total_amount'];
+            $r['voice_minutes']  = (float) $r['voice_minutes'];
+            $r['rejected_calls'] = (float) $r['rejected_calls'];
+            $r['rent_values']    = (float) $r['rent_values'];
+            $r['call_recording'] = (float) $r['call_recording'];
+            $r['voip_shield']    = (float) $r['voip_shield'];
+            $r['other_expenses'] = (float) $r['other_expenses'];
+            $r['total_amount']   = (float) $r['total_amount'];
             $r['sort_order']     = (int) $r['sort_order'];
         }
         return $rows;
