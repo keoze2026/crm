@@ -2,10 +2,9 @@ import { useState } from 'react'
 import { api } from '../api/client'
 import DepartmentSheet from '../components/DepartmentSheet'
 import { PageHeader } from '../components/Layout'
-import { MonthSelector, currentMonth, formatMonth } from '../components/MonthSelector'
+import { MonthSelector, currentMonth, formatMonth, shiftMonth } from '../components/MonthSelector'
 import ReviewSheet from '../components/ReviewSheet'
 import { Button, Card, CardHeader, DownloadIcon, PageLoader, SegmentedTabs } from '../components/ui'
-import { formatDmy, today } from '../lib/format'
 import { buildBehaviourPdf, buildDepartmentsPdf, buildPerformancePdf } from '../lib/sheetPdf'
 import { useAsync } from '../lib/useAsync'
 import type { ReviewKind } from '../types'
@@ -20,21 +19,21 @@ const TABS: { id: Tab; label: string }[] = [
 
 export default function Review() {
   const [tab, setTab] = useState<Tab>('performance')
-  const [month, setMonth] = useState<string>(currentMonth())
+  // A review is about the month BEFORE it is written — the sheet you fill in during
+  // September judges August — so the page opens on last month, not this one.
+  const [month, setMonth] = useState<string>(() => shiftMonth(currentMonth(), -1))
 
-  const departments = useAsync(() => api.reviewDepartments(), [])
-  // Behaviour is a monthly sheet; performance is a running one, so only the former passes
-  // a month. The Department tab needs no entries at all.
+  // All three tabs are month-wise: departments carry the score they held that month, and
+  // both entry tabs carry the rows written about it.
+  const departments = useAsync(() => api.reviewDepartments(month), [month])
   const entries = useAsync(
-    () => tab === 'department'
-      ? Promise.resolve([])
-      : api.reviewEntries(tab, tab === 'behaviour' ? month : undefined),
+    () => tab === 'department' ? Promise.resolve([]) : api.reviewEntries(tab, month),
     [tab, month],
   )
-  // The NAME cell picks from the shared staff roster (the same list the Queues page keeps),
-  // and can add to or remove from it in place. Tolerated as optional — an install where the
-  // queues tables don't exist yet still loads the page, just with an empty list.
-  const roster = useAsync(() => api.queuePeople().catch(() => []), [])
+  // The NAME cell picks from the shared staff roster (the Staff page's list), which is
+  // also where each person's departments come from. Tolerated as optional — an install
+  // where the staff tables don't exist yet still loads the page, just with an empty list.
+  const roster = useAsync(() => api.staff().catch(() => []), [])
 
   const reload = () => { entries.reload(); departments.reload() }
   const loading = departments.loading || entries.loading
@@ -46,21 +45,24 @@ export default function Review() {
   const depts = departments.data ?? []
   const canExport = tab === 'department' ? depts.length > 0 : rows.length > 0
 
+  const label = formatMonth(month)
   const exportPdf = () => {
-    const stamp = formatDmy(today())
     if (tab === 'performance') {
-      buildPerformancePdf(rows, depts).save(`Review_Performance_${stamp}.pdf`)
+      buildPerformancePdf(rows, depts, label).save(`Review_Performance_${month}.pdf`)
     } else if (tab === 'behaviour') {
-      buildBehaviourPdf(rows, depts, formatMonth(month)).save(`Review_Behaviour_${month}.pdf`)
+      buildBehaviourPdf(rows, depts, label).save(`Review_Behaviour_${month}.pdf`)
     } else {
-      buildDepartmentsPdf(depts).save(`Review_Departments_${stamp}.pdf`)
+      buildDepartmentsPdf(depts, label).save(`Review_Departments_${month}.pdf`)
     }
   }
 
   return (
     <div>
-      <PageHeader title="Review" subtitle="Monthly performance and behaviour reviews">
-        {tab === 'behaviour' && <MonthSelector value={month} onChange={setMonth} />}
+      <PageHeader
+        title="Review"
+        subtitle={`Reviewing ${label}`}
+      >
+        <MonthSelector value={month} onChange={setMonth} />
         <Button variant="secondary" disabled={!canExport} onClick={exportPdf}>
           <DownloadIcon />PDF
         </Button>
@@ -73,23 +75,24 @@ export default function Review() {
       ) : (
         <Card>
           <CardHeader
-            title={
-              tab === 'performance' ? 'Performance'
-                : tab === 'behaviour' ? `Behaviour — ${formatMonth(month)}`
-                  : 'Department'
-            }
+            title={`${tab === 'performance' ? 'Performance' : tab === 'behaviour' ? 'Behaviour' : 'Department'} — ${label}`}
           />
           <div className="p-4">
             {tab === 'department' ? (
-              <DepartmentSheet departments={departments.data ?? []} onChanged={reload} />
+              <DepartmentSheet
+                // Remount on a month change so no row keeps the previous month's draft.
+                key={month}
+                month={month}
+                departments={depts}
+                onChanged={reload}
+              />
             ) : (
               <ReviewSheet
-                // Remount when the tab or month changes so no row keeps a stale draft.
                 key={`${tab}-${month}`}
                 kind={tab}
                 month={month}
-                entries={entries.data ?? []}
-                departments={departments.data ?? []}
+                entries={rows}
+                departments={depts}
                 people={roster.data ?? []}
                 onChanged={reload}
                 onRosterChanged={roster.reload}

@@ -2,28 +2,35 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api/client'
 import { matches, parseNameList } from '../lib/queues'
-import type { QueuePerson } from '../types'
+import type { StaffMember } from '../types'
 import { Spinner, cx } from './ui'
 
 /**
  * A name cell that is a list, not a text box: pick someone in one click, and add or remove
- * people without leaving the row. The list is the shared staff roster (the same one the
- * Queues page keeps), so a name typed once anywhere is a click everywhere after that.
+ * people without leaving the row. The list is the shared staff roster managed on the Staff
+ * page — the same one the Queues sheet reads — so a name added once is a click everywhere
+ * after that, and each entry shows the departments that person belongs to.
  *
- * Deleting only takes the person off the roster — rows already written keep the name they
- * were saved with, since a review stores the name as text, not a link.
+ * Deleting takes the person off the roster entirely (their Queues record and their
+ * attendance, leave and salary rows go with them). Rows already written keep the name they
+ * were saved with, since a review stores the name as text as well as a link.
  *
  * Rendered in a portal so it escapes the sheet's horizontal scroll container.
  */
 export default function NamePicker({
-  value, people, onChange, onRosterChanged, placeholder = 'Select name',
+  value, people, onChange, onRosterChanged, departmentId = null, placeholder = 'Select name',
 }: {
   value: string
-  people: QueuePerson[]
+  people: StaffMember[]
   /** Called with the chosen name — the cell saves it like any other edit. */
-  onChange: (name: string) => void
+  onChange: (name: string, staffId: number | null) => void
   /** The roster changed (a name was added or removed) — the page reloads it. */
   onRosterChanged: () => void
+  /**
+   * The department band this cell sits in. Someone added from here joins that department,
+   * so the person lands in the band they were typed under rather than nowhere.
+   */
+  departmentId?: number | null
   placeholder?: string
 }) {
   const [open, setOpen] = useState(false)
@@ -41,7 +48,7 @@ export default function NamePicker({
     if (!open || !triggerRef.current) return
     const r = triggerRef.current.getBoundingClientRect()
     const margin = 8
-    const width = Math.min(280, window.innerWidth - margin * 2)
+    const width = Math.min(300, window.innerWidth - margin * 2)
     let left = r.left
     if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width
     if (left < margin) left = margin
@@ -62,33 +69,33 @@ export default function NamePicker({
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
   })
 
-  const shown = people.filter((p) => search.trim() === '' || matches(p.name, search))
+  // Searching matches a department too, so "audits" finds everyone in it.
+  const shown = people.filter((p) =>
+    search.trim() === '' || matches(p.name, search) || p.departments.some((d) => matches(d.name, search)),
+  )
 
-  const pick = (name: string) => { onChange(name); close() }
+  const pick = (person: StaffMember) => { onChange(person.name, person.id); close() }
 
   const add = async () => {
     const names = parseNameList(draft)
     if (names.length === 0 || busy) return
     setBusy(true); setError(null)
     try {
-      const res = await api.createQueuePeople(names)
+      const res = await api.createStaff(names, departmentId === null ? [] : [departmentId])
       onRosterChanged()
       // Adding from a row means "this is the person" — select the first one straight away.
       const only = res.created[0] ?? res.existing[0]
-      if (only) { onChange(only.name); close(); return }
+      if (only) { onChange(only.name, only.id); close(); return }
       setDraft('')
     } catch (err) {
       setError((err as Error).message)
     } finally { setBusy(false) }
   }
 
-  const remove = async (person: QueuePerson) => {
-    const warning = person.assignment_id !== null
-      ? `Remove "${person.name}" from the staff list? Their row on the Queues sheet goes too; reviews already saved keep the name.`
-      : `Remove "${person.name}" from the staff list? Reviews already saved keep the name.`
-    if (!confirm(warning)) return
+  const remove = async (person: StaffMember) => {
+    if (!confirm(`Remove ${person.name} from the staff list? Their queue, attendance, leave and salary rows go too.`)) return
     try {
-      await api.deleteQueuePerson(person.id)
+      await api.deleteStaff(person.id)
       onRosterChanged()
     } catch (err) { setError((err as Error).message) }
   }
@@ -119,48 +126,65 @@ export default function NamePicker({
           <input
             value={search}
             autoFocus
-            placeholder="Search names…"
+            placeholder="Search names or departments…"
             onChange={(e) => setSearch(e.target.value)}
             className={inputCls}
           />
 
           {people.length === 0 ? (
-            <p className="py-4 text-center text-[11px] font-medium text-slate-500">No names yet.</p>
+            <p className="py-4 text-center text-[11px] font-medium text-slate-500">
+              No staff yet.
+            </p>
           ) : shown.length === 0 ? (
             <p className="py-4 text-center text-[11px] font-medium text-slate-500">No match.</p>
           ) : (
             <ul className="mt-1.5 max-h-56 space-y-0.5 overflow-y-auto">
-              {shown.map((p) => (
-                <li key={p.id}>
-                  <div className={cx(
-                    'flex items-center gap-1 rounded border px-1.5 py-1 transition-colors',
-                    p.name === value
-                      ? 'border-[#1a3654] bg-[#1a3654]'
-                      : 'border-transparent hover:border-slate-300 hover:bg-slate-100',
-                  )}>
-                    <button
-                      onClick={() => pick(p.name)}
-                      className={cx(
-                        'min-w-0 flex-1 truncate text-left text-xs font-semibold',
-                        p.name === value ? 'text-white' : 'text-slate-800',
-                      )}
-                    >
-                      {p.name}
-                    </button>
-                    <button
-                      onClick={() => remove(p)}
-                      title={`Remove ${p.name} from the list`}
-                      aria-label={`Remove ${p.name} from the list`}
-                      className={cx(
-                        'flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors hover:bg-red-600 hover:text-white',
-                        p.name === value ? 'text-white/70' : 'text-slate-500',
-                      )}
-                    >
-                      <TrashIcon />
-                    </button>
-                  </div>
-                </li>
-              ))}
+              {shown.map((p) => {
+                const selected = p.name === value
+                return (
+                  <li key={p.id}>
+                    <div className={cx(
+                      'flex items-center gap-1 rounded border px-1.5 py-1 transition-colors',
+                      selected
+                        ? 'border-[#1a3654] bg-[#1a3654]'
+                        : 'border-transparent hover:border-slate-300 hover:bg-slate-100',
+                    )}>
+                      <button
+                        onClick={() => pick(p)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <span className={cx(
+                          'block truncate text-xs font-semibold',
+                          selected ? 'text-white' : 'text-slate-800',
+                        )}>
+                          {p.name}
+                        </span>
+                        {/* The departments are the reason this list is shared — a name is
+                            never picked without seeing which band the person belongs to. */}
+                        <span className={cx(
+                          'block truncate text-[10px] font-medium',
+                          selected ? 'text-white/70' : 'text-slate-500',
+                        )}>
+                          {p.departments.length === 0
+                            ? 'No department'
+                            : p.departments.map((d) => d.name).join(' · ')}
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => remove(p)}
+                        title={`Remove ${p.name} from the staff list`}
+                        aria-label={`Remove ${p.name} from the staff list`}
+                        className={cx(
+                          'flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors hover:bg-red-600 hover:text-white',
+                          selected ? 'text-white/70' : 'text-slate-500',
+                        )}
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           )}
 
@@ -175,8 +199,8 @@ export default function NamePicker({
             <button
               onClick={add}
               disabled={draft.trim() === '' || busy}
-              title="Add to the list"
-              aria-label="Add to the list"
+              title="Add to the staff list"
+              aria-label="Add to the staff list"
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#1a3654] text-white transition-colors hover:bg-[#24466b] disabled:bg-slate-300"
             >
               {busy ? <Spinner className="h-4 w-4 text-white" /> : <PlusIcon />}

@@ -17,6 +17,7 @@ use App\Controllers\PortalExpenseController;
 use App\Controllers\QueueController;
 use App\Controllers\RecordController;
 use App\Controllers\ReviewController;
+use App\Controllers\StaffController;
 use App\Controllers\UserController;
 use App\Controllers\VendorController;
 use App\Database;
@@ -107,16 +108,36 @@ $router->get('/queues',                fn () => $queues->index());
 $router->post('/queues',               fn () => $queues->store());
 $router->put('/queues/{id}',           fn ($p) => $queues->update($p));
 $router->delete('/queues/{id}',        fn ($p) => $queues->destroy($p));
-$router->get('/queue-people',          fn () => $queues->people());
-$router->post('/queue-people',         fn () => $queues->storePeople());
-$router->put('/queue-people/{id}',     fn ($p) => $queues->updatePerson($p));
-$router->delete('/queue-people/{id}',  fn ($p) => $queues->destroyPerson($p));
 $router->get('/queue-codes',           fn () => $queues->codes());
 $router->post('/queue-codes',          fn () => $queues->storeCodes());
 $router->put('/queue-codes/{id}',      fn ($p) => $queues->updateCode($p));
 $router->delete('/queue-codes/{id}',   fn ($p) => $queues->destroyCode($p));
 
-// Reviews — the Department catalogue plus the Performance / Behaviour entries
+// Staff management — the roster the Queues and Review sheets pick their names from, plus
+// the department catalogue, the hand-keyed attendance, the leaves sheet and the salaries.
+$staff = new StaffController();
+$router->get('/staff',                       fn () => $staff->index());
+$router->post('/staff',                      fn () => $staff->store());
+$router->put('/staff/{id}',                  fn ($p) => $staff->update($p));
+$router->delete('/staff/{id}',               fn ($p) => $staff->destroy($p));
+$router->get('/departments',                 fn () => $staff->departments());
+$router->post('/departments',                fn () => $staff->storeDepartment());
+$router->put('/departments/{id}',            fn ($p) => $staff->updateDepartment($p));
+$router->delete('/departments/{id}',         fn ($p) => $staff->destroyDepartment($p));
+$router->get('/staff-attendance',            fn () => $staff->attendance());
+$router->post('/staff-attendance',           fn () => $staff->storeAttendance());
+$router->put('/staff-attendance/{id}',       fn ($p) => $staff->updateAttendance($p));
+$router->delete('/staff-attendance/{id}',    fn ($p) => $staff->destroyAttendance($p));
+$router->get('/staff-leaves',                fn () => $staff->leaves());
+$router->post('/staff-leaves',               fn () => $staff->storeLeave());
+$router->put('/staff-leaves/{id}',           fn ($p) => $staff->updateLeave($p));
+$router->delete('/staff-leaves/{id}',        fn ($p) => $staff->destroyLeave($p));
+$router->get('/staff-salaries',              fn () => $staff->salaries());
+$router->post('/staff-salaries',             fn () => $staff->storeSalary());
+$router->put('/staff-salaries/{id}',         fn ($p) => $staff->updateSalary($p));
+$router->delete('/staff-salaries/{id}',      fn ($p) => $staff->destroySalary($p));
+
+// Reviews — the Department scorecard plus the Performance / Behaviour entries
 $reviews = new ReviewController();
 $router->get('/review-departments',         fn () => $reviews->departments());
 $router->post('/review-departments',        fn () => $reviews->storeDepartment());

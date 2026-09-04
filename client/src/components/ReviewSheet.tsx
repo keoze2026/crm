@@ -2,8 +2,13 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api/client'
 import { BEHAVIOUR_RATINGS, NUMERIC, PERFORMANCE_RATINGS } from '../lib/review'
-import type { QueuePerson, ReviewDepartment, ReviewEntry, ReviewKind } from '../types'
+import type { ReviewDepartment, ReviewEntry, ReviewKind, StaffMember } from '../types'
 import NamePicker from './NamePicker'
+import {
+  addBtnCls, addRowCls, bandCls, cellCls, fieldCls, headCls, idxCell, removeBtnCls, rowCls,
+  sheetStroke, tableCls, theadCls,
+} from './sheet'
+import { PlusIcon, TrashIcon } from './sheetIcons'
 import { cx } from './ui'
 
 /**
@@ -17,6 +22,10 @@ import { cx } from './ui'
  * and Sr. No. runs continuously across the bands. Every band ends in a blank row that adds
  * a person to that department, so the band you type under decides where the row lands.
  *
+ * A band's name list is the staff who ARE in that department on the Staff page, so the
+ * sections divide by the same departments everywhere and a name can't be filed under a
+ * band the person doesn't belong to. Someone added from inside a band joins it.
+ *
  * Ratings are dropdowns; the DEPARTMENT cell stays free text because it carries the
  * cross-department notes ("Billing/Audits") rather than the band's own name.
  */
@@ -24,12 +33,12 @@ export default function ReviewSheet({
   kind, month, entries, departments, people, onChanged, onRosterChanged,
 }: {
   kind: ReviewKind
-  /** The month new behaviour rows are filed under (YYYY-MM); ignored for performance. */
+  /** The month the rows are ABOUT (YYYY-MM) — both kinds are filed under it. */
   month: string
   entries: ReviewEntry[]
   departments: ReviewDepartment[]
   /** The staff roster the NAME cell picks from. */
-  people: QueuePerson[]
+  people: StaffMember[]
   onChanged: () => void
   /** A name was added to or removed from the roster. */
   onRosterChanged: () => void
@@ -54,7 +63,7 @@ export default function ReviewSheet({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-2xl border-collapse text-xs [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white">
+      <table className={cx(tableCls, "min-w-2xl")}>
         <colgroup>
           <col style={{ width: '5%' }} />
           {behaviour && <col style={{ width: '9%' }} />}
@@ -66,7 +75,7 @@ export default function ReviewSheet({
           <col style={{ width: '6%' }} />
         </colgroup>
         <thead>
-          <tr className="bg-[#1a3654] text-center text-[11px] font-bold uppercase tracking-wide text-white">
+          <tr className={theadCls}>
             <th className={headCls}>{behaviour ? 'Sr. No' : 'Sr'}</th>
             {behaviour && <th className={headCls}>Month</th>}
             <th className={headCls}>Name</th>
@@ -80,9 +89,14 @@ export default function ReviewSheet({
         <tbody>
           {groups.map((group) => {
             const rows = entries.filter((e) => e.department_id === group.id)
+            // A band offers the staff who are actually in that department — and the
+            // "No department" band offers the people who are in none.
+            const bandPeople = group.id === null
+              ? people.filter((p) => p.departments.length === 0)
+              : people.filter((p) => p.departments.some((d) => d.id === group.id))
             return (
               <Fragment key={`group-${group.id ?? 'none'}`}>
-                <tr className="bg-[#1a3654] text-white">
+                <tr className={bandCls}>
                   <td className="px-2 py-1" />
                   <td className="px-2 py-1 text-[11px] font-bold uppercase tracking-wide" colSpan={COLUMNS - 1}>
                     {group.name}
@@ -97,7 +111,8 @@ export default function ReviewSheet({
                       first={sr === 1}
                       entry={entry}
                       kind={kind}
-                      people={people}
+                      departmentId={group.id}
+                      people={bandPeople}
                       onChanged={onChanged}
                       onRosterChanged={onRosterChanged}
                       // departments={departments}
@@ -108,7 +123,7 @@ export default function ReviewSheet({
                   kind={kind}
                   month={month}
                   departmentId={group.id}
-                  people={people}
+                  people={bandPeople}
                   onChanged={onChanged}
                   onRosterChanged={onRosterChanged}
                 />
@@ -121,25 +136,21 @@ export default function ReviewSheet({
   )
 }
 
-const headCls = 'px-2 py-1.5 text-center text-[11px] font-bold uppercase tracking-wide'
-const cellCls = 'px-1.5 py-0.5'
-const idxCell = cx(cellCls, 'bg-[#bfdeeb] text-center text-xs font-bold text-[#1a3654]')
-const fieldCls =
-  'w-full rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 '
-  + 'placeholder:text-slate-400 focus:border-[#1a3654] focus:outline-none focus:ring-1 focus:ring-[#1a3654]/30'
-
 /** The editable half of a row — the same shape whether it is being added or edited. */
 interface Draft {
   person_name: string
+  /** The roster link that goes with the name; null when the name matches nobody. */
+  staff_id: number | null
   department_note: string
   rating: string
   percentage: string
   notes: string
 }
 
-const blank = (): Draft => ({ person_name: '', department_note: '', rating: '', percentage: '', notes: '' })
+const blank = (): Draft => ({ person_name: '', staff_id: null, department_note: '', rating: '', percentage: '', notes: '' })
 const draftOf = (e: ReviewEntry): Draft => ({
   person_name: e.person_name,
+  staff_id: e.staff_id,
   department_note: e.department_note,
   rating: e.rating,
   percentage: e.percentage === null ? '' : String(e.percentage),
@@ -148,17 +159,19 @@ const draftOf = (e: ReviewEntry): Draft => ({
 
 /** The cells shared by both rows, so the add row can't drift from the saved one. */
 function Cells({
-  draft, onDraft, kind, people, onRosterChanged, onRating, onName, onNotes,
+  draft, onDraft, kind, people, departmentId, onRosterChanged, onRating, onName, onNotes,
 }: {
   draft: Draft
   onDraft: (d: Draft) => void
   kind: ReviewKind
-  /** The NAME cell's list. */
-  people: QueuePerson[]
+  /** The NAME cell's list — the staff in this band's department. */
+  people: StaffMember[]
+  /** The band's department, so a name added from here joins it. */
+  departmentId: number | null
   onRosterChanged: () => void
   /** Pickers save at once rather than waiting for the row to lose focus. */
   onRating?: (value: string) => void
-  onName?: (value: string) => void
+  onName?: (value: string, staffId: number | null) => void
   onNotes?: (value: string) => void
   // The per-row department picker is commented out (the band names the department):
   // departments: ReviewDepartment[]
@@ -178,10 +191,11 @@ function Cells({
         <NamePicker
           value={draft.person_name}
           people={people}
+          departmentId={departmentId}
           onRosterChanged={onRosterChanged}
-          onChange={(name) => {
-            onDraft({ ...draft, person_name: name })
-            onName?.(name)
+          onChange={(name, staffId) => {
+            onDraft({ ...draft, person_name: name, staff_id: staffId })
+            onName?.(name, staffId)
           }}
         />
       </td>
@@ -343,14 +357,15 @@ function NoteCell({ value, onSave }: { value: string; onSave: (text: string) => 
 
 // ── Saved row ───────────────────────────────────────────────────────────────────
 function Row({
-  sr, first, entry, kind, people, onChanged, onRosterChanged,
+  sr, first, entry, kind, people, departmentId, onChanged, onRosterChanged,
 }: {
   sr: number
   /** The client's sheet stamps the month once, on the first row. */
   first: boolean
   entry: ReviewEntry
   kind: ReviewKind
-  people: QueuePerson[]
+  people: StaffMember[]
+  departmentId: number | null
   onChanged: () => void
   onRosterChanged: () => void
   // Only the commented-out department picker needed these:
@@ -364,6 +379,7 @@ function Row({
     const next = { ...draft, ...over }
     const changed =
       next.person_name.trim() !== entry.person_name ||
+      next.staff_id !== entry.staff_id ||
       next.department_note.trim() !== entry.department_note ||
       next.rating !== entry.rating ||
       next.notes.trim() !== entry.notes ||
@@ -373,6 +389,7 @@ function Row({
     try {
       await api.updateReviewEntry(entry.id, {
         person_name: next.person_name.trim(),
+        staff_id: next.staff_id,
         department_note: next.department_note.trim(),
         rating: next.rating,
         ...(kind === 'performance'
@@ -400,7 +417,7 @@ function Row({
   }, 0)
 
   return (
-    <tr ref={rowRef} onBlur={onRowBlur} className="bg-[#d4e9f2] text-[#0f172a]">
+    <tr ref={rowRef} onBlur={onRowBlur} className={rowCls}>
       <td className={idxCell}>{sr}</td>
       {kind === 'behaviour' && (
         <td className={first ? idxCell : cx(cellCls, 'text-center')}>
@@ -409,9 +426,9 @@ function Row({
       )}
       <Cells
         draft={draft} onDraft={setDraft} kind={kind}
-        people={people} onRosterChanged={onRosterChanged}
+        people={people} departmentId={departmentId} onRosterChanged={onRosterChanged}
         onRating={(v) => save({ rating: v })}
-        onName={(v) => save({ person_name: v })}
+        onName={(v, staffId) => save({ person_name: v, staff_id: staffId })}
         onNotes={(v) => save({ notes: v })}
         // departments={departments}
         // onDepartmentNote={(v) => save({ department_note: v })}
@@ -422,7 +439,7 @@ function Row({
             onClick={remove}
             title={`Delete ${entry.person_name}'s row`}
             aria-label={`Delete ${entry.person_name}'s row`}
-            className="flex h-5 w-5 items-center justify-center rounded border border-slate-400 bg-white text-slate-600 transition-colors hover:border-red-600 hover:bg-red-600 hover:text-white"
+            className={removeBtnCls}
           >
             <TrashIcon />
           </button>
@@ -440,7 +457,7 @@ function AddRow({
   month: string
   /** The band this row is being added under — it sets the row's department. */
   departmentId: number | null
-  people: QueuePerson[]
+  people: StaffMember[]
   onChanged: () => void
   onRosterChanged: () => void
   // Only the commented-out department picker needed these:
@@ -455,7 +472,10 @@ function AddRow({
     try {
       await api.createReviewEntry({
         kind,
+        // Both kinds are filed under the month they judge, not the month typed in.
+        month,
         department_id: departmentId,
+        staff_id: draft.staff_id,
         person_name: draft.person_name.trim(),
         department_note: draft.department_note.trim(),
         rating: draft.rating,
@@ -464,7 +484,7 @@ function AddRow({
             percentage: draft.percentage === '' ? null : Number(draft.percentage),
             notes: draft.notes.trim(),
           }
-          : { month }),
+          : {}),
       })
       setDraft(blank())
       onChanged()
@@ -472,12 +492,12 @@ function AddRow({
   }
 
   return (
-    <tr className="bg-[#eaf5fa] text-[#0f172a]" onKeyDown={(e) => { if (e.key === 'Enter') add() }}>
+    <tr className={addRowCls} onKeyDown={(e) => { if (e.key === "Enter") add() }}>
       <td className={cx(idxCell, 'text-slate-400')}>+</td>
-      {kind === 'behaviour' && <td className={cx(cellCls, 'bg-[#eaf5fa]')} />}
+      {kind === 'behaviour' && <td className={cellCls} />}
       <Cells
         draft={draft} onDraft={setDraft} kind={kind}
-        people={people} onRosterChanged={onRosterChanged}
+        people={people} departmentId={departmentId} onRosterChanged={onRosterChanged}
         // departments={departments}
       />
       <td className="p-0">
@@ -487,7 +507,7 @@ function AddRow({
             disabled={draft.person_name.trim() === ''}
             title="Add row"
             aria-label="Add row"
-            className="flex h-5 w-5 items-center justify-center rounded bg-[#1a3654] text-white transition-colors hover:bg-[#24466b] disabled:bg-slate-300"
+            className={addBtnCls}
           >
             <PlusIcon />
           </button>
@@ -505,22 +525,9 @@ function monthName(iso: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'long' }).toUpperCase()
 }
 
-const stroke = {
-  fill: 'none' as const, stroke: 'currentColor', strokeWidth: 2.4,
-  strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const,
-}
-
-const PlusIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" {...stroke}><path d="M12 5v14M5 12h14" /></svg>
-)
-const TrashIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" {...stroke}>
-    <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
-  </svg>
-)
 /** Solid once a note exists, so a glance down the column shows who has one. */
 const NoteIcon = ({ filled }: { filled: boolean }) => (
-  <svg width="12" height="12" viewBox="0 0 24 24" {...stroke}
+  <svg width="12" height="12" viewBox="0 0 24 24" {...sheetStroke}
     className={cx('shrink-0', filled ? 'text-[#1a3654]' : 'text-slate-400')}
     fill={filled ? 'currentColor' : 'none'} fillOpacity={filled ? 0.15 : 0}>
     <path d="M4 4h16v12H8l-4 4z" />

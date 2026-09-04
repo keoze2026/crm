@@ -26,6 +26,19 @@ function toDate(iso: string): Date {
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const DAYS   = ['MON','TUE','WED','THU','FRI','SAT','SUN']
 
+/**
+ * Whole-calendar-month bounds, `delta` months from the current one. Local parts, matching
+ * `today()` — a UTC-derived month would roll over a day early for US users each evening.
+ */
+function monthBounds(delta: number): Range {
+  const now = new Date()
+  const first = new Date(now.getFullYear(), now.getMonth() + delta, 1)
+  const last = new Date(now.getFullYear(), now.getMonth() + delta + 1, 0)
+  const iso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return { from: iso(first), to: iso(last) }
+}
+
 const PRESETS = [
   { label: 'Today',        range: (): Range => ({ from: today(), to: today() }) },
   { label: 'Yesterday',    range: (): Range => { const d = daysAgo(1); return { from: d, to: d } } },
@@ -33,6 +46,9 @@ const PRESETS = [
   { label: 'Last 30 days', range: (): Range => ({ from: daysAgo(29), to: today() }) },
   { label: 'Last 90 days', range: (): Range => ({ from: daysAgo(89), to: today() }) },
   { label: 'This month',   range: (): Range => ({ from: `${today().slice(0,7)}-01`, to: today() }) },
+  // The whole of last month, end included — "This month" stops at today, but a finished
+  // month has no reason to.
+  { label: 'Last month',   range: (): Range => monthBounds(-1) },
 ]
 
 // ─── Calendar ─────────────────────────────────────────────────────────────────

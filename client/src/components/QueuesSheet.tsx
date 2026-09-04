@@ -3,15 +3,22 @@ import { createPortal } from 'react-dom'
 import { api } from '../api/client'
 import { num } from '../lib/format'
 import { matches } from '../lib/queues'
-import type { QueueAssignment, QueueCode, QueuePerson } from '../types'
+import type { QueueAssignment, QueueCode, StaffMember } from '../types'
+import {
+  addBtnCls, addRowCls, cellCls, fieldCls, headCls, idxCell, removeBtnCls, rowCls, sheetStroke,
+  tableCls, theadCls,
+} from './sheet'
 import { Spinner, cx } from './ui'
 
 /**
- * The Queues sheet: Sr. No. · Name · Queues · Total, keyed straight into the table.
+ * The Queues sheet: Sr. No. · Name · Department · Queues · Total, keyed straight into the
+ * table.
  *
- * Name is a dropdown of the names in the list above; Queues is a dropdown that ticks as
- * many queue codes as you like. Sr. No. is the row's position and Total is how many
- * queues the row holds — neither is typed, and neither is stored.
+ * Name is a dropdown of the shared staff roster (managed on the Staff page), and
+ * DEPARTMENT is read straight off whoever is picked — it is never typed here, so it can
+ * never disagree with the Staff page. Queues is a dropdown that ticks as many queue codes
+ * as you like. Sr. No. is the row's position and Total is how many queues the row holds —
+ * none of the three is typed, and none is stored.
  *
  * Existing rows save as soon as you change them (the queue dropdown saves once, when it
  * closes, rather than on every tick). The trailing row adds a record.
@@ -23,7 +30,7 @@ export default function QueuesSheet({
   rows, people, codes, filtered, onChanged,
 }: {
   rows: { index: number; row: QueueAssignment }[]
-  people: QueuePerson[]
+  people: StaffMember[]
   codes: QueueCode[]
   /** True while a search narrows the sheet — the totals bar says so. */
   filtered: boolean
@@ -35,18 +42,20 @@ export default function QueuesSheet({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-2xl border-collapse text-xs [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white">
+      <table className={cx(tableCls, "min-w-2xl")}>
         <colgroup>
           <col style={{ width: '6%' }} />
-          <col style={{ width: '21%' }} />
-          <col style={{ width: '60%' }} />
+          <col style={{ width: '19%' }} />
+          <col style={{ width: '17%' }} />
+          <col style={{ width: '45%' }} />
           <col style={{ width: '7%' }} />
           <col style={{ width: '6%' }} />
         </colgroup>
         <thead>
-          <tr className="bg-[#1a3654] text-center text-xs font-bold uppercase tracking-wide text-white">
+          <tr className={theadCls}>
             <th className={headCls}>Sr. No.</th>
             <th className={headCls}>Name</th>
+            <th className={headCls}>Department</th>
             <th className={headCls}>Queues</th>
             <th className={headCls}>Total</th>
             <th className={headCls} aria-label="actions" />
@@ -60,7 +69,7 @@ export default function QueuesSheet({
         </tbody>
         <tfoot>
           <tr className="bg-[#1a3654] font-bold text-white">
-            <td className="px-2 py-1.5 text-center text-[11px] font-bold uppercase" colSpan={3}>
+            <td className="px-2 py-1.5 text-center text-[11px] font-bold uppercase" colSpan={4}>
               {filtered ? 'Total (shown)' : 'Total'}
             </td>
             <td className="px-2 py-1.5 text-center text-xs tabular-nums">{num(total)}</td>
@@ -72,20 +81,14 @@ export default function QueuesSheet({
   )
 }
 
-const headCls = 'px-2 py-1.5 text-center text-[11px] font-bold uppercase tracking-wide'
-const cellCls = 'px-1.5 py-0.5'
-/** Sr. No. column — the darker label band, matching the other sheets. */
-const idxCell = cx(cellCls, 'bg-[#bfdeeb] text-center text-xs font-bold text-[#1a3654]')
-const selectCls =
-  'w-full rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs font-semibold text-slate-900 '
-  + 'focus:border-[#1a3654] focus:outline-none focus:ring-1 focus:ring-[#1a3654]/30'
+const selectCls = cx(fieldCls, 'font-semibold')
 /** Queue code as it reads in the sheet — small, bordered, spreadsheet blue. */
 const chipCls = 'rounded border border-blue-300 bg-blue-50 px-1 text-[10px] font-bold leading-4 text-[#1d4ed8]'
 
 // ── Existing record ─────────────────────────────────────────────────────────────
 function Row({
   index, row, people, codes, onChanged,
-}: { index: number; row: QueueAssignment; people: QueuePerson[]; codes: QueueCode[]; onChanged: () => void }) {
+}: { index: number; row: QueueAssignment; people: StaffMember[]; codes: QueueCode[]; onChanged: () => void }) {
   // The queue dropdown edits this draft live (so Total moves with it) and saves once,
   // when it closes — one request per edit instead of one per tick.
   const signature = row.codes.map((c) => c.id).join(',')
@@ -127,7 +130,7 @@ function Row({
   }
 
   return (
-    <tr className="bg-[#d4e9f2] text-[#0f172a]">
+    <tr className={rowCls}>
       <td className={idxCell}>{index}</td>
       <td className={cellCls}>
         <select
@@ -144,6 +147,9 @@ function Row({
           ))}
         </select>
       </td>
+      <td className={cx(cellCls, 'text-[11px] font-semibold text-slate-700')}>
+        <DepartmentCell departments={row.departments} />
+      </td>
       <td className={cellCls}>
         <QueuePicker codes={codes} value={draft} onChange={setDraft} onClose={() => commitCodes(draft)} />
       </td>
@@ -155,7 +161,7 @@ function Row({
               onClick={remove}
               title={`Delete ${row.name}'s record`}
               aria-label={`Delete ${row.name}'s record`}
-              className="flex h-5 w-5 items-center justify-center rounded border border-slate-400 bg-white text-slate-600 transition-colors hover:border-red-600 hover:bg-red-600 hover:text-white"
+              className={removeBtnCls}
             >
               <TrashIcon />
             </button>
@@ -167,7 +173,7 @@ function Row({
 }
 
 // ── Trailing "add a record" row ─────────────────────────────────────────────────
-function AddRow({ free, codes, onChanged }: { free: QueuePerson[]; codes: QueueCode[]; onChanged: () => void }) {
+function AddRow({ free, codes, onChanged }: { free: StaffMember[]; codes: QueueCode[]; onChanged: () => void }) {
   const [personId, setPersonId] = useState<number | ''>('')
   const [picked, setPicked] = useState<number[]>([])
   const [busy, setBusy] = useState(false)
@@ -183,7 +189,7 @@ function AddRow({ free, codes, onChanged }: { free: QueuePerson[]; codes: QueueC
   }
 
   return (
-    <tr className="bg-[#eaf5fa] text-[#0f172a]">
+    <tr className={addRowCls}>
       <td className={cx(idxCell, 'text-slate-400')}>+</td>
       <td className={cellCls}>
         <select
@@ -196,6 +202,10 @@ function AddRow({ free, codes, onChanged }: { free: QueuePerson[]; codes: QueueC
           {free.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </td>
+      {/* Follows the picked name straight away, so the band is visible before saving. */}
+      <td className={cx(cellCls, 'text-[11px] font-semibold text-slate-700')}>
+        <DepartmentCell departments={free.find((p) => p.id === personId)?.departments ?? []} />
+      </td>
       <td className={cellCls}>
         <QueuePicker codes={codes} value={picked} onChange={setPicked} />
       </td>
@@ -207,13 +217,30 @@ function AddRow({ free, codes, onChanged }: { free: QueuePerson[]; codes: QueueC
             disabled={personId === '' || busy}
             title="Add record"
             aria-label="Add record"
-            className="flex h-5 w-5 items-center justify-center rounded bg-[#1a3654] text-white transition-colors hover:bg-[#24466b] disabled:bg-slate-300"
+            className={addBtnCls}
           >
             {busy ? <Spinner className="h-4 w-4 text-white" /> : <PlusIcon />}
           </button>
         </div>
       </td>
     </tr>
+  )
+}
+
+/**
+ * The DEPARTMENT cell — read-only on purpose. Departments are edited on the Staff page, so
+ * showing them here can never let the two lists drift apart.
+ */
+function DepartmentCell({ departments }: { departments: { id: number; name: string }[] }) {
+  if (departments.length === 0) return <span className="text-slate-400">—</span>
+  return (
+    <div className="flex flex-wrap gap-0.5">
+      {departments.map((d) => (
+        <span key={d.id} className="rounded border border-slate-300 bg-slate-50 px-1 text-[10px] font-bold leading-4 text-slate-700">
+          {d.name}
+        </span>
+      ))}
+    </div>
   )
 }
 
@@ -369,25 +396,21 @@ function QueuePicker({
 }
 
 // ── Icons ───────────────────────────────────────────────────────────────────────
-
-const stroke = {
-  fill: 'none' as const, stroke: 'currentColor', strokeWidth: 2.4,
-  strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const,
-}
+// Sized larger than the shared row icons — these sit in the queue picker, not in a cell.
 
 const PlusIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" {...stroke}><path d="M12 5v14M5 12h14" /></svg>
+  <svg width="15" height="15" viewBox="0 0 24 24" {...sheetStroke}><path d="M12 5v14M5 12h14" /></svg>
 )
 const CheckIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" {...stroke}><path d="m20 6-11 11-5-5" /></svg>
+  <svg width="12" height="12" viewBox="0 0 24 24" {...sheetStroke}><path d="m20 6-11 11-5-5" /></svg>
 )
 const TrashIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" {...stroke}>
+  <svg width="14" height="14" viewBox="0 0 24 24" {...sheetStroke}>
     <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
   </svg>
 )
 const CaretIcon = ({ open }: { open: boolean }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" {...stroke}
+  <svg width="14" height="14" viewBox="0 0 24 24" {...sheetStroke}
     className={cx('shrink-0 text-slate-600 transition-transform', open && 'rotate-180')}>
     <path d="m6 9 6 6 6-6" />
   </svg>

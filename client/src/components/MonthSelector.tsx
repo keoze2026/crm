@@ -12,7 +12,8 @@ export function currentMonth(): string {
 }
 
 /** Shift a "YYYY-MM" value by n months. */
-function shiftMonth(value: string, n: number): string {
+// eslint-disable-next-line react-refresh/only-export-components
+export function shiftMonth(value: string, n: number): string {
   const [y, m] = value.split('-').map(Number)
   const d = new Date(y, m - 1 + n, 1)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`

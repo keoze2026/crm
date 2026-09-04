@@ -27,6 +27,7 @@ const NAV: NavItem[] = [
   { to: '/portal-expenses', label: 'Portal Expenses', perm: 'portal-expenses', icon: icon(<><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /><path d="M6 15h4" /></>) },
   { to: '/queues', label: 'Queues', perm: 'queues', icon: icon(<><rect x="3" y="4" width="18" height="4" rx="1" /><rect x="3" y="10" width="18" height="4" rx="1" /><rect x="3" y="16" width="18" height="4" rx="1" /><path d="M7 6h.01M7 12h.01M7 18h.01" /></>) },
   { to: '/review', label: 'Review', perm: 'reviews', icon: icon(<><path d="M9 11l3 3 8-8" /><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" /></>) },
+  { to: '/staff', label: 'Staff Management', perm: 'staff', icon: icon(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></>) },
   // Reports (download hub) disabled — Complete Report is the only report page now.
   // { to: '/reports', label: 'Reports', icon: icon(<><path d="M3 3v18h18" /><path d="m7 14 3-3 3 3 5-5" /></>) },
   { to: '/complete-report', label: 'Complete Report', perm: 'complete-report', icon: icon(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M16 13H8M16 17H8M10 9H8" /></>) },

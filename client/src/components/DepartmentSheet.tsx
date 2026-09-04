@@ -2,21 +2,29 @@ import { useRef, useState } from 'react'
 import { api } from '../api/client'
 import { NUMERIC, PERFORMANCE_RATINGS } from '../lib/review'
 import type { ReviewDepartment } from '../types'
+import {
+  addBtnCls, addRowCls, cellCls, fieldCls, headCls, idxCell, removeBtnCls, rowCls, tableCls, theadCls,
+} from './sheet'
+import { PlusIcon, TrashIcon } from './sheetIcons'
 import { cx } from './ui'
 
 /**
  * The Department tab: Sr. No · Department · Perfomance · %.
  *
- * It is also the catalogue the Performance and Behaviour tabs group by, so a department
- * added here becomes a band on both — and removing one leaves its people behind under
- * "No department" rather than deleting their reviews.
+ * The department NAMES are the shared catalogue (the same list the Staff page files people
+ * into, and the bands the other two tabs group by), so a department added here becomes a
+ * band everywhere — and removing one leaves its people behind under "No department" rather
+ * than deleting their reviews.
+ *
+ * The rating and the % belong to the MONTH, not the department: each month gets its own
+ * score, so last month's 65% is still there when this month reads 80%.
  */
 export default function DepartmentSheet({
-  departments, onChanged,
-}: { departments: ReviewDepartment[]; onChanged: () => void }) {
+  month, departments, onChanged,
+}: { month: string; departments: ReviewDepartment[]; onChanged: () => void }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-lg border-collapse text-xs [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white">
+      <table className={cx(tableCls, "min-w-lg")}>
         <colgroup>
           <col style={{ width: '9%' }} />
           <col style={{ width: '45%' }} />
@@ -25,7 +33,7 @@ export default function DepartmentSheet({
           <col style={{ width: '8%' }} />
         </colgroup>
         <thead>
-          <tr className="bg-[#1a3654] text-center text-[11px] font-bold uppercase tracking-wide text-white">
+          <tr className={theadCls}>
             <th className={headCls}>Sr. No</th>
             <th className={headCls}>Department</th>
             <th className={headCls}>Perfomance</th>
@@ -35,21 +43,14 @@ export default function DepartmentSheet({
         </thead>
         <tbody>
           {departments.map((d, i) => (
-            <Row key={d.id} index={i + 1} department={d} onChanged={onChanged} />
+            <Row key={d.id} index={i + 1} month={month} department={d} onChanged={onChanged} />
           ))}
-          <AddRow onChanged={onChanged} />
+          <AddRow month={month} onChanged={onChanged} />
         </tbody>
       </table>
     </div>
   )
 }
-
-const headCls = 'px-2 py-1.5 text-center text-[11px] font-bold uppercase tracking-wide'
-const cellCls = 'px-1.5 py-0.5'
-const idxCell = cx(cellCls, 'bg-[#bfdeeb] text-center text-xs font-bold text-[#1a3654]')
-const fieldCls =
-  'w-full rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 '
-  + 'placeholder:text-slate-400 focus:border-[#1a3654] focus:outline-none focus:ring-1 focus:ring-[#1a3654]/30'
 
 interface Draft { name: string; performance: string; percentage: string }
 
@@ -100,8 +101,8 @@ function Cells({
 
 // ── Saved row ───────────────────────────────────────────────────────────────────
 function Row({
-  index, department, onChanged,
-}: { index: number; department: ReviewDepartment; onChanged: () => void }) {
+  index, month, department, onChanged,
+}: { index: number; month: string; department: ReviewDepartment; onChanged: () => void }) {
   const [draft, setDraft] = useState<Draft>(() => ({
     name: department.name,
     performance: department.performance,
@@ -121,14 +122,16 @@ function Row({
     saving.current = true
     try {
       await api.updateReviewDepartment(department.id, {
-        name: next.name.trim(), performance: next.performance, percentage,
+        month, name: next.name.trim(), performance: next.performance, percentage,
       })
       onChanged()
     } catch (err) { alert((err as Error).message) } finally { saving.current = false }
   }
 
   const remove = async () => {
-    if (!confirm(`Remove "${department.name}"? Its people keep their reviews under "No department".`)) return
+    // Deleting the department removes it everywhere, not just this month — the name is
+    // the shared catalogue, so the confirm says what actually goes.
+    if (!confirm(`Remove "${department.name}"? It goes from every month, and its people move to "No department".`)) return
     try {
       await api.deleteReviewDepartment(department.id)
       onChanged()
@@ -140,7 +143,7 @@ function Row({
   }, 0)
 
   return (
-    <tr ref={rowRef} onBlur={onRowBlur} className="bg-[#d4e9f2] text-[#0f172a]">
+    <tr ref={rowRef} onBlur={onRowBlur} className={rowCls}>
       <td className={idxCell}>{index}</td>
       <Cells draft={draft} onDraft={setDraft} onRating={(v) => save({ performance: v })} />
       <td className="p-0">
@@ -149,7 +152,7 @@ function Row({
             onClick={remove}
             title={`Remove ${department.name}`}
             aria-label={`Remove ${department.name}`}
-            className="flex h-5 w-5 items-center justify-center rounded border border-slate-400 bg-white text-slate-600 transition-colors hover:border-red-600 hover:bg-red-600 hover:text-white"
+            className={removeBtnCls}
           >
             <TrashIcon />
           </button>
@@ -160,7 +163,7 @@ function Row({
 }
 
 // ── Trailing add row ────────────────────────────────────────────────────────────
-function AddRow({ onChanged }: { onChanged: () => void }) {
+function AddRow({ month, onChanged }: { month: string; onChanged: () => void }) {
   const [draft, setDraft] = useState<Draft>(blank)
   const saving = useRef(false)
 
@@ -169,6 +172,7 @@ function AddRow({ onChanged }: { onChanged: () => void }) {
     saving.current = true
     try {
       await api.createReviewDepartment({
+        month,
         name: draft.name.trim(),
         performance: draft.performance,
         percentage: draft.percentage === '' ? null : Number(draft.percentage),
@@ -179,7 +183,7 @@ function AddRow({ onChanged }: { onChanged: () => void }) {
   }
 
   return (
-    <tr className="bg-[#eaf5fa] text-[#0f172a]" onKeyDown={(e) => { if (e.key === 'Enter') add() }}>
+    <tr className={addRowCls} onKeyDown={(e) => { if (e.key === 'Enter') add() }}>
       <td className={cx(idxCell, 'text-slate-400')}>+</td>
       <Cells draft={draft} onDraft={setDraft} />
       <td className="p-0">
@@ -189,7 +193,7 @@ function AddRow({ onChanged }: { onChanged: () => void }) {
             disabled={draft.name.trim() === ''}
             title="Add department"
             aria-label="Add department"
-            className="flex h-5 w-5 items-center justify-center rounded bg-[#1a3654] text-white transition-colors hover:bg-[#24466b] disabled:bg-slate-300"
+            className={addBtnCls}
           >
             <PlusIcon />
           </button>
@@ -199,16 +203,3 @@ function AddRow({ onChanged }: { onChanged: () => void }) {
   )
 }
 
-const stroke = {
-  fill: 'none' as const, stroke: 'currentColor', strokeWidth: 2.4,
-  strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const,
-}
-
-const PlusIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" {...stroke}><path d="M12 5v14M5 12h14" /></svg>
-)
-const TrashIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" {...stroke}>
-    <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
-  </svg>
-)

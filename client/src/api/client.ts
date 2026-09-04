@@ -25,9 +25,15 @@ import type {
   AuditFilters,
   PortalExpense,
   CatalogueResult,
+  StaffStatus,
+  Department,
+  StaffMember,
+  StaffAttendancePage,
+  StaffAttendanceRow,
+  StaffLeave,
+  StaffSalary,
   QueueAssignment,
   QueueCode,
-  QueuePerson,
   ReviewDepartment,
   ReviewEntry,
   ReviewKind,
@@ -220,6 +226,83 @@ export const api = {
   deletePortalExpense: (id: number) =>
     request<{ deleted: boolean }>(`/portal-expenses/${id}`, { method: 'DELETE' }),
 
+  // Staff — the one roster the Queues, Review and Staff pages all pick names from.
+  staff: () =>
+    request<StaffMember[]>('/staff'),
+  // Create takes a list, so a roster can be seeded from a pasted "Anna, Ben, Camp Team" in
+  // one call; `departmentIds` files everyone it touches under those departments.
+  createStaff: (names: string[], departmentIds?: number[]) =>
+    request<CatalogueResult<StaffMember>>('/staff', {
+      method: 'POST', body: JSON.stringify({ names, department_ids: departmentIds ?? [] }),
+    }),
+  // `department_ids` is the complete set the person should end up in, not an addition.
+  updateStaff: (id: number, data: {
+    name?: string
+    department_ids?: number[]
+    status?: StaffStatus
+    sort_order?: number
+  }) =>
+    request<StaffMember>(`/staff/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  // Cascades: their Queues record, departments, attendance, leaves and salary rows go too.
+  // Reviews keep the name they were written with.
+  deleteStaff: (id: number) =>
+    request<{ deleted: boolean }>(`/staff/${id}`, { method: 'DELETE' }),
+
+  // Departments — the catalogue shared by the Staff bands and the Review bands.
+  departments: () =>
+    request<Department[]>('/departments'),
+  createDepartment: (name: string) =>
+    request<Department>('/departments', { method: 'POST', body: JSON.stringify({ name }) }),
+  renameDepartment: (id: number, name: string) =>
+    request<Department>(`/departments/${id}`, { method: 'PUT', body: JSON.stringify({ name }) }),
+  deleteDepartment: (id: number) =>
+    request<{ deleted: boolean }>(`/departments/${id}`, { method: 'DELETE' }),
+
+  // Staff attendance — fetched and hand-keyed days merged. Only rows with an id (the
+  // hand-keyed ones) can be written; a fetched day has none and is read-only by design.
+  staffAttendance: (params: { from: string; to: string; staff_id?: number }) =>
+    request<StaffAttendancePage>(`/staff-attendance${qs(params)}`),
+  createStaffAttendance: (data: {
+    staff_id: number
+    work_date: string
+    login_at?: string | null
+    logout_at?: string | null
+    break_min?: number
+    status?: string
+    note?: string
+  }) =>
+    request<StaffAttendanceRow>('/staff-attendance', { method: 'POST', body: JSON.stringify(data) }),
+  updateStaffAttendance: (id: number, data: Partial<{
+    login_at: string | null
+    logout_at: string | null
+    break_min: number
+    status: string
+    note: string
+  }>) =>
+    request<StaffAttendanceRow>(`/staff-attendance/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteStaffAttendance: (id: number) =>
+    request<{ deleted: boolean }>(`/staff-attendance/${id}`, { method: 'DELETE' }),
+
+  // Leaves sheet.
+  staffLeaves: (range: { from: string; to: string }) =>
+    request<StaffLeave[]>(`/staff-leaves${qs(range)}`),
+  createStaffLeave: (data: Partial<StaffLeave>) =>
+    request<StaffLeave>('/staff-leaves', { method: 'POST', body: JSON.stringify(data) }),
+  updateStaffLeave: (id: number, data: Partial<StaffLeave>) =>
+    request<StaffLeave>(`/staff-leaves/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteStaffLeave: (id: number) =>
+    request<{ deleted: boolean }>(`/staff-leaves/${id}`, { method: 'DELETE' }),
+
+  // Salary sheet — one row per person per month, so creating twice updates.
+  staffSalaries: (month: string) =>
+    request<StaffSalary[]>(`/staff-salaries${qs({ month })}`),
+  createStaffSalary: (data: Partial<StaffSalary> & { month: string }) =>
+    request<StaffSalary>('/staff-salaries', { method: 'POST', body: JSON.stringify(data) }),
+  updateStaffSalary: (id: number, data: Partial<StaffSalary>) =>
+    request<StaffSalary>(`/staff-salaries/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteStaffSalary: (id: number) =>
+    request<{ deleted: boolean }>(`/staff-salaries/${id}`, { method: 'DELETE' }),
+
   // Queues — the per-person records. `day` (YYYY-MM-DD) narrows to the records keyed in
   // on one day; omit it for the whole sheet.
   queues: (day?: string) =>
@@ -233,18 +316,6 @@ export const api = {
   deleteQueueAssignment: (id: number) =>
     request<{ deleted: boolean }>(`/queues/${id}`, { method: 'DELETE' }),
 
-  // Queues — the Names catalogue. Create takes a list, so a sheet can be seeded from a
-  // pasted "Anna, Ben, Camp Team" in one call.
-  queuePeople: () =>
-    request<QueuePerson[]>('/queue-people'),
-  createQueuePeople: (names: string[]) =>
-    request<CatalogueResult<QueuePerson>>('/queue-people', { method: 'POST', body: JSON.stringify({ names }) }),
-  updateQueuePerson: (id: number, name: string) =>
-    request<QueuePerson>(`/queue-people/${id}`, { method: 'PUT', body: JSON.stringify({ name }) }),
-  // Cascades: deleting a name also removes that person's record.
-  deleteQueuePerson: (id: number) =>
-    request<{ deleted: boolean }>(`/queue-people/${id}`, { method: 'DELETE' }),
-
   // Queues — the Queues catalogue, same list-on-create ("BHS, BOP, Q04").
   queueCodes: () =>
     request<QueueCode[]>('/queue-codes'),
@@ -256,21 +327,22 @@ export const api = {
   deleteQueueCode: (id: number) =>
     request<{ deleted: boolean }>(`/queue-codes/${id}`, { method: 'DELETE' }),
 
-  // Reviews — the Department catalogue the other two tabs group by.
-  reviewDepartments: () =>
-    request<ReviewDepartment[]>('/review-departments'),
-  createReviewDepartment: (data: Partial<ReviewDepartment>) =>
+  // Reviews — the department scorecard for ONE month. `month` is the month being
+  // reviewed (a September review judges August), and it is required on every call.
+  reviewDepartments: (month: string) =>
+    request<ReviewDepartment[]>(`/review-departments${qs({ month })}`),
+  createReviewDepartment: (data: Partial<ReviewDepartment> & { month: string }) =>
     request<ReviewDepartment>('/review-departments', { method: 'POST', body: JSON.stringify(data) }),
-  updateReviewDepartment: (id: number, data: Partial<ReviewDepartment>) =>
+  updateReviewDepartment: (id: number, data: Partial<ReviewDepartment> & { month: string }) =>
     request<ReviewDepartment>(`/review-departments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   // Entries keep their rows and resurface under "No department".
   deleteReviewDepartment: (id: number) =>
     request<{ deleted: boolean }>(`/review-departments/${id}`, { method: 'DELETE' }),
 
-  // Reviews — the Performance / Behaviour rows. `month` scopes behaviour to one month.
-  reviewEntries: (kind: ReviewKind, month?: string) =>
+  // Reviews — the Performance / Behaviour rows, both scoped to the month reviewed.
+  reviewEntries: (kind: ReviewKind, month: string) =>
     request<ReviewEntry[]>(`/review-entries${qs({ kind, month })}`),
-  createReviewEntry: (data: Partial<ReviewEntry>) =>
+  createReviewEntry: (data: Partial<ReviewEntry> & { month: string }) =>
     request<ReviewEntry>('/review-entries', { method: 'POST', body: JSON.stringify(data) }),
   updateReviewEntry: (id: number, data: Partial<ReviewEntry>) =>
     request<ReviewEntry>(`/review-entries/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

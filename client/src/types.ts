@@ -375,17 +375,109 @@ export interface PortalExpense {
   updated_at: string
 }
 
-// ─── Queues (per-person queue records + the two catalogues) ────────────────────
+// ─── Staff (the roster the Queues, Review and Staff pages all read) ────────────
 
-/** A name in the Names catalogue the Queues page picks from. */
-export interface QueuePerson {
+/** A department, shared by the Staff page's bands and the Review page's. */
+export interface Department {
   id: number
   name: string
-  /** Their record's id, or null when they have no record yet. */
-  assignment_id: number | null
+  sort_order: number
+  /** How many people are in it — what a delete would unfile. */
+  staff_count: number
   created_at: string
   updated_at: string
 }
+
+/** Where a staff member stands: on the job, gone, or away for a while. */
+export type StaffStatus = 'active' | 'inactive' | 'leave'
+
+/** A staff member. The one roster; a person may sit in more than one department. */
+export interface StaffMember {
+  id: number
+  name: string
+  departments: { id: number; name: string }[]
+  /** Their Queues record's id, or null when they have none yet. */
+  assignment_id: number | null
+  /**
+   * The check-in account they clock in with, resolved from their name by the server — it
+   * is never picked. null = no account, so their attendance is keyed in by hand.
+   */
+  attendance_user_id: string | null
+  status: StaffStatus
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * One attendance day. `source` is the whole story: 'fetched' rows come from the check-in
+ * bot and carry no id, which is exactly why they cannot be edited; 'manual' rows are the
+ * ones keyed in here for people the bot never saw.
+ */
+export interface StaffAttendanceRow {
+  /** null for a fetched row — there is nothing to address a write to. */
+  id: number | null
+  source: 'fetched' | 'manual'
+  staff_id: number
+  staff_name: string
+  work_date: string
+  /** Org-local clock time, "HH:MM", or null when not recorded. */
+  login_at: string | null
+  logout_at: string | null
+  break_min: number
+  status: string
+  note: string
+  hours: number | null
+  net_hours: number | null
+}
+
+export interface StaffAttendancePage {
+  timezone: string
+  from: string
+  to: string
+  /** False where the check-in bot's tables aren't installed — everything is hand-keyed. */
+  fetched: boolean
+  rows: StaffAttendanceRow[]
+}
+
+/** A row of the Leaves sheet. Every marker is free text ("Approved", a reason). */
+export interface StaffLeave {
+  id: number
+  staff_id: number
+  staff_name: string
+  department_id: number | null
+  department_name: string | null
+  leave_date: string
+  sick_leave: string
+  break_leave: string
+  half_day: string
+  late_login: string
+  aob: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+/** A row of the Salary sheet — one per person per month. */
+export interface StaffSalary {
+  id: number
+  staff_id: number
+  staff_name: string
+  department_id: number | null
+  department_name: string | null
+  /** First of the month being paid, YYYY-MM-DD. */
+  month: string
+  /** The SALARY cell as the sheet words it — "Received". */
+  status: string
+  /** Optional figure beside the status; null when only the status is recorded. */
+  amount: number | null
+  note: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+// ─── Queues (per-person queue records + the queue catalogue) ───────────────────
 
 /** A queue in the Queues catalogue the page ticks. */
 export interface QueueCode {
@@ -401,8 +493,10 @@ export interface QueueCode {
 export interface QueueAssignment {
   id: number
   person_id: number
-  /** Denormalised from the Names catalogue for display. */
+  /** Denormalised from the staff roster for display. */
   name: string
+  /** The person's departments, so the sheet can show them without a second lookup. */
+  departments: { id: number; name: string }[]
   codes: { id: number; code: string }[]
   sort_order: number
   /** When the record was keyed in — the date the History section groups by. */
@@ -421,13 +515,16 @@ export interface CatalogueResult<T> {
 /** Which tab an entry belongs to. */
 export type ReviewKind = 'performance' | 'behaviour'
 
-/** A row of the Department tab — and the catalogue the other tabs group by. */
+/**
+ * A department as the Review page sees it: the shared `Department` plus the rating and %
+ * it scored for ONE month. The name lives in the catalogue, the score lives in the month.
+ */
 export interface ReviewDepartment {
   id: number
   name: string
   /** Excellent / Good / Average / Below Average / Poor — stored as the shown wording. */
   performance: string
-  /** null = never scored, so the cell stays blank rather than reading 0. */
+  /** null = not scored this month, so the cell stays blank rather than reading 0. */
   percentage: number | null
   sort_order: number
   created_at: string
@@ -440,6 +537,8 @@ export interface ReviewEntry {
   kind: ReviewKind
   /** The department band the row sits under; null = "No department". */
   department_id: number | null
+  /** The roster link; null when the name matches nobody on the Staff page. */
+  staff_id: number | null
   person_name: string
   /** The per-row DEPARTMENT cell ("Billing", "Billing/Audits") — free text. */
   department_note: string
@@ -449,7 +548,10 @@ export interface ReviewEntry {
   percentage: number | null
   /** Free-text remark on the individual — shown on the Performance tab. */
   notes: string
-  /** Behaviour rows only — the first day of the month, YYYY-MM-DD. */
+  /**
+   * The month the review is ABOUT — the first of that month, YYYY-MM-DD. A review keyed
+   * in during September judges August, so this is never the month it was written in.
+   */
   month: string | null
   sort_order: number
   created_at: string

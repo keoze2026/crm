@@ -10,10 +10,13 @@ use App\Http;
 /**
  * Queues — the CRUD behind the Queues page.
  *
- * Three resources:
- *   /queue-people — the NAMES catalogue the page picks from
+ * Two resources:
  *   /queue-codes  — the QUEUES catalogue the page ticks
  *   /queues       — one record per person: the person plus the queues they cover
+ *
+ * The NAMES the sheet picks from are the shared staff roster (`staff`, served by
+ * StaffController at /staff) — the same list the Review and Staff pages read, so a person
+ * is added, renamed or removed in exactly one place and their departments come along.
  *
  * A record's TOTAL is never stored (it is how many codes are linked to it) and neither is
  * its Sr. No. (that is its position in the sheet), so the two can't drift from the queues
@@ -21,10 +24,10 @@ use App\Http;
  * keyed in, which is what the page's History section groups by, and `?day=YYYY-MM-DD`
  * narrows the list to one such day.
  *
- * Both catalogues take a LIST on create ("BHS, BOP Q04" or "Anna, Camp Team"), so a sheet
- * can be seeded in one call; each answers with the rows it created AND the ones that were
- * already there, letting the page tick everything the user typed and report duplicates
- * without treating them as an error.
+ * The queue catalogue takes a LIST on create ("BHS, BOP Q04"), so a sheet can be seeded in
+ * one call; it answers with the rows it created AND the ones that were already there,
+ * letting the page tick everything the user typed and report duplicates without treating
+ * them as an error.
  */
 final class QueueController
 {
@@ -36,17 +39,18 @@ final class QueueController
                              ORDER BY upper(btrim(c.code)))
                     FILTER (WHERE c.id IS NOT NULL),
                     \'[]\'
-                ) AS codes
+                ) AS codes,
+                (SELECT COALESCE(
+                            json_agg(json_build_object(\'id\', d.id, \'name\', d.name)
+                                     ORDER BY d.sort_order, d.id),
+                            \'[]\')
+                   FROM staff_departments sd
+                   JOIN departments d ON d.id = sd.department_id
+                  WHERE sd.staff_id = p.id) AS departments
            FROM queue_assignments a
-           JOIN queue_people p ON p.id = a.person_id
+           JOIN staff p ON p.id = a.person_id
       LEFT JOIN queue_assignment_codes ac ON ac.assignment_id = a.id
       LEFT JOIN queue_codes c ON c.id = ac.code_id';
-
-    /** `assignment_id` lets the page jump from a name straight to its record. */
-    private const PEOPLE_SELECT =
-        'SELECT p.id, p.name, a.id AS assignment_id, p.created_at, p.updated_at
-           FROM queue_people p
-      LEFT JOIN queue_assignments a ON a.person_id = p.id';
 
     /** `usage_count` is what the page warns with before deleting a queue. */
     private const CODES_SELECT =
@@ -68,7 +72,7 @@ final class QueueController
             $sql .= ' WHERE a.created_at::date = :day';
             $params[':day'] = $day;
         }
-        $sql .= ' GROUP BY a.id, p.name ORDER BY a.sort_order ASC, a.id ASC';
+        $sql .= ' GROUP BY a.id, p.id ORDER BY a.sort_order ASC, a.id ASC';
 
         $stmt = Database::connection()->prepare($sql);
         $stmt->execute($params);
@@ -145,57 +149,6 @@ final class QueueController
         Http::json(['deleted' => $stmt->rowCount() > 0]);
     }
 
-    // ─── Names catalogue (/queue-people) ───────────────────────────────────────
-
-    public function people(): void
-    {
-        $stmt = Database::connection()->query(self::PEOPLE_SELECT . ' ORDER BY lower(btrim(p.name)) ASC');
-        Http::json(array_map([$this, 'castPerson'], $stmt->fetchAll()));
-    }
-
-    public function storePeople(): void
-    {
-        // Names may hold spaces, so a pasted list is comma/newline separated only.
-        $names = $this->values(Http::body(), '/[,;\n]+/', 'names', 'name');
-        if ($names === []) {
-            Http::error('A name is required', 422);
-        }
-        $ids = $this->insertCatalogue('queue_people', 'name', 'lower', $names);
-        Http::json([
-            'created'  => $this->peopleByIds($ids['created']),
-            'existing' => $this->peopleByIds($ids['existing']),
-        ], $ids['created'] === [] ? 200 : 201);
-    }
-
-    public function updatePerson(array $params): void
-    {
-        $name = trim((string) (Http::body()['name'] ?? ''));
-        if ($name === '') {
-            Http::error('A name is required', 422);
-        }
-        $id = (int) $params['id'];
-        if ($this->takenBy('queue_people', 'name', 'lower', $name, $id)) {
-            Http::error('Another name in the list is already called that', 409);
-        }
-
-        $stmt = Database::connection()->prepare(
-            'UPDATE queue_people SET name = :name, updated_at = now() WHERE id = :id'
-        );
-        $stmt->execute([':name' => $name, ':id' => $id]);
-        if ($stmt->rowCount() === 0) {
-            Http::error('Name not found', 404);
-        }
-        Http::json($this->peopleByIds([$id])[0]);
-    }
-
-    public function destroyPerson(array $params): void
-    {
-        // ON DELETE CASCADE takes the person's record (and its queue links) with them.
-        $stmt = Database::connection()->prepare('DELETE FROM queue_people WHERE id = :id');
-        $stmt->execute([':id' => (int) $params['id']]);
-        Http::json(['deleted' => $stmt->rowCount() > 0]);
-    }
-
     // ─── Queues catalogue (/queue-codes) ───────────────────────────────────────
 
     public function codes(): void
@@ -255,8 +208,8 @@ final class QueueController
     /**
      * Insert a list of catalogue values, skipping the ones already there.
      *
-     * @param string   $fold    'lower' for names, 'upper' for codes — matches the table's
-     *                          case-insensitive unique index
+     * @param string   $fold    'upper' for codes — matches the table's case-insensitive
+     *                          unique index
      * @param string[] $values
      * @return array{created: int[], existing: int[]}  ids, hydrated by the caller
      */
@@ -376,27 +329,11 @@ final class QueueController
     private function record(int $id): ?array
     {
         $stmt = Database::connection()->prepare(
-            self::RECORD_SELECT . ' WHERE a.id = :id GROUP BY a.id, p.name'
+            self::RECORD_SELECT . ' WHERE a.id = :id GROUP BY a.id, p.id'
         );
         $stmt->execute([':id' => $id]);
         $row = $stmt->fetch();
         return $row ? $this->castRecord($row) : null;
-    }
-
-    /**
-     * @param int[] $ids
-     * @return array<int, array<string, mixed>>
-     */
-    private function peopleByIds(array $ids): array
-    {
-        if ($ids === []) {
-            return [];
-        }
-        $stmt = Database::connection()->query(
-            self::PEOPLE_SELECT . ' WHERE p.id IN (' . $this->idList($ids) . ')'
-            . ' ORDER BY lower(btrim(p.name)) ASC'
-        );
-        return array_map([$this, 'castPerson'], $stmt->fetchAll());
     }
 
     /**
@@ -426,19 +363,17 @@ final class QueueController
         $row['id']         = (int) $row['id'];
         $row['person_id']  = (int) $row['person_id'];
         $row['sort_order'] = (int) $row['sort_order'];
-        // `codes` arrives as JSON text from json_agg.
+        // `codes` and `departments` arrive as JSON text from json_agg.
         $codes = \is_string($row['codes']) ? json_decode($row['codes'], true) : $row['codes'];
         $row['codes'] = array_map(
             static fn (array $c): array => ['id' => (int) $c['id'], 'code' => (string) $c['code']],
             \is_array($codes) ? $codes : []
         );
-        return $row;
-    }
-
-    private function castPerson(array $row): array
-    {
-        $row['id']            = (int) $row['id'];
-        $row['assignment_id'] = $row['assignment_id'] === null ? null : (int) $row['assignment_id'];
+        $departments = \is_string($row['departments']) ? json_decode($row['departments'], true) : $row['departments'];
+        $row['departments'] = array_map(
+            static fn (array $d): array => ['id' => (int) $d['id'], 'name' => (string) $d['name']],
+            \is_array($departments) ? $departments : []
+        );
         return $row;
     }
 
@@ -457,7 +392,7 @@ final class QueueController
 
     private function personExists(int $id): bool
     {
-        $stmt = Database::connection()->prepare('SELECT 1 FROM queue_people WHERE id = :id');
+        $stmt = Database::connection()->prepare('SELECT 1 FROM staff WHERE id = :id');
         $stmt->execute([':id' => $id]);
         return (bool) $stmt->fetchColumn();
     }

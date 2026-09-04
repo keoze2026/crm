@@ -1,26 +1,30 @@
 import { useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import { parseCodeList, parseNameList } from '../lib/queues'
-import type { QueueCode, QueuePerson } from '../types'
+import { parseCodeList } from '../lib/queues'
+import type { QueueCode, StaffMember } from '../types'
 import { Badge, Card, Spinner, cx } from './ui'
 
 /**
- * The small lists section above the sheet: the names and queue codes the sheet's two
- * dropdowns are filled from. Add, rename or remove either — nothing is assigned here,
- * so the edit controls sit right on each chip.
+ * The queue catalogue above the sheet: the codes the sheet's Queues dropdown is filled
+ * from. Add, rename or remove them — nothing is assigned here, so the edit controls sit
+ * right on each chip. The add box takes a list, so a pasted set of codes ("BHS, BOP Q04")
+ * goes in at once.
  *
- * Both add boxes take a list, so a whole roster ("Anna, Ben, Camp Team") or a pasted set
- * of codes ("BHS, BOP Q04") goes in at once.
+ * NAMES are deliberately not editable here any more: the sheet picks from the shared staff
+ * roster, which is managed on the Staff page along with each person's departments. This
+ * panel just says how many are available and links there.
  */
 export default function QueueLists({
   people, codes, onChanged,
 }: {
-  people: QueuePerson[]
+  people: StaffMember[]
   codes: QueueCode[]
   onChanged: () => void
 }) {
-  // Open on a fresh install (nothing to pick from yet), collapsed once the lists exist.
-  const [open, setOpen] = useState(people.length === 0 && codes.length === 0)
+  // Open on a fresh install (nothing to pick from yet), collapsed once the list exists.
+  const [open, setOpen] = useState(codes.length === 0)
+  const unassigned = people.filter((p) => p.assignment_id === null).length
 
   return (
     <Card>
@@ -37,9 +41,9 @@ export default function QueueLists({
           >
             <path d="m9 18 6-6-6-6" />
           </svg>
-          <h3 className="font-semibold text-slate-900">Names &amp; queues</h3>
-          <Badge>{`${people.length} names`}</Badge>
+          <h3 className="font-semibold text-slate-900">Queues</h3>
           <Badge color="blue">{`${codes.length} queues`}</Badge>
+          <Badge>{`${people.length} staff`}</Badge>
         </div>
         <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           {open ? 'Hide' : 'Show'}
@@ -48,25 +52,6 @@ export default function QueueLists({
 
       {open && (
         <div className="grid gap-4 border-t border-white/50 p-4 lg:grid-cols-2">
-          <List
-            label="Names"
-            placeholder="Add a name…"
-            entries={people.map((p) => ({
-              id: p.id,
-              label: p.name,
-              note: p.assignment_id !== null ? 'on sheet' : null,
-            }))}
-            onAdd={(raw) => api.createQueuePeople(parseNameList(raw))}
-            onRename={(id, value) => api.updateQueuePerson(id, value)}
-            onRemove={(id, label) => {
-              const person = people.find((p) => p.id === id)
-              const warning = person?.assignment_id != null
-                ? `Remove "${label}"? Their row on the sheet goes with them.`
-                : `Remove "${label}"?`
-              return confirm(warning) ? api.deleteQueuePerson(id) : null
-            }}
-            onChanged={onChanged}
-          />
           <List
             label="Queues"
             placeholder="Add queue codes…"
@@ -87,6 +72,24 @@ export default function QueueLists({
             }}
             onChanged={onChanged}
           />
+
+          <div className="rounded-xl border border-slate-300 bg-white p-3 shadow-sm">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wide text-slate-700">Names</span>
+              <span className="text-xs font-medium text-slate-500">{people.length}</span>
+            </div>
+            <p className="text-sm text-slate-600">
+              Managed on the{' '}
+              <Link to="/staff" className="font-semibold text-[#1a3654] underline underline-offset-2 hover:text-[#24466b]">
+                Staff page
+              </Link>, with their departments.
+            </p>
+            {people.length > 0 && (
+              <p className="mt-2 text-xs font-medium text-slate-500">
+                {`${unassigned} of ${people.length} not on the sheet yet.`}
+              </p>
+            )}
+          </div>
         </div>
       )}
     </Card>
@@ -96,7 +99,7 @@ export default function QueueLists({
 interface Entry {
   id: number
   label: string
-  /** Small trailing marker on the chip — "on sheet", "×4". */
+  /** Small trailing marker on the chip — "×4". */
   note: string | null
 }
 
