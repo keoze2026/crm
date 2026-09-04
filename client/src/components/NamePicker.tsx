@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api/client'
+import { anchorTo, focusQuietly, type Anchor } from '../lib/popover'
 import { matches, parseNameList } from '../lib/queues'
 import type { StaffMember } from '../types'
 import { Spinner, cx } from './ui'
@@ -40,19 +41,20 @@ export default function NamePicker({
   const [error, setError] = useState<string | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 260 })
+  const searchRef = useRef<HTMLInputElement>(null)
+  const [pos, setPos] = useState<Anchor>({ top: 0, left: 0, width: 260 })
 
   const close = () => { setOpen(false); setSearch(''); setDraft(''); setError(null) }
 
+  // Measured before the panel exists, so its first paint is already in place — see
+  // anchorTo(). Opening any other way drags the page to the top of the document.
+  const openPanel = () => {
+    setPos(anchorTo(triggerRef.current, 300, 4))
+    setOpen(true)
+  }
+
   useLayoutEffect(() => {
-    if (!open || !triggerRef.current) return
-    const r = triggerRef.current.getBoundingClientRect()
-    const margin = 8
-    const width = Math.min(300, window.innerWidth - margin * 2)
-    let left = r.left
-    if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width
-    if (left < margin) left = margin
-    setPos({ top: r.bottom + 4 + window.scrollY, left: left + window.scrollX, width })
+    if (open) focusQuietly(searchRef.current)
   }, [open])
 
   useEffect(() => {
@@ -105,7 +107,7 @@ export default function NamePicker({
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => (open ? close() : setOpen(true))}
+        onClick={() => (open ? close() : openPanel())}
         title={value || placeholder}
         className={cx(
           'flex w-full items-center justify-between gap-1 rounded border bg-white px-1.5 py-0.5 text-left text-xs transition-colors',
@@ -124,8 +126,8 @@ export default function NamePicker({
           className="z-50 rounded-xl border border-slate-300 bg-white p-2 shadow-2xl shadow-slate-900/20"
         >
           <input
+            ref={searchRef}
             value={search}
-            autoFocus
             placeholder="Search names or departments…"
             onChange={(e) => setSearch(e.target.value)}
             className={inputCls}

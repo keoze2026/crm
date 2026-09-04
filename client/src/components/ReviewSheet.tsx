@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api/client'
+import { anchorTo, focusQuietly, type Anchor } from '../lib/popover'
 import { BEHAVIOUR_RATINGS, NUMERIC, PERFORMANCE_RATINGS } from '../lib/review'
 import type { ReviewDepartment, ReviewEntry, ReviewKind, StaffMember } from '../types'
 import NamePicker from './NamePicker'
@@ -270,22 +271,24 @@ function NoteCell({ value, onSave }: { value: string; onSave: (text: string) => 
   const [text, setText] = useState(value)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 320 })
+  const textRef = useRef<HTMLTextAreaElement>(null)
+  const [pos, setPos] = useState<Anchor>({ top: 0, left: 0, width: 320 })
 
   const commit = () => {
     setOpen(false)
     if (text.trim() !== value.trim()) onSave(text.trim())
   }
 
+  // Measured before the panel exists, so its first paint is already in place — see
+  // anchorTo(). Opening any other way drags the page to the top of the document.
+  const openPanel = () => {
+    setText(value)
+    setPos(anchorTo(triggerRef.current, 380))
+    setOpen(true)
+  }
+
   useLayoutEffect(() => {
-    if (!open || !triggerRef.current) return
-    const r = triggerRef.current.getBoundingClientRect()
-    const margin = 8
-    const width = Math.min(380, window.innerWidth - margin * 2)
-    let left = r.left
-    if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width
-    if (left < margin) left = margin
-    setPos({ top: r.bottom + 4 + window.scrollY, left: left + window.scrollX, width })
+    if (open) focusQuietly(textRef.current)
   }, [open])
 
   useEffect(() => {
@@ -307,7 +310,7 @@ function NoteCell({ value, onSave }: { value: string; onSave: (text: string) => 
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => (open ? commit() : (setText(value), setOpen(true)))}
+        onClick={() => (open ? commit() : openPanel())}
         title={value || 'Add a note'}
         className={cx(
           'flex w-full items-center gap-1 rounded border bg-white px-1.5 py-0.5 text-left text-xs transition-colors',
@@ -326,8 +329,8 @@ function NoteCell({ value, onSave }: { value: string; onSave: (text: string) => 
           className="z-50 rounded-xl border border-slate-300 bg-white p-2 shadow-2xl shadow-slate-900/20"
         >
           <textarea
+            ref={textRef}
             value={text}
-            autoFocus
             rows={4}
             placeholder="Note about this person's review…"
             onChange={(e) => setText(e.target.value)}

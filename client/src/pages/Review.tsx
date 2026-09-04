@@ -57,7 +57,7 @@ export default function Review() {
   }
 
   return (
-    <div>
+    <div className="min-w-0">
       <PageHeader
         title="Review"
         subtitle={`Reviewing ${label}`}

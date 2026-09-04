@@ -71,29 +71,27 @@ export function buildQueuesPdf(rows: QueueAssignment[]): jsPDF {
   const body: RowInput[] = rows.map((r, i) => [
     String(i + 1),
     r.name,
-    r.departments.map((d) => d.name).join(', '),
     r.codes.map((c) => c.code).join(', '),
     String(r.codes.length),
   ])
   body.push([
-    { content: 'TOTAL', colSpan: 4, styles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', halign: 'left' } },
+    { content: 'TOTAL', colSpan: 3, styles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', halign: 'left' } },
     { content: String(total), styles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', halign: 'center' } },
   ])
 
   autoTable(doc, {
     startY: y,
     theme: 'grid',
-    head: [['SR NO.', 'NAME', 'DEPARTMENT', 'QUEUES', 'TOTAL']],
+    head: [['SR NO.', 'NAME', 'QUEUES', 'TOTAL']],
     body,
     styles: baseStyles,
     headStyles: navyHead,
     bodyStyles: { fillColor: CYAN },
     columnStyles: {
       0: { halign: 'center', cellWidth: 44, fillColor: BAND, fontStyle: 'bold' },
-      1: { cellWidth: 130, fontStyle: 'bold' },
-      2: { cellWidth: 130 },
-      3: { halign: 'left' },
-      4: { halign: 'center', cellWidth: 48, fontStyle: 'bold' },
+      1: { cellWidth: 150, fontStyle: 'bold' },
+      2: { halign: 'left' },
+      3: { halign: 'center', cellWidth: 48, fontStyle: 'bold' },
     },
     margin: { left: M, right: M },
   })

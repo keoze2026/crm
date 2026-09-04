@@ -30,7 +30,7 @@ export function DaySelector({ value, onChange }: { value: string; onChange: (iso
   const now = today()
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-1.5">
       <button onClick={() => onChange(shiftDay(value, -1))} aria-label="Previous day" className={stepBtn}>
         {chevron('left')}
       </button>
@@ -40,7 +40,7 @@ export function DaySelector({ value, onChange }: { value: string; onChange: (iso
         value={value}
         max={now}
         onChange={(e) => { if (e.target.value) onChange(e.target.value) }}
-        className="glass-input rounded-xl border border-white/70 px-3 py-2 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+        className="glass-input min-w-0 flex-1 rounded-xl border border-white/70 px-3 py-2 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30 sm:flex-none"
       />
 
       <button

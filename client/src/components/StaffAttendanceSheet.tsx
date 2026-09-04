@@ -5,17 +5,22 @@ import type { StaffAttendanceRow, StaffMember } from '../types'
 import {
   addRowCls, cellCls, fieldCls, headCls, idxCell, lockedCls, removeBtnCls, rowCls, tableCls, theadCls,
 } from './sheet'
-import { LockIcon, TrashIcon } from './sheetIcons'
+import { LockIcon, RevertIcon, TrashIcon } from './sheetIcons'
 import { EmptyState, cx } from './ui'
 
 /**
  * One day's attendance for the whole roster — a row per staff member for the selected
  * date, the way the Attendance page's daily roster reads.
  *
- * Where the check-in bot recorded the day it is already filled in and locked: those rows
- * come back with no id, so there is nothing to write to. Everyone else gets an empty row
- * that saves itself the moment something is typed into it, which is how a person the bot
- * never saw gets a day.
+ * Where the check-in bot recorded the day, its clock times are shown locked: they are the
+ * bot's to change, not this page's. The BREAK is the exception — it can be corrected on
+ * any row, because a mis-logged break is the thing that actually needs fixing by hand. A
+ * correction is stored beside the bot's day rather than over it, and the Attendance page
+ * reads the same figure, so the two pages never disagree. Clearing it (the revert button)
+ * puts the bot's own total back.
+ *
+ * Everyone the bot didn't record gets an empty row that saves itself the moment something
+ * is typed into it.
  */
 export default function StaffAttendanceSheet({
   date, rows, staff, onChanged,
@@ -60,7 +65,16 @@ export default function StaffAttendanceSheet({
             {staff.map((person, i) => {
               const row = byStaff.get(person.id) ?? null
               return row?.source === 'fetched'
-                ? <FetchedRow key={person.id} index={i + 1} person={person} row={row} />
+                ? (
+                  <FetchedRow
+                    key={`${person.id}-${date}`}
+                    index={i + 1}
+                    person={person}
+                    row={row}
+                    date={date}
+                    onChanged={onChanged}
+                  />
+                )
                 : (
                   <KeyedRow
                     // Remount when the day changes so no row keeps yesterday's draft.
@@ -100,9 +114,48 @@ function DepartmentCell({ person }: { person: StaffMember }) {
   )
 }
 
-// ── A day the bot recorded: shown, never edited ─────────────────────────────────
+// ── A day the bot recorded: clock times locked, break correctable ────────────────
 
-function FetchedRow({ index, person, row }: { index: number; person: StaffMember; row: StaffAttendanceRow }) {
+function FetchedRow({
+  index, person, row, date, onChanged,
+}: {
+  index: number
+  person: StaffMember
+  row: StaffAttendanceRow
+  date: string
+  onChanged: () => void
+}) {
+  const [breakMin, setBreakMin] = useState(String(row.break_min))
+  const saving = useRef(false)
+
+  // Hours follow the break as it is typed, so the correction can be seen before saving.
+  const hours = netHours(row.login_at ?? '', row.logout_at ?? '', Number(breakMin || 0))
+
+  const save = async () => {
+    const next = Number(breakMin || 0)
+    if (saving.current || next === row.break_min) return
+    saving.current = true
+    try {
+      // The correction is addressed to the day, not to a row — the server creates the
+      // override the first time and updates it after that.
+      if (row.id !== null) await api.updateStaffAttendance(row.id, { break_min: next })
+      else await api.createStaffAttendance({ staff_id: person.id, work_date: date, break_min: next })
+      onChanged()
+    } catch (err) {
+      alert((err as Error).message)
+      setBreakMin(String(row.break_min))
+    } finally { saving.current = false }
+  }
+
+  const revert = async () => {
+    if (row.id === null) return
+    if (!confirm(`Put back the check-in bot's own break for ${person.name}?`)) return
+    try {
+      await api.deleteStaffAttendance(row.id)
+      onChanged()
+    } catch (err) { alert((err as Error).message) }
+  }
+
   return (
     <tr className={rowCls}>
       <td className={idxCell}>{index}</td>
@@ -110,15 +163,41 @@ function FetchedRow({ index, person, row }: { index: number; person: StaffMember
       <td className={cellCls}><DepartmentCell person={person} /></td>
       <td className={cellCls}><span className={lockedCls}>{clockLabel(row.login_at)}</span></td>
       <td className={cellCls}><span className={lockedCls}>{clockLabel(row.logout_at)}</span></td>
-      <td className={cx(cellCls, 'text-center tabular-nums')}>{row.break_min}m</td>
-      <td className={cx(cellCls, 'text-center font-semibold tabular-nums')}>{hoursLabel(row.net_hours)}</td>
+      <td className={cellCls}>
+        <input
+          value={breakMin}
+          inputMode="numeric"
+          title={row.break_edited ? 'Corrected here — the bot recorded a different total' : undefined}
+          onChange={(e) => { if (/^\d*$/.test(e.target.value)) setBreakMin(e.target.value) }}
+          onBlur={save}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+          className={cx(fieldCls, 'text-right tabular-nums', row.break_edited && editedCls)}
+        />
+      </td>
+      <td className={cx(cellCls, 'text-center font-semibold tabular-nums')}>{hoursLabel(hours)}</td>
       <td className={cx(cellCls, 'capitalize')}>{row.status}</td>
-      <td className={cx(cellCls, 'text-center text-slate-500')} title="Fetched from the check-in bot">
-        <span className="inline-flex"><LockIcon /></span>
+      <td className="p-0">
+        <div className="flex items-center justify-center">
+          {row.break_edited ? (
+            <button
+              onClick={revert}
+              title="Put back the check-in bot's own break"
+              aria-label={`Put back the bot's break for ${person.name}`}
+              className={removeBtnCls}
+            >
+              <RevertIcon />
+            </button>
+          ) : (
+            <span className="text-slate-400" title="Fetched from the check-in bot"><LockIcon /></span>
+          )}
+        </div>
       </td>
     </tr>
   )
 }
+
+/** A corrected break is tinted, so a glance down the column shows which are not the bot's. */
+const editedCls = 'border-amber-400 bg-amber-50 font-bold text-amber-900'
 
 // ── A day keyed in here ─────────────────────────────────────────────────────────
 

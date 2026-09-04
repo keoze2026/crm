@@ -13,10 +13,10 @@ use App\Http;
  *   /staff             the people: name, status (active / inactive / leave) and the
  *                      departments they belong to — a person may belong to several
  *   /departments       the department catalogue, shared with the Review page's bands
- *   /staff-attendance  attendance, fetched and hand-keyed merged into one list. Fetched
- *                      days come from the bot's `attendance_days` and are READ-ONLY:
- *                      only rows this app owns (`staff_attendance`) carry an id, and only
- *                      those can be written or deleted
+ *   /staff-attendance  attendance, fetched and hand-keyed merged into one list. A day the
+ *                      bot recorded keeps its clock times — only its BREAK can be corrected,
+ *                      and that correction is a `staff_attendance` row the Attendance page
+ *                      reads too, so both pages show the same figure
  *   /staff-leaves      the leaves sheet
  *   /staff-salaries    the salary sheet, one row per person per month
  *
@@ -277,8 +277,10 @@ final class StaffController
                     m.work_date::text AS work_date,
                     to_char(m.login_at, 'HH24:MI')  AS login_at,
                     to_char(m.logout_at, 'HH24:MI') AS logout_at,
-                    m.break_min, m.status, m.note,
-                    ROUND(EXTRACT(EPOCH FROM (m.logout_at - m.login_at)) / 3600.0 - m.break_min / 60.0, 2) AS net_hours,
+                    COALESCE(m.break_min, 0) AS break_min,
+                    FALSE AS break_edited,
+                    m.status, m.note,
+                    ROUND(EXTRACT(EPOCH FROM (m.logout_at - m.login_at)) / 3600.0 - COALESCE(m.break_min, 0) / 60.0, 2) AS net_hours,
                     ROUND(EXTRACT(EPOCH FROM (m.logout_at - m.login_at)) / 3600.0, 2) AS hours
                FROM staff_attendance m
                JOIN staff s ON s.id = m.staff_id
@@ -295,18 +297,23 @@ final class StaffController
             // Fetched days, reduced to the same shape: local clock times, one row per day.
             // A hand-keyed row for a day the bot also recorded is ignored — the fetched one
             // wins, which is what "if it was fetched it should not be edited" means.
+            // `o` is the override: a staff_attendance row for a day the bot also recorded.
+            // Only its break counts — the clock times still come from the bot — and its id
+            // rides along so the page can write to it. NULL id means no override yet.
             $sql .= "
              UNION ALL
-            SELECT NULL::bigint AS id, 'fetched' AS source, s.id AS staff_id, s.name AS staff_name,
+            SELECT o.id, 'fetched' AS source, s.id AS staff_id, s.name AS staff_name,
                    d.work_date::text AS work_date,
                    to_char(d.login_at  AT TIME ZONE '{$tz}', 'HH24:MI') AS login_at,
                    to_char(d.logout_at AT TIME ZONE '{$tz}', 'HH24:MI') AS logout_at,
-                   COALESCE(b.break_min, 0)::int AS break_min,
+                   COALESCE(o.break_min, b.break_min, 0)::int AS break_min,
+                   (o.break_min IS NOT NULL) AS break_edited,
                    CASE WHEN d.login_at IS NULL THEN 'absent'
                         WHEN d.logout_at IS NULL THEN 'still in'
                         ELSE 'present' END AS status,
-                   '' AS note,
-                   ROUND(EXTRACT(EPOCH FROM (d.logout_at - d.login_at)) / 3600.0 - COALESCE(b.break_min, 0) / 60.0, 2) AS net_hours,
+                   COALESCE(o.note, '') AS note,
+                   ROUND(EXTRACT(EPOCH FROM (d.logout_at - d.login_at)) / 3600.0
+                         - COALESCE(o.break_min, b.break_min, 0) / 60.0, 2) AS net_hours,
                    ROUND(EXTRACT(EPOCH FROM (d.logout_at - d.login_at)) / 3600.0, 2) AS hours
               FROM attendance_days d
               JOIN staff s ON s.attendance_user_id = d.user_id::text
@@ -314,6 +321,7 @@ final class StaffController
                    SELECT user_id, work_date, SUM(duration_min)::int AS break_min
                      FROM attendance_breaks GROUP BY user_id, work_date
               ) b ON b.user_id = d.user_id AND b.work_date = d.work_date
+         LEFT JOIN staff_attendance o ON o.staff_id = s.id AND o.work_date = d.work_date
              WHERE d.work_date BETWEEN :from_f AND :to_f{$whereF}";
         }
 
@@ -324,7 +332,9 @@ final class StaffController
 
         $rows = array_map([$this, 'castAttendance'], $stmt->fetchAll());
 
-        // A fetched day always beats a hand-keyed one for the same person and date.
+        // A day the bot recorded always beats the hand-keyed row for the same person and
+        // date — and where that hand-keyed row exists it is an override, whose break the
+        // fetched row has already picked up. So dropping it here loses nothing.
         $seen = [];
         $out  = [];
         foreach ($rows as $row) {
@@ -361,9 +371,11 @@ final class StaffController
         if ($date === null) {
             Http::error('A date is required', 422);
         }
-        if ($this->fetchedDayExists($staffId, $date)) {
-            Http::error('That day was fetched from the attendance system and cannot be keyed in', 409);
-        }
+
+        // On a day the bot recorded, the row is an OVERRIDE, not an entry: the clock times
+        // and the status stay the bot's, and only the break is taken. Storing NULL times
+        // keeps that honest — there is nothing here that could shadow what the bot said.
+        $override = $this->fetchedDayExists($staffId, $date);
 
         // Re-keying a day updates it, so the sheet can never hold two rows for one day.
         $stmt = Database::connection()->prepare(
@@ -381,13 +393,16 @@ final class StaffController
         $stmt->execute([
             ':staff'  => $staffId,
             ':date'   => $date,
-            ':login'  => $this->clock($body['login_at'] ?? null),
-            ':logout' => $this->clock($body['logout_at'] ?? null),
-            ':break'  => max(0, (int) ($body['break_min'] ?? 0)),
-            ':status' => $this->text($body['status'] ?? 'present'),
+            ':login'  => $override ? null : $this->clock($body['login_at'] ?? null),
+            ':logout' => $override ? null : $this->clock($body['logout_at'] ?? null),
+            ':break'  => $this->breakMin($body['break_min'] ?? null),
+            ':status' => $override ? '' : $this->text($body['status'] ?? 'present'),
             ':note'   => $this->text($body['note'] ?? ''),
         ]);
-        Http::json($this->manualAttendance((int) $stmt->fetchColumn()), 201);
+        $id = (int) $stmt->fetchColumn();
+
+        // An override is only ever read back through the fetched row it belongs to.
+        Http::json($override ? $this->attendanceDay($staffId, $date) : $this->manualAttendance($id), 201);
     }
 
     public function updateAttendance(array $params): void
@@ -401,7 +416,7 @@ final class StaffController
                 status     = COALESCE(:status, status),
                 note       = COALESCE(:note, note),
                 updated_at = now()
-             WHERE id = :id RETURNING id'
+             WHERE id = :id RETURNING id, staff_id, work_date::text AS work_date'
         );
         $stmt->execute([
             ':id'         => (int) $params['id'],
@@ -410,15 +425,19 @@ final class StaffController
             ':login'      => $this->clock($body['login_at'] ?? null),
             ':logout_set' => \array_key_exists('logout_at', $body) ? 1 : 0,
             ':logout'     => $this->clock($body['logout_at'] ?? null),
-            ':break'      => isset($body['break_min']) ? max(0, (int) $body['break_min']) : null,
+            ':break'      => \array_key_exists('break_min', $body) ? $this->breakMin($body['break_min']) : null,
             ':status'     => isset($body['status']) ? $this->text($body['status']) : null,
             ':note'       => isset($body['note']) ? $this->text($body['note']) : null,
         ]);
-        $id = $stmt->fetchColumn();
-        if ($id === false || $id === null) {
+        $row = $stmt->fetch();
+        if (!$row) {
             Http::error('Attendance row not found', 404);
         }
-        Http::json($this->manualAttendance((int) $id));
+        // Where the row overrides a bot-recorded day, answer with that day as the sheet
+        // shows it — the bot's clock times carrying the corrected break.
+        Http::json($this->fetchedDayExists((int) $row['staff_id'], $row['work_date'])
+            ? $this->attendanceDay((int) $row['staff_id'], $row['work_date'])
+            : $this->manualAttendance((int) $row['id']));
     }
 
     public function destroyAttendance(array $params): void
@@ -726,14 +745,50 @@ final class StaffController
                     m.work_date::text AS work_date,
                     to_char(m.login_at, 'HH24:MI')  AS login_at,
                     to_char(m.logout_at, 'HH24:MI') AS logout_at,
-                    m.break_min, m.status, m.note,
-                    ROUND(EXTRACT(EPOCH FROM (m.logout_at - m.login_at)) / 3600.0 - m.break_min / 60.0, 2) AS net_hours,
+                    COALESCE(m.break_min, 0) AS break_min,
+                    FALSE AS break_edited,
+                    m.status, m.note,
+                    ROUND(EXTRACT(EPOCH FROM (m.logout_at - m.login_at)) / 3600.0 - COALESCE(m.break_min, 0) / 60.0, 2) AS net_hours,
                     ROUND(EXTRACT(EPOCH FROM (m.logout_at - m.login_at)) / 3600.0, 2) AS hours
                FROM staff_attendance m
                JOIN staff s ON s.id = m.staff_id
               WHERE m.id = :id"
         );
         $stmt->execute([':id' => $id]);
+        return $this->castAttendance($stmt->fetch() ?: []);
+    }
+
+    /**
+     * One bot-recorded day as the sheet shows it: the bot's clock times, with the break
+     * replaced by the override when one has been keyed in.
+     */
+    private function attendanceDay(int $staffId, string $date): array
+    {
+        $tz   = self::TZ;
+        $stmt = Database::connection()->prepare(
+            "SELECT o.id, 'fetched' AS source, s.id AS staff_id, s.name AS staff_name,
+                    d.work_date::text AS work_date,
+                    to_char(d.login_at  AT TIME ZONE '{$tz}', 'HH24:MI') AS login_at,
+                    to_char(d.logout_at AT TIME ZONE '{$tz}', 'HH24:MI') AS logout_at,
+                    COALESCE(o.break_min, b.break_min, 0)::int AS break_min,
+                    (o.break_min IS NOT NULL) AS break_edited,
+                    CASE WHEN d.login_at IS NULL THEN 'absent'
+                         WHEN d.logout_at IS NULL THEN 'still in'
+                         ELSE 'present' END AS status,
+                    COALESCE(o.note, '') AS note,
+                    ROUND(EXTRACT(EPOCH FROM (d.logout_at - d.login_at)) / 3600.0
+                          - COALESCE(o.break_min, b.break_min, 0) / 60.0, 2) AS net_hours,
+                    ROUND(EXTRACT(EPOCH FROM (d.logout_at - d.login_at)) / 3600.0, 2) AS hours
+               FROM attendance_days d
+               JOIN staff s ON s.attendance_user_id = d.user_id::text
+          LEFT JOIN (
+                    SELECT user_id, work_date, SUM(duration_min)::int AS break_min
+                      FROM attendance_breaks GROUP BY user_id, work_date
+               ) b ON b.user_id = d.user_id AND b.work_date = d.work_date
+          LEFT JOIN staff_attendance o ON o.staff_id = s.id AND o.work_date = d.work_date
+              WHERE s.id = :staff AND d.work_date = :date"
+        );
+        $stmt->execute([':staff' => $staffId, ':date' => $date]);
         return $this->castAttendance($stmt->fetch() ?: []);
     }
 
@@ -851,6 +906,18 @@ final class StaffController
         return mb_substr(trim((string) $value), 0, 200);
     }
 
+    /**
+     * Break minutes, or null for "no override" — which on a bot-recorded day means fall
+     * back to what the bot itself totalled. A whole day is the ceiling.
+     */
+    private function breakMin(mixed $value): ?int
+    {
+        if ($value === null || $value === '' || !is_numeric($value)) {
+            return null;
+        }
+        return max(0, min(24 * 60, (int) $value));
+    }
+
     /** "HH:MM" (or "HH:MM:SS") as keyed in, or null for a blank cell. */
     private function clock(mixed $value): ?string
     {
@@ -920,7 +987,8 @@ final class StaffController
         }
         $row['id']        = $row['id'] === null ? null : (int) $row['id'];
         $row['staff_id']  = (int) $row['staff_id'];
-        $row['break_min'] = (int) $row['break_min'];
+        $row['break_min']    = (int) $row['break_min'];
+        $row['break_edited'] = (bool) ($row['break_edited'] ?? false);
         $row['hours']     = $row['hours'] === null ? null : (float) $row['hours'];
         $row['net_hours'] = $row['net_hours'] === null ? null : (float) $row['net_hours'];
         return $row;

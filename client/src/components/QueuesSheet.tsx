@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api/client'
 import { num } from '../lib/format'
+import { anchorTo, focusQuietly, type Anchor } from '../lib/popover'
 import { matches } from '../lib/queues'
 import type { QueueAssignment, QueueCode, StaffMember } from '../types'
 import {
@@ -11,14 +12,11 @@ import {
 import { Spinner, cx } from './ui'
 
 /**
- * The Queues sheet: Sr. No. · Name · Department · Queues · Total, keyed straight into the
- * table.
+ * The Queues sheet: Sr. No. · Name · Queues · Total, keyed straight into the table.
  *
- * Name is a dropdown of the shared staff roster (managed on the Staff page), and
- * DEPARTMENT is read straight off whoever is picked — it is never typed here, so it can
- * never disagree with the Staff page. Queues is a dropdown that ticks as many queue codes
- * as you like. Sr. No. is the row's position and Total is how many queues the row holds —
- * none of the three is typed, and none is stored.
+ * Name is a dropdown of the shared staff roster (managed on the Staff page); Queues is a
+ * dropdown that ticks as many queue codes as you like. Sr. No. is the row.s position and
+ * Total is how many queues the row holds — neither is typed, and neither is stored.
  *
  * Existing rows save as soon as you change them (the queue dropdown saves once, when it
  * closes, rather than on every tick). The trailing row adds a record.
@@ -45,9 +43,8 @@ export default function QueuesSheet({
       <table className={cx(tableCls, "min-w-2xl")}>
         <colgroup>
           <col style={{ width: '6%' }} />
-          <col style={{ width: '19%' }} />
-          <col style={{ width: '17%' }} />
-          <col style={{ width: '45%' }} />
+          <col style={{ width: '21%' }} />
+          <col style={{ width: '60%' }} />
           <col style={{ width: '7%' }} />
           <col style={{ width: '6%' }} />
         </colgroup>
@@ -55,7 +52,6 @@ export default function QueuesSheet({
           <tr className={theadCls}>
             <th className={headCls}>Sr. No.</th>
             <th className={headCls}>Name</th>
-            <th className={headCls}>Department</th>
             <th className={headCls}>Queues</th>
             <th className={headCls}>Total</th>
             <th className={headCls} aria-label="actions" />
@@ -69,7 +65,7 @@ export default function QueuesSheet({
         </tbody>
         <tfoot>
           <tr className="bg-[#1a3654] font-bold text-white">
-            <td className="px-2 py-1.5 text-center text-[11px] font-bold uppercase" colSpan={4}>
+            <td className="px-2 py-1.5 text-center text-[11px] font-bold uppercase" colSpan={3}>
               {filtered ? 'Total (shown)' : 'Total'}
             </td>
             <td className="px-2 py-1.5 text-center text-xs tabular-nums">{num(total)}</td>
@@ -147,9 +143,6 @@ function Row({
           ))}
         </select>
       </td>
-      <td className={cx(cellCls, 'text-[11px] font-semibold text-slate-700')}>
-        <DepartmentCell departments={row.departments} />
-      </td>
       <td className={cellCls}>
         <QueuePicker codes={codes} value={draft} onChange={setDraft} onClose={() => commitCodes(draft)} />
       </td>
@@ -202,10 +195,6 @@ function AddRow({ free, codes, onChanged }: { free: StaffMember[]; codes: QueueC
           {free.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </td>
-      {/* Follows the picked name straight away, so the band is visible before saving. */}
-      <td className={cx(cellCls, 'text-[11px] font-semibold text-slate-700')}>
-        <DepartmentCell departments={free.find((p) => p.id === personId)?.departments ?? []} />
-      </td>
       <td className={cellCls}>
         <QueuePicker codes={codes} value={picked} onChange={setPicked} />
       </td>
@@ -224,23 +213,6 @@ function AddRow({ free, codes, onChanged }: { free: StaffMember[]; codes: QueueC
         </div>
       </td>
     </tr>
-  )
-}
-
-/**
- * The DEPARTMENT cell — read-only on purpose. Departments are edited on the Staff page, so
- * showing them here can never let the two lists drift apart.
- */
-function DepartmentCell({ departments }: { departments: { id: number; name: string }[] }) {
-  if (departments.length === 0) return <span className="text-slate-400">—</span>
-  return (
-    <div className="flex flex-wrap gap-0.5">
-      {departments.map((d) => (
-        <span key={d.id} className="rounded border border-slate-300 bg-slate-50 px-1 text-[10px] font-bold leading-4 text-slate-700">
-          {d.name}
-        </span>
-      ))}
-    </div>
   )
 }
 
@@ -264,19 +236,20 @@ function QueuePicker({
   const [search, setSearch] = useState('')
   const triggerRef = useRef<HTMLButtonElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 320 })
+  const searchRef = useRef<HTMLInputElement>(null)
+  const [pos, setPos] = useState<Anchor>({ top: 0, left: 0, width: 320 })
 
   const close = () => { setOpen(false); setSearch(''); onClose?.() }
 
+  // Measured before the panel exists, so its first paint is already in place — see
+  // anchorTo(). Opening any other way drags the page to the top of the document.
+  const openPanel = () => {
+    setPos(anchorTo(triggerRef.current, 360, 6))
+    setOpen(true)
+  }
+
   useLayoutEffect(() => {
-    if (!open || !triggerRef.current) return
-    const r = triggerRef.current.getBoundingClientRect()
-    const margin = 8
-    const width = Math.min(360, window.innerWidth - margin * 2)
-    let left = r.left
-    if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width
-    if (left < margin) left = margin
-    setPos({ top: r.bottom + 6 + window.scrollY, left: left + window.scrollX, width })
+    if (open) focusQuietly(searchRef.current)
   }, [open])
 
   useEffect(() => {
@@ -303,7 +276,7 @@ function QueuePicker({
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => (open ? close() : setOpen(true))}
+        onClick={() => (open ? close() : openPanel())}
         title={selected.map((c) => c.code).join(', ')}
         className={cx(
           'flex w-full items-center justify-between gap-1.5 rounded border bg-white px-1.5 py-0.5 text-left transition-colors',
@@ -330,8 +303,8 @@ function QueuePicker({
         >
           <div className="mb-2 flex items-center gap-1.5">
             <input
+              ref={searchRef}
               value={search}
-              autoFocus
               placeholder="Search…"
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#1a3654] focus:outline-none focus:ring-2 focus:ring-[#1a3654]/25"

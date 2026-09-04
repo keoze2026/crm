@@ -12,6 +12,24 @@ final class AttendanceController
     private const TZ          = 'America/New_York';
     private const BREAK_ALLOW = 60;
 
+    /**
+     * The break total for a day. The bot's own sum, unless someone has corrected it on the
+     * Staff page's attendance sheet — that correction is stored as a `staff_attendance`
+     * row and wins here, so both pages always agree on the same figure.
+     *
+     * Every query that totals a break uses this together with BREAK_OVERRIDE_JOIN.
+     */
+    private const BREAK_MIN = 'COALESCE(o.break_min, b.break_min, 0)';
+
+    /**
+     * Reaches the override from the bot's side: day -> the staff member who checks in with
+     * that account -> their row for the same date. LEFT JOINs throughout, so a day with no
+     * staff member or no correction still comes back with the bot's own total.
+     */
+    private const BREAK_OVERRIDE_JOIN =
+        'LEFT JOIN staff so ON so.attendance_user_id = d.user_id::text
+         LEFT JOIN staff_attendance o ON o.staff_id = so.id AND o.work_date = d.work_date';
+
     public function staff(): void
     {
         $stmt = Database::connection()->prepare(
@@ -24,18 +42,19 @@ final class AttendanceController
 
     public function roster(): void
     {
-        $date = Http::query('date', (new \DateTime('now', new \DateTimeZone(self::TZ)))->format('Y-m-d'));
-        $stmt = Database::connection()->prepare(
+        $date  = Http::query('date', (new \DateTime('now', new \DateTimeZone(self::TZ)))->format('Y-m-d'));
+        $break = self::BREAK_MIN;
+        $stmt  = Database::connection()->prepare(
             "SELECT d.user_id::text, d.staff_name, d.username, d.work_date::text,
                     d.login_at, d.login_stated, d.logout_at, d.logout_stated,
                     (d.login_at IS NOT NULL) AS present,
                     (d.login_at IS NOT NULL AND d.logout_at IS NULL) AS still_in,
                     ROUND(EXTRACT(EPOCH FROM (d.logout_at - d.login_at)) / 3600.0, 2) AS hours,
-                    COALESCE(b.break_min, 0) AS break_min,
+                    {$break} AS break_min,
                     COALESCE(b.break_count, 0) AS break_count,
                     COALESCE(b.break_detail, '') AS break_detail,
-                    GREATEST(COALESCE(b.break_min, 0) - :allow, 0) AS over_break_min,
-                    ROUND(EXTRACT(EPOCH FROM (d.logout_at - d.login_at)) / 3600.0 - COALESCE(b.break_min, 0) / 60.0, 2) AS net_hours
+                    GREATEST({$break} - :allow, 0) AS over_break_min,
+                    ROUND(EXTRACT(EPOCH FROM (d.logout_at - d.login_at)) / 3600.0 - {$break} / 60.0, 2) AS net_hours
              FROM attendance_days d
              LEFT JOIN (
                  SELECT user_id, work_date,
@@ -44,6 +63,7 @@ final class AttendanceController
                         STRING_AGG(duration_min::text, ', ' ORDER BY taken_at) AS break_detail
                  FROM attendance_breaks GROUP BY user_id, work_date
              ) b ON b.user_id = d.user_id AND b.work_date = d.work_date
+             " . self::BREAK_OVERRIDE_JOIN . "
              WHERE d.work_date = :date
              ORDER BY d.login_at NULLS LAST"
         );
@@ -78,15 +98,16 @@ final class AttendanceController
         $params = [':from' => $from, ':to' => $to, ':allow' => self::BREAK_ALLOW];
         if ($userId) { $where[] = 'd.user_id = :uid'; $params[':uid'] = $userId; }
 
-        $stmt = Database::connection()->prepare(
+        $break = self::BREAK_MIN;
+        $stmt  = Database::connection()->prepare(
             "SELECT d.user_id::text, d.staff_name, d.username, d.work_date::text,
                     d.login_at, d.login_stated, d.logout_at, d.logout_stated,
                     ROUND(EXTRACT(EPOCH FROM (d.logout_at - d.login_at)) / 3600.0, 2) AS hours,
-                    COALESCE(b.break_min, 0) AS break_min,
+                    {$break} AS break_min,
                     COALESCE(b.break_count, 0) AS break_count,
                     COALESCE(b.break_detail, '') AS break_detail,
-                    GREATEST(COALESCE(b.break_min, 0) - :allow, 0) AS over_break_min,
-                    ROUND(EXTRACT(EPOCH FROM (d.logout_at - d.login_at)) / 3600.0 - COALESCE(b.break_min, 0) / 60.0, 2) AS net_hours,
+                    GREATEST({$break} - :allow, 0) AS over_break_min,
+                    ROUND(EXTRACT(EPOCH FROM (d.logout_at - d.login_at)) / 3600.0 - {$break} / 60.0, 2) AS net_hours,
                     (d.logout_at IS NOT NULL) AS completed
              FROM attendance_days d
              LEFT JOIN (
@@ -96,6 +117,7 @@ final class AttendanceController
                         STRING_AGG(duration_min::text, ', ' ORDER BY taken_at) AS break_detail
                  FROM attendance_breaks GROUP BY user_id, work_date
              ) b ON b.user_id = d.user_id AND b.work_date = d.work_date
+             " . self::BREAK_OVERRIDE_JOIN . "
              WHERE " . implode(' AND ', $where) . "
              ORDER BY d.work_date DESC, d.staff_name"
         );
@@ -134,13 +156,29 @@ final class AttendanceController
         );
         $totStmt->execute([':uid' => $userId, ':date' => $date]);
         $totalMin = (int) $totStmt->fetchColumn();
+
+        // A correction keyed in on the Staff page replaces the total. The individual breaks
+        // below are still the bot's own list — the override is a day total, not a re-timing
+        // of each break — so `overridden` says which of the two the total came from.
+        $ovrStmt = Database::connection()->prepare(
+            'SELECT o.break_min
+               FROM staff_attendance o
+               JOIN staff s ON s.id = o.staff_id
+              WHERE s.attendance_user_id = :uid AND o.work_date = :date AND o.break_min IS NOT NULL'
+        );
+        $ovrStmt->execute([':uid' => $userId, ':date' => $date]);
+        $override = $ovrStmt->fetchColumn();
+        $overridden = $override !== false && $override !== null;
+        if ($overridden) {
+            $totalMin = (int) $override;
+        }
         $stmt = Database::connection()->prepare(
             "SELECT taken_at, duration_min, urgent, raw FROM attendance_breaks WHERE user_id = :uid AND work_date = :date ORDER BY taken_at"
         );
         $stmt->execute([':uid' => $userId, ':date' => $date]);
         $breaks = $stmt->fetchAll();
         foreach ($breaks as &$b) { $b['urgent'] = (bool)$b['urgent']; $b['duration_min'] = (int)$b['duration_min']; }
-        Http::json(['userId' => $userId, 'date' => $date, 'allowanceMin' => self::BREAK_ALLOW, 'totalMin' => $totalMin, 'overMin' => max(0, $totalMin - self::BREAK_ALLOW), 'breaks' => $breaks]);
+        Http::json(['userId' => $userId, 'date' => $date, 'allowanceMin' => self::BREAK_ALLOW, 'totalMin' => $totalMin, 'overMin' => max(0, $totalMin - self::BREAK_ALLOW), 'overridden' => $overridden, 'breaks' => $breaks]);
     }
 
     public function exceptions(): void
@@ -152,7 +190,21 @@ final class AttendanceController
         $params = [':from' => $from, ':to' => $to];
         $sql = match($type) {
             'missing_logout' => "SELECT user_id::text, staff_name, work_date::text, login_at FROM attendance_days WHERE login_at IS NOT NULL AND logout_at IS NULL AND work_date < (now() AT TIME ZONE '{$tz}')::date AND work_date BETWEEN :from AND :to ORDER BY work_date DESC",
-            'over_break'     => "SELECT user_id::text, staff_name, work_date::text, SUM(duration_min) AS break_min, SUM(duration_min) - 60 AS over_min FROM attendance_breaks WHERE work_date BETWEEN :from AND :to GROUP BY user_id, staff_name, work_date HAVING SUM(duration_min) > 60 ORDER BY over_min DESC",
+            // Driven off attendance_days, not attendance_breaks, so a corrected total is
+            // what decides whether the day is over the allowance — including a correction
+            // that brings a day back UNDER it, which a query over the bot's rows can't see.
+            'over_break'     => "SELECT d.user_id::text, d.staff_name, d.work_date::text,
+                                        " . self::BREAK_MIN . " AS break_min,
+                                        " . self::BREAK_MIN . " - " . self::BREAK_ALLOW . " AS over_min
+                                   FROM attendance_days d
+                              LEFT JOIN (
+                                        SELECT user_id, work_date, SUM(duration_min) AS break_min
+                                          FROM attendance_breaks GROUP BY user_id, work_date
+                                   ) b ON b.user_id = d.user_id AND b.work_date = d.work_date
+                                   " . self::BREAK_OVERRIDE_JOIN . "
+                                  WHERE d.work_date BETWEEN :from AND :to
+                                    AND " . self::BREAK_MIN . " > " . self::BREAK_ALLOW . "
+                                  ORDER BY over_min DESC",
             'late'           => "SELECT user_id::text, staff_name, work_date::text, (login_at AT TIME ZONE '{$tz}')::time::text AS local_login FROM attendance_days WHERE login_at IS NOT NULL AND (login_at AT TIME ZONE '{$tz}')::time > TIME '09:00' AND work_date BETWEEN :from AND :to ORDER BY work_date DESC",
             default          => null,
         };

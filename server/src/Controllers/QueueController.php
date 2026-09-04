@@ -16,7 +16,7 @@ use App\Http;
  *
  * The NAMES the sheet picks from are the shared staff roster (`staff`, served by
  * StaffController at /staff) — the same list the Review and Staff pages read, so a person
- * is added, renamed or removed in exactly one place and their departments come along.
+ * is added, renamed or removed in exactly one place.
  *
  * A record's TOTAL is never stored (it is how many codes are linked to it) and neither is
  * its Sr. No. (that is its position in the sheet), so the two can't drift from the queues
@@ -39,14 +39,7 @@ final class QueueController
                              ORDER BY upper(btrim(c.code)))
                     FILTER (WHERE c.id IS NOT NULL),
                     \'[]\'
-                ) AS codes,
-                (SELECT COALESCE(
-                            json_agg(json_build_object(\'id\', d.id, \'name\', d.name)
-                                     ORDER BY d.sort_order, d.id),
-                            \'[]\')
-                   FROM staff_departments sd
-                   JOIN departments d ON d.id = sd.department_id
-                  WHERE sd.staff_id = p.id) AS departments
+                ) AS codes
            FROM queue_assignments a
            JOIN staff p ON p.id = a.person_id
       LEFT JOIN queue_assignment_codes ac ON ac.assignment_id = a.id
@@ -363,16 +356,11 @@ final class QueueController
         $row['id']         = (int) $row['id'];
         $row['person_id']  = (int) $row['person_id'];
         $row['sort_order'] = (int) $row['sort_order'];
-        // `codes` and `departments` arrive as JSON text from json_agg.
+        // `codes` arrives as JSON text from json_agg.
         $codes = \is_string($row['codes']) ? json_decode($row['codes'], true) : $row['codes'];
         $row['codes'] = array_map(
             static fn (array $c): array => ['id' => (int) $c['id'], 'code' => (string) $c['code']],
             \is_array($codes) ? $codes : []
-        );
-        $departments = \is_string($row['departments']) ? json_decode($row['departments'], true) : $row['departments'];
-        $row['departments'] = array_map(
-            static fn (array $d): array => ['id' => (int) $d['id'], 'name' => (string) $d['name']],
-            \is_array($departments) ? $departments : []
         );
         return $row;
     }

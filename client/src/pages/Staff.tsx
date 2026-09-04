@@ -3,14 +3,14 @@ import { api } from '../api/client'
 import DepartmentLists from '../components/DepartmentLists'
 import { DaySelector } from '../components/DaySelector'
 import { PageHeader } from '../components/Layout'
-import { MonthSelector, currentMonth, formatMonth } from '../components/MonthSelector'
+import { MonthSelector, currentMonth, formatMonth, shiftMonth } from '../components/MonthSelector'
 import StaffAttendanceSheet from '../components/StaffAttendanceSheet'
 import StaffLeavesSheet from '../components/StaffLeavesSheet'
 import StaffSalariesSheet from '../components/StaffSalariesSheet'
 import StaffSheet from '../components/StaffSheet'
 import {
   Badge, Button, Card, CardHeader, DownloadIcon, EmptyState, Input, PageLoader,
-  SegmentedTabs, StatTile,
+  SegmentedTabs,
 } from '../components/ui'
 import { formatDate, today } from '../lib/format'
 import { matches } from '../lib/queues'
@@ -39,13 +39,17 @@ const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
  * Staff Management — the roster every other sheet reads, plus the three sheets that hang
  * off it.
  *
- * Each tab carries the filter it actually needs: attendance is a day at a time (opening on
- * today, like the Attendance page), leaves and salaries are monthly sheets, and the roster
- * is neither, so it gets a search box.
+ * Each tab carries the filter it actually needs: attendance is a day at a time, opening on
+ * today, because it records a day as it happens; leaves and salaries are monthly sheets
+ * about the month just finished, so they open on last month like Review; and the roster is
+ * neither, so it gets a search box.
  */
 export default function Staff() {
   const [tab, setTab] = useState<Tab>('staff')
-  const [month, setMonth] = useState<string>(currentMonth())
+  // Leaves and salaries are both written up about the month just finished — a salary paid
+  // in September is for August's work — so they open on last month, the way Review does.
+  // Attendance is the opposite: it is a record of a day as it happens, so it opens on today.
+  const [month, setMonth] = useState<string>(() => shiftMonth(currentMonth(), -1))
   const [date, setDate] = useState<string>(today)
   const [search, setSearch] = useState('')
 
@@ -112,7 +116,7 @@ export default function Staff() {
   }
 
   return (
-    <div>
+    <div className="min-w-0">
       <PageHeader title="Staff Management">
         {tab === 'staff' ? (
           <div className="w-full sm:w-64">
@@ -140,12 +144,6 @@ export default function Staff() {
         <PageLoader label="Loading staff…" />
       ) : tab === 'staff' ? (
         <>
-          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <StatTile label="Staff" value={people.length} />
-            <StatTile label="Active" value={people.filter((p) => p.status === 'active').length} />
-            <StatTile label="Departments" value={depts.length} />
-          </div>
-
           <DepartmentLists departments={depts} onChanged={reloadRoster} />
 
           <Card className="mt-6">

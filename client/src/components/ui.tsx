@@ -166,6 +166,10 @@ export function Select({
 /**
  * Segmented pill tab bar — a dark rounded container with a raised active segment, matching
  * the app's sidebar language. Generic over the tab id type.
+ *
+ * `w-fit` keeps it hugging its tabs on a wide screen, and `flex-wrap` lets it stack onto a
+ * second row on a narrow one rather than running off the side and dragging the whole page
+ * into a horizontal scroll. Labels never break mid-word.
  */
 export function SegmentedTabs<T extends string>({ tabs, value, onChange, className }: {
   tabs: { id: T; label: string; icon?: ReactNode }[]
@@ -174,13 +178,13 @@ export function SegmentedTabs<T extends string>({ tabs, value, onChange, classNa
   className?: string
 }) {
   return (
-    <div className={cx('inline-flex items-center gap-1 rounded-2xl bg-linear-to-b from-[#131b31] to-[#0d1424] p-1 shadow-lg shadow-slate-900/25 ring-1 ring-white/10 backdrop-blur', className)}>
+    <div className={cx('flex w-fit max-w-full flex-wrap items-center gap-1 rounded-2xl bg-linear-to-b from-[#131b31] to-[#0d1424] p-1 shadow-lg shadow-slate-900/25 ring-1 ring-white/10 backdrop-blur', className)}>
       {tabs.map((t) => (
         <button
           key={t.id}
           onClick={() => onChange(t.id)}
           className={cx(
-            'flex items-center gap-2 rounded-xl px-4 py-1.5 text-sm font-medium transition-all',
+            'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-3 py-1.5 text-sm font-medium transition-all sm:px-4',
             value === t.id
               ? 'bg-white text-slate-900 shadow-sm'
               : 'text-slate-300 hover:bg-white/10 hover:text-white',

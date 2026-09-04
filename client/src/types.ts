@@ -415,7 +415,10 @@ export interface StaffMember {
  * ones keyed in here for people the bot never saw.
  */
 export interface StaffAttendanceRow {
-  /** null for a fetched row — there is nothing to address a write to. */
+  /**
+   * The row this app owns. For a hand-keyed day that is the day itself; for a fetched day
+   * it is the break correction sitting over it, and null until one is keyed in.
+   */
   id: number | null
   source: 'fetched' | 'manual'
   staff_id: number
@@ -425,6 +428,8 @@ export interface StaffAttendanceRow {
   login_at: string | null
   logout_at: string | null
   break_min: number
+  /** True when `break_min` is a correction rather than the bot's own total. */
+  break_edited: boolean
   status: string
   note: string
   hours: number | null
@@ -495,8 +500,6 @@ export interface QueueAssignment {
   person_id: number
   /** Denormalised from the staff roster for display. */
   name: string
-  /** The person's departments, so the sheet can show them without a second lookup. */
-  departments: { id: number; name: string }[]
   codes: { id: number; code: string }[]
   sort_order: number
   /** When the record was keyed in — the date the History section groups by. */

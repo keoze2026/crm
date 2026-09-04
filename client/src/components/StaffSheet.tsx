@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api/client'
+import { anchorTo, focusQuietly, type Anchor } from '../lib/popover'
 import { matches } from '../lib/queues'
 import { STAFF_STATUSES, staffStatus } from '../lib/staff'
 import type { Department, StaffMember, StaffStatus } from '../types'
@@ -26,7 +27,7 @@ export default function StaffSheet({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className={cx(tableCls, "min-w-3xl")}>
+      <table className={cx(tableCls, "min-w-2xl")}>
         <colgroup>
           <col style={{ width: '7%' }} />
           <col style={{ width: '32%' }} />
@@ -233,7 +234,8 @@ function DepartmentPicker({
   const [seen, setSeen] = useState(value.join(','))
   const triggerRef = useRef<HTMLButtonElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 260 })
+  const searchRef = useRef<HTMLInputElement>(null)
+  const [pos, setPos] = useState<Anchor>({ top: 0, left: 0, width: 260 })
 
   // Adopt the server's answer whenever the row changes underneath us — the render-phase
   // reset React prescribes for state derived from props, rather than an effect.
@@ -249,15 +251,15 @@ function DepartmentPicker({
     if ([...draft].sort().join(',') !== [...value].sort().join(',')) onCommit(draft)
   }
 
+  // Measured before the panel exists, so its first paint is already in place — see
+  // anchorTo(). Opening any other way drags the page to the top of the document.
+  const openPanel = () => {
+    setPos(anchorTo(triggerRef.current, 280))
+    setOpen(true)
+  }
+
   useLayoutEffect(() => {
-    if (!open || !triggerRef.current) return
-    const r = triggerRef.current.getBoundingClientRect()
-    const margin = 8
-    const width = Math.min(280, window.innerWidth - margin * 2)
-    let left = r.left
-    if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width
-    if (left < margin) left = margin
-    setPos({ top: r.bottom + 4 + window.scrollY, left: left + window.scrollX, width })
+    if (open) focusQuietly(searchRef.current)
   }, [open])
 
   useEffect(() => {
@@ -285,7 +287,7 @@ function DepartmentPicker({
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => (open ? close() : setOpen(true))}
+        onClick={() => (open ? close() : openPanel())}
         title={chosen.map((d) => d.name).join(', ') || 'No department'}
         className={cx(
           'flex w-full items-center justify-between gap-1 rounded border bg-white px-1.5 py-0.5 text-left text-xs transition-colors',
@@ -313,8 +315,8 @@ function DepartmentPicker({
           className="z-50 rounded-xl border border-slate-300 bg-white p-2 shadow-2xl shadow-slate-900/20"
         >
           <input
+            ref={searchRef}
             value={search}
-            autoFocus
             placeholder="Search departments…"
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 placeholder:text-slate-400 focus:border-[#1a3654] focus:outline-none focus:ring-2 focus:ring-[#1a3654]/25"
