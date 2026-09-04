@@ -206,3 +206,86 @@ CREATE TABLE IF NOT EXISTS vendor_payments (
 
 CREATE INDEX IF NOT EXISTS idx_vendor_payments_vendor ON vendor_payments (vendor);
 CREATE INDEX IF NOT EXISTS idx_vendor_payments_date   ON vendor_payments (entry_date);
+
+-- Queues — powers the Queues page. Two reusable catalogues (`queue_people`, `queue_codes`,
+-- both editable from the page itself) joined by a record per person: `queue_assignments`
+-- (at most one per person — hence the unique index) and `queue_assignment_codes` (which
+-- queues that record covers). The sheet's TOTAL is NOT stored: it is how many rows a record
+-- has in queue_assignment_codes, so it can never disagree with the queues shown next to it;
+-- Sr. No. is positional too. There is no reporting date: `created_at` is the day the record
+-- was keyed in and is what the History section groups by. Standalone (no call_records link),
+-- so the 40-day cleanup never touches them.
+CREATE TABLE IF NOT EXISTS queue_people (
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name       TEXT        NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_queue_people_name_ci ON queue_people (lower(btrim(name)));
+
+CREATE TABLE IF NOT EXISTS queue_codes (
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code       TEXT        NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_queue_codes_code_ci ON queue_codes (upper(btrim(code)));
+
+CREATE TABLE IF NOT EXISTS queue_assignments (
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    person_id  BIGINT      NOT NULL REFERENCES queue_people (id) ON DELETE CASCADE,
+    sort_order INTEGER     NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),  -- the day it was keyed in (the History date)
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_queue_assignments_person  ON queue_assignments (person_id);
+CREATE INDEX        IF NOT EXISTS idx_queue_assignments_created ON queue_assignments (created_at);
+
+CREATE TABLE IF NOT EXISTS queue_assignment_codes (
+    assignment_id BIGINT NOT NULL REFERENCES queue_assignments (id) ON DELETE CASCADE,
+    code_id       BIGINT NOT NULL REFERENCES queue_codes (id) ON DELETE CASCADE,
+    PRIMARY KEY (assignment_id, code_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_queue_assignment_codes_code ON queue_assignment_codes (code_id);
+
+-- Reviews — powers the Review page's three tabs. `review_departments` is the Department tab
+-- (its own rating + % score) and doubles as the catalogue the other tabs group by;
+-- `review_entries` holds one row per person per tab, told apart by `kind`: 'performance'
+-- (rating + percentage) or 'behaviour' (rating + month). Ratings are stored as the wording
+-- the dropdowns show. `department_id` is SET NULL on delete so dropping a department can't
+-- take a month of reviews with it. Standalone (no call_records link), so the 40-day cleanup
+-- never touches them.
+CREATE TABLE IF NOT EXISTS review_departments (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name        TEXT          NOT NULL,
+    performance TEXT          NOT NULL DEFAULT '',   -- Excellent / Good / Average / …
+    percentage  NUMERIC(5, 2),                       -- NULL = never scored (blank cell)
+    sort_order  INTEGER       NOT NULL DEFAULT 0,
+    created_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_review_departments_name_ci
+    ON review_departments (lower(btrim(name)));
+
+CREATE TABLE IF NOT EXISTS review_entries (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    kind            TEXT        NOT NULL CHECK (kind IN ('performance', 'behaviour')),
+    department_id   BIGINT      REFERENCES review_departments (id) ON DELETE SET NULL,
+    person_name     TEXT        NOT NULL,
+    department_note TEXT        NOT NULL DEFAULT '',  -- the per-row DEPARTMENT cell
+    rating          TEXT        NOT NULL DEFAULT '',  -- Performance or Behaviour analysis
+    percentage      NUMERIC(5, 2),                    -- performance rows only
+    notes           TEXT        NOT NULL DEFAULT '',  -- free-text remark on the individual
+    month           DATE,                             -- behaviour rows only, first of the month
+    sort_order      INTEGER     NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_review_entries_kind       ON review_entries (kind, month);
+CREATE INDEX IF NOT EXISTS idx_review_entries_department ON review_entries (department_id);

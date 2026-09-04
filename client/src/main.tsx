@@ -12,6 +12,8 @@ import Buyers from './pages/Buyers'
 import Campaigns from './pages/Campaigns'
 import Vendors from './pages/Vendors'
 import PortalExpenses from './pages/PortalExpenses'
+import QueuesPage from './pages/Queues'
+import Review from './pages/Review'
 import CompleteReportPage from './pages/CompleteReport'
 import Attendance from './pages/Attendance'
 import Login from './pages/Login'
@@ -39,6 +41,8 @@ const router = createBrowserRouter([
           { path: 'campaigns', element: <RequirePage page="campaigns"><Campaigns /></RequirePage> },
           { path: 'vendors', element: <RequirePage page="vendors"><Vendors /></RequirePage> },
           { path: 'portal-expenses', element: <RequirePage page="portal-expenses"><PortalExpenses /></RequirePage> },
+          { path: 'queues', element: <RequirePage page="queues"><QueuesPage /></RequirePage> },
+          { path: 'review', element: <RequirePage page="reviews"><Review /></RequirePage> },
           { path: 'complete-report', element: <RequirePage page="complete-report"><CompleteReportPage /></RequirePage> },
           { path: 'attendance', element: <RequirePage page="attendance"><Attendance /></RequirePage> },
           { path: 'users', element: <RequirePage page="users"><Users /></RequirePage> },

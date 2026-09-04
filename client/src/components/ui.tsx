@@ -269,6 +269,15 @@ export function Modal({
   )
 }
 
+/** Download affordance — a tray with an arrow into it. Pairs with the PDF/export buttons. */
+export function DownloadIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M4 21h16" />
+    </svg>
+  )
+}
+
 export function Spinner({ className }: { className?: string }) {
   return (
     <svg className={cx('animate-spin text-blue-600', className)} width="20" height="20" viewBox="0 0 24 24" fill="none">

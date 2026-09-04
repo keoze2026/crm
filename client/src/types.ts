@@ -375,6 +375,87 @@ export interface PortalExpense {
   updated_at: string
 }
 
+// ─── Queues (per-person queue records + the two catalogues) ────────────────────
+
+/** A name in the Names catalogue the Queues page picks from. */
+export interface QueuePerson {
+  id: number
+  name: string
+  /** Their record's id, or null when they have no record yet. */
+  assignment_id: number | null
+  created_at: string
+  updated_at: string
+}
+
+/** A queue in the Queues catalogue the page ticks. */
+export interface QueueCode {
+  id: number
+  code: string
+  /** How many records currently include this queue — what a delete would touch. */
+  usage_count: number
+  created_at: string
+  updated_at: string
+}
+
+/** One person's record: the name plus every queue they cover. */
+export interface QueueAssignment {
+  id: number
+  person_id: number
+  /** Denormalised from the Names catalogue for display. */
+  name: string
+  codes: { id: number; code: string }[]
+  sort_order: number
+  /** When the record was keyed in — the date the History section groups by. */
+  created_at: string
+  updated_at: string
+}
+
+/** What a catalogue create answers with: the rows it added, and the ones already there. */
+export interface CatalogueResult<T> {
+  created: T[]
+  existing: T[]
+}
+
+// ─── Reviews (the Review page's three tabs) ────────────────────────────────────
+
+/** Which tab an entry belongs to. */
+export type ReviewKind = 'performance' | 'behaviour'
+
+/** A row of the Department tab — and the catalogue the other tabs group by. */
+export interface ReviewDepartment {
+  id: number
+  name: string
+  /** Excellent / Good / Average / Below Average / Poor — stored as the shown wording. */
+  performance: string
+  /** null = never scored, so the cell stays blank rather than reading 0. */
+  percentage: number | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+/** One person's row on the Performance or Behaviour tab. */
+export interface ReviewEntry {
+  id: number
+  kind: ReviewKind
+  /** The department band the row sits under; null = "No department". */
+  department_id: number | null
+  person_name: string
+  /** The per-row DEPARTMENT cell ("Billing", "Billing/Audits") — free text. */
+  department_note: string
+  /** Performance rating, or the behaviour analysis. */
+  rating: string
+  /** Performance rows only. */
+  percentage: number | null
+  /** Free-text remark on the individual — shown on the Performance tab. */
+  notes: string
+  /** Behaviour rows only — the first day of the month, YYYY-MM-DD. */
+  month: string | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
 // ─── Vendors (traffic-source payment sheets) ───────────────────────────────────
 
 export interface Vendor {

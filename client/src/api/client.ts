@@ -24,6 +24,13 @@ import type {
   AuditPage,
   AuditFilters,
   PortalExpense,
+  CatalogueResult,
+  QueueAssignment,
+  QueueCode,
+  QueuePerson,
+  ReviewDepartment,
+  ReviewEntry,
+  ReviewKind,
   Vendor,
   VendorLedger,
   VendorPayment,
@@ -212,6 +219,63 @@ export const api = {
     request<PortalExpense>(`/portal-expenses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deletePortalExpense: (id: number) =>
     request<{ deleted: boolean }>(`/portal-expenses/${id}`, { method: 'DELETE' }),
+
+  // Queues — the per-person records. `day` (YYYY-MM-DD) narrows to the records keyed in
+  // on one day; omit it for the whole sheet.
+  queues: (day?: string) =>
+    request<QueueAssignment[]>(`/queues${qs({ day })}`),
+  // Creating for a person who already has a record updates that record instead, so the
+  // sheet can never hold two rows for one name.
+  createQueueAssignment: (data: { person_id: number; code_ids: number[] }) =>
+    request<QueueAssignment>('/queues', { method: 'POST', body: JSON.stringify(data) }),
+  updateQueueAssignment: (id: number, data: { person_id?: number; code_ids?: number[] }) =>
+    request<QueueAssignment>(`/queues/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteQueueAssignment: (id: number) =>
+    request<{ deleted: boolean }>(`/queues/${id}`, { method: 'DELETE' }),
+
+  // Queues — the Names catalogue. Create takes a list, so a sheet can be seeded from a
+  // pasted "Anna, Ben, Camp Team" in one call.
+  queuePeople: () =>
+    request<QueuePerson[]>('/queue-people'),
+  createQueuePeople: (names: string[]) =>
+    request<CatalogueResult<QueuePerson>>('/queue-people', { method: 'POST', body: JSON.stringify({ names }) }),
+  updateQueuePerson: (id: number, name: string) =>
+    request<QueuePerson>(`/queue-people/${id}`, { method: 'PUT', body: JSON.stringify({ name }) }),
+  // Cascades: deleting a name also removes that person's record.
+  deleteQueuePerson: (id: number) =>
+    request<{ deleted: boolean }>(`/queue-people/${id}`, { method: 'DELETE' }),
+
+  // Queues — the Queues catalogue, same list-on-create ("BHS, BOP, Q04").
+  queueCodes: () =>
+    request<QueueCode[]>('/queue-codes'),
+  createQueueCodes: (codes: string[]) =>
+    request<CatalogueResult<QueueCode>>('/queue-codes', { method: 'POST', body: JSON.stringify({ codes }) }),
+  updateQueueCode: (id: number, code: string) =>
+    request<QueueCode>(`/queue-codes/${id}`, { method: 'PUT', body: JSON.stringify({ code }) }),
+  // Cascades: deleting a queue removes it from every record that included it.
+  deleteQueueCode: (id: number) =>
+    request<{ deleted: boolean }>(`/queue-codes/${id}`, { method: 'DELETE' }),
+
+  // Reviews — the Department catalogue the other two tabs group by.
+  reviewDepartments: () =>
+    request<ReviewDepartment[]>('/review-departments'),
+  createReviewDepartment: (data: Partial<ReviewDepartment>) =>
+    request<ReviewDepartment>('/review-departments', { method: 'POST', body: JSON.stringify(data) }),
+  updateReviewDepartment: (id: number, data: Partial<ReviewDepartment>) =>
+    request<ReviewDepartment>(`/review-departments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  // Entries keep their rows and resurface under "No department".
+  deleteReviewDepartment: (id: number) =>
+    request<{ deleted: boolean }>(`/review-departments/${id}`, { method: 'DELETE' }),
+
+  // Reviews — the Performance / Behaviour rows. `month` scopes behaviour to one month.
+  reviewEntries: (kind: ReviewKind, month?: string) =>
+    request<ReviewEntry[]>(`/review-entries${qs({ kind, month })}`),
+  createReviewEntry: (data: Partial<ReviewEntry>) =>
+    request<ReviewEntry>('/review-entries', { method: 'POST', body: JSON.stringify(data) }),
+  updateReviewEntry: (id: number, data: Partial<ReviewEntry>) =>
+    request<ReviewEntry>(`/review-entries/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteReviewEntry: (id: number) =>
+    request<{ deleted: boolean }>(`/review-entries/${id}`, { method: 'DELETE' }),
 
   // Vendors (traffic-source payment sheets)
   vendors: () =>

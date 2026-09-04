@@ -107,11 +107,12 @@ export default function Users() {
           <EmptyState message={users.length === 0 ? 'No users yet. Add your first user to get started.' : 'No users match this filter.'} />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
+            <table className="w-full min-w-[820px] text-sm">
               <thead>
                 <tr className="border-b border-white/50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                   <th className="px-5 py-3">User</th>
                   <th className="px-5 py-3">Role</th>
+                  <th className="px-5 py-3">Access</th>
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Last sign-in</th>
                   <th className="px-5 py-3 text-right">Actions</th>
@@ -134,6 +135,7 @@ export default function Users() {
                     <td className="px-5 py-3">
                       <Badge color={u.role === 'admin' ? 'blue' : 'slate'}>{u.role === 'admin' ? 'Admin' : 'User'}</Badge>
                     </td>
+                    <td className="px-5 py-3"><AccessCell user={u} /></td>
                     <td className="px-5 py-3">
                       {!u.is_active ? <Badge color="red">Deactivated</Badge>
                         : u.totp_enabled ? <Badge color="green">Active</Badge>
@@ -189,6 +191,39 @@ export default function Users() {
         />
       )}
       {link && <EnrollLinkPopup info={link} onClose={() => setLink(null)} />}
+    </div>
+  )
+}
+
+// ─── Access summary ─────────────────────────────────────────────────────────────
+
+/**
+ * What this user can actually open. Admins always see everything; for a member it shows
+ * the count and, in amber, any page a *default* member would have but they don't.
+ *
+ * That amber line is the one that matters after a page is added to the app: a member whose
+ * access was customised earlier keeps the exact list they were saved with, so a new page
+ * (Queues, Review, …) stays switched off for them until an admin ticks it here.
+ */
+function AccessCell({ user }: { user: ManagedUser }) {
+  if (user.role === 'admin') return <Badge color="blue">All pages</Badge>
+
+  const perms = user.permissions ?? DEFAULT_USER_PAGES
+  const granted = PAGES.filter((p) => perms.includes(p.key))
+  const missing = DEFAULT_USER_PAGES
+    .filter((key) => !perms.includes(key))
+    .map((key) => PAGES.find((p) => p.key === key)?.label ?? key)
+
+  return (
+    <div className="leading-tight">
+      <span className="text-xs font-medium text-slate-600" title={granted.map((p) => p.label).join(', ') || 'No pages'}>
+        {granted.length} of {PAGES.length} pages
+      </span>
+      {missing.length > 0 && (
+        <div className="text-[11px] font-medium text-amber-700" title={`Not granted: ${missing.join(', ')}`}>
+          off: {missing.slice(0, 2).join(', ')}{missing.length > 2 ? ` +${missing.length - 2}` : ''}
+        </div>
+      )}
     </div>
   )
 }
@@ -367,7 +402,26 @@ function EditUserPopover({ user, rect, me, onClose, onSaved }: {
 
         {!isSelf && role !== 'admin' && (
           <div>
-            <span className="mb-1 block text-xs font-medium text-slate-700">Page access</span>
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-slate-700">
+                Page access <span className="text-slate-400">({perms.size}/{PAGES.length})</span>
+              </span>
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => setPerms(new Set(PAGES.map((p) => p.key)))}
+                  className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100">
+                  All
+                </button>
+                <button type="button" onClick={() => setPerms(new Set(DEFAULT_USER_PAGES))}
+                  title="The pages a new user gets"
+                  className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100">
+                  Default
+                </button>
+                <button type="button" onClick={() => setPerms(new Set())}
+                  className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100">
+                  None
+                </button>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-x-2 gap-y-1 rounded-lg border border-slate-200 p-2">
               {PAGES.map((p) => (
                 <label key={p.key} className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-700">

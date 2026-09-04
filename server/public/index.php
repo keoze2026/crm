@@ -14,7 +14,9 @@ use App\Controllers\BuyerController;
 use App\Controllers\CampaignController;
 use App\Controllers\DestinationController;
 use App\Controllers\PortalExpenseController;
+use App\Controllers\QueueController;
 use App\Controllers\RecordController;
+use App\Controllers\ReviewController;
 use App\Controllers\UserController;
 use App\Controllers\VendorController;
 use App\Database;
@@ -98,6 +100,32 @@ $router->get('/portal-expenses',         fn () => $portalExpenses->index());
 $router->post('/portal-expenses',        fn () => $portalExpenses->store());
 $router->put('/portal-expenses/{id}',    fn ($p) => $portalExpenses->update($p));
 $router->delete('/portal-expenses/{id}', fn ($p) => $portalExpenses->destroy($p));
+
+// Queues — the per-person records plus the two catalogues the page picks from
+$queues = new QueueController();
+$router->get('/queues',                fn () => $queues->index());
+$router->post('/queues',               fn () => $queues->store());
+$router->put('/queues/{id}',           fn ($p) => $queues->update($p));
+$router->delete('/queues/{id}',        fn ($p) => $queues->destroy($p));
+$router->get('/queue-people',          fn () => $queues->people());
+$router->post('/queue-people',         fn () => $queues->storePeople());
+$router->put('/queue-people/{id}',     fn ($p) => $queues->updatePerson($p));
+$router->delete('/queue-people/{id}',  fn ($p) => $queues->destroyPerson($p));
+$router->get('/queue-codes',           fn () => $queues->codes());
+$router->post('/queue-codes',          fn () => $queues->storeCodes());
+$router->put('/queue-codes/{id}',      fn ($p) => $queues->updateCode($p));
+$router->delete('/queue-codes/{id}',   fn ($p) => $queues->destroyCode($p));
+
+// Reviews — the Department catalogue plus the Performance / Behaviour entries
+$reviews = new ReviewController();
+$router->get('/review-departments',         fn () => $reviews->departments());
+$router->post('/review-departments',        fn () => $reviews->storeDepartment());
+$router->put('/review-departments/{id}',    fn ($p) => $reviews->updateDepartment($p));
+$router->delete('/review-departments/{id}', fn ($p) => $reviews->destroyDepartment($p));
+$router->get('/review-entries',             fn () => $reviews->entries());
+$router->post('/review-entries',            fn () => $reviews->storeEntry());
+$router->put('/review-entries/{id}',        fn ($p) => $reviews->updateEntry($p));
+$router->delete('/review-entries/{id}',     fn ($p) => $reviews->destroyEntry($p));
 
 // Vendors (traffic-source payment sheets)
 $vendors = new VendorController();
