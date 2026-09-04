@@ -106,7 +106,8 @@ function grouped(entries: ReviewEntry[], departments: ReviewDepartment[]) {
 export function buildPerformancePdf(entries: ReviewEntry[], departments: ReviewDepartment[]): jsPDF {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
   const withNotes = entries.some((e) => e.notes.trim() !== '')
-  const head = ['SR', 'NAME', 'DEPARTMENT', 'PERFOMANCE', 'PERCENTAGE', ...(withNotes ? ['NOTES'] : [])]
+  // No per-row DEPARTMENT column — the band names it, matching the sheet.
+  const head = ['SR', 'NAME', 'PERFOMANCE', 'PERCENTAGE', ...(withNotes ? ['NOTES'] : [])]
   const y = drawHeader(doc, 'PERFORMANCE REVIEW', `${entries.length} ${entries.length === 1 ? 'person' : 'people'} reviewed`)
 
   const body: RowInput[] = []
@@ -118,7 +119,6 @@ export function buildPerformancePdf(entries: ReviewEntry[], departments: ReviewD
       body.push([
         String(sr),
         e.person_name,
-        e.department_note,
         e.rating,
         e.percentage === null ? '' : `${e.percentage}%`,
         ...(withNotes ? [e.notes] : []),
@@ -134,14 +134,14 @@ export function buildPerformancePdf(entries: ReviewEntry[], departments: ReviewD
     styles: baseStyles,
     headStyles: navyHead,
     bodyStyles: { fillColor: CYAN },
-    // Only the narrow columns are pinned; NAME, DEPARTMENT (and NOTES when shown) size
-    // themselves. At least one flexible column is required, or autoTable can't fill the
-    // page width and warns that the content doesn't fit.
+    // Only the narrow columns are pinned; NAME (and NOTES when shown) size themselves.
+    // At least one flexible column is required, or autoTable can't fill the page width
+    // and warns that the content doesn't fit.
     columnStyles: {
       0: { halign: 'center', cellWidth: 34, fillColor: BAND, fontStyle: 'bold' },
       1: { fontStyle: 'bold' },
-      3: { halign: 'center', cellWidth: 90 },
-      4: { halign: 'center', cellWidth: 76 },
+      2: { halign: 'center', cellWidth: 90 },
+      3: { halign: 'center', cellWidth: 76 },
     },
     margin: { left: M, right: M },
   })
@@ -158,14 +158,14 @@ export function buildBehaviourPdf(
   const body: RowInput[] = []
   let sr = 0
   for (const group of grouped(entries, departments)) {
-    body.push(bandRow(group.name, 5))
+    // No per-row DEPARTMENT column — the band names it, matching the sheet.
+    body.push(bandRow(group.name, 4))
     for (const e of group.rows) {
       sr += 1
       body.push([
         String(sr),
         sr === 1 ? monthLabel.toUpperCase() : '',
         e.person_name,
-        e.department_note,
         e.rating,
       ])
     }
@@ -174,7 +174,7 @@ export function buildBehaviourPdf(
   autoTable(doc, {
     startY: y,
     theme: 'grid',
-    head: [['SR.NO', 'MONTH', 'NAME', 'DEPARTMENT', 'BEHAVIOUR ANALYSIS']],
+    head: [['SR.NO', 'MONTH', 'NAME', 'BEHAVIOUR ANALYSIS']],
     body,
     styles: baseStyles,
     headStyles: navyHead,
@@ -182,9 +182,8 @@ export function buildBehaviourPdf(
     columnStyles: {
       0: { halign: 'center', cellWidth: 40, fillColor: BAND, fontStyle: 'bold' },
       1: { halign: 'center', cellWidth: 70, fontStyle: 'bold' },
-      2: { cellWidth: 150, fontStyle: 'bold' },
-      3: { cellWidth: 110 },
-      4: { halign: 'left' },
+      2: { cellWidth: 170, fontStyle: 'bold' },
+      3: { halign: 'left' },
     },
     margin: { left: M, right: M },
   })

@@ -46,8 +46,10 @@ export default function ReviewSheet({
       : []),
   ]
 
-  // Sr · [Month] · Name · Department · rating · [Percentage · Notes] · actions.
-  const COLUMNS = behaviour ? 6 : 8
+  // Sr · [Month] · Name · rating · [Percentage · Notes] · actions.
+  // (The per-row DEPARTMENT column is commented out below — the navy band already says
+  // which department a run of rows belongs to, so the cell only repeated it.)
+  const COLUMNS = behaviour ? 5 : 6
   let sr = 0
 
   return (
@@ -56,11 +58,11 @@ export default function ReviewSheet({
         <colgroup>
           <col style={{ width: '5%' }} />
           {behaviour && <col style={{ width: '9%' }} />}
-          <col style={{ width: behaviour ? '20%' : '19%' }} />
-          <col style={{ width: behaviour ? '16%' : '14%' }} />
-          <col style={{ width: behaviour ? '44%' : '16%' }} />
-          {!behaviour && <col style={{ width: '10%' }} />}
-          {!behaviour && <col style={{ width: '30%' }} />}
+          <col style={{ width: behaviour ? '24%' : '24%' }} />
+          {/* <col style={{ width: behaviour ? '16%' : '14%' }} /> department */}
+          <col style={{ width: behaviour ? '56%' : '19%' }} />
+          {!behaviour && <col style={{ width: '12%' }} />}
+          {!behaviour && <col style={{ width: '34%' }} />}
           <col style={{ width: '6%' }} />
         </colgroup>
         <thead>
@@ -68,7 +70,7 @@ export default function ReviewSheet({
             <th className={headCls}>{behaviour ? 'Sr. No' : 'Sr'}</th>
             {behaviour && <th className={headCls}>Month</th>}
             <th className={headCls}>Name</th>
-            <th className={headCls}>Department</th>
+            {/* <th className={headCls}>Department</th> */}
             <th className={headCls}>{behaviour ? 'Behaviour Analysis' : 'Perfomance'}</th>
             {!behaviour && <th className={headCls}>Percentage</th>}
             {!behaviour && <th className={headCls}>Notes</th>}
@@ -95,10 +97,10 @@ export default function ReviewSheet({
                       first={sr === 1}
                       entry={entry}
                       kind={kind}
-                      departments={departments}
                       people={people}
                       onChanged={onChanged}
                       onRosterChanged={onRosterChanged}
+                      // departments={departments}
                     />
                   )
                 })}
@@ -106,7 +108,6 @@ export default function ReviewSheet({
                   kind={kind}
                   month={month}
                   departmentId={group.id}
-                  departments={departments}
                   people={people}
                   onChanged={onChanged}
                   onRosterChanged={onRosterChanged}
@@ -147,29 +148,29 @@ const draftOf = (e: ReviewEntry): Draft => ({
 
 /** The cells shared by both rows, so the add row can't drift from the saved one. */
 function Cells({
-  draft, onDraft, kind, departments, people, onRosterChanged, onRating, onDepartmentNote, onName, onNotes,
+  draft, onDraft, kind, people, onRosterChanged, onRating, onName, onNotes,
 }: {
   draft: Draft
   onDraft: (d: Draft) => void
   kind: ReviewKind
-  /** The DEPARTMENT cell's options — the Department tab's list. */
-  departments: ReviewDepartment[]
   /** The NAME cell's list. */
   people: QueuePerson[]
   onRosterChanged: () => void
   /** Pickers save at once rather than waiting for the row to lose focus. */
   onRating?: (value: string) => void
-  onDepartmentNote?: (value: string) => void
   onName?: (value: string) => void
   onNotes?: (value: string) => void
+  // The per-row department picker is commented out (the band names the department):
+  // departments: ReviewDepartment[]
+  // onDepartmentNote?: (value: string) => void
 }) {
   const ratings = kind === 'behaviour' ? BEHAVIOUR_RATINGS : PERFORMANCE_RATINGS
   // A note left over from a department that has since been renamed or removed stays
   // selectable, so opening the dropdown can't silently rewrite it.
-  const options = departments.map((d) => d.name)
-  if (draft.department_note !== '' && !options.includes(draft.department_note)) {
-    options.push(draft.department_note)
-  }
+  // const options = departments.map((d) => d.name)
+  // if (draft.department_note !== '' && !options.includes(draft.department_note)) {
+  //   options.push(draft.department_note)
+  // }
 
   return (
     <>
@@ -184,6 +185,9 @@ function Cells({
           }}
         />
       </td>
+      {/* Per-row DEPARTMENT picker — the band above already names the department, so the
+          cell only repeated it. Restore this <td> (plus the header, colgroup entry, the
+          `departments`/`onDepartmentNote` props and the COLUMNS count) to bring it back.
       <td className={cellCls}>
         <select
           value={draft.department_note}
@@ -197,7 +201,7 @@ function Cells({
           <option value="">—</option>
           {options.map((name) => <option key={name} value={name}>{name}</option>)}
         </select>
-      </td>
+      </td> */}
       <td className={cellCls}>
         <select
           value={draft.rating}
@@ -339,17 +343,18 @@ function NoteCell({ value, onSave }: { value: string; onSave: (text: string) => 
 
 // ── Saved row ───────────────────────────────────────────────────────────────────
 function Row({
-  sr, first, entry, kind, departments, people, onChanged, onRosterChanged,
+  sr, first, entry, kind, people, onChanged, onRosterChanged,
 }: {
   sr: number
   /** The client's sheet stamps the month once, on the first row. */
   first: boolean
   entry: ReviewEntry
   kind: ReviewKind
-  departments: ReviewDepartment[]
   people: QueuePerson[]
   onChanged: () => void
   onRosterChanged: () => void
+  // Only the commented-out department picker needed these:
+  // departments: ReviewDepartment[]
 }) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(entry))
   const rowRef = useRef<HTMLTableRowElement>(null)
@@ -403,12 +408,13 @@ function Row({
         </td>
       )}
       <Cells
-        draft={draft} onDraft={setDraft} kind={kind} departments={departments}
+        draft={draft} onDraft={setDraft} kind={kind}
         people={people} onRosterChanged={onRosterChanged}
         onRating={(v) => save({ rating: v })}
-        onDepartmentNote={(v) => save({ department_note: v })}
         onName={(v) => save({ person_name: v })}
         onNotes={(v) => save({ notes: v })}
+        // departments={departments}
+        // onDepartmentNote={(v) => save({ department_note: v })}
       />
       <td className="p-0">
         <div className="flex items-center justify-center">
@@ -428,15 +434,17 @@ function Row({
 
 // ── Trailing "add to this department" row ───────────────────────────────────────
 function AddRow({
-  kind, month, departmentId, departments, people, onChanged, onRosterChanged,
+  kind, month, departmentId, people, onChanged, onRosterChanged,
 }: {
   kind: ReviewKind
   month: string
+  /** The band this row is being added under — it sets the row's department. */
   departmentId: number | null
-  departments: ReviewDepartment[]
   people: QueuePerson[]
   onChanged: () => void
   onRosterChanged: () => void
+  // Only the commented-out department picker needed these:
+  // departments: ReviewDepartment[]
 }) {
   const [draft, setDraft] = useState<Draft>(blank)
   const saving = useRef(false)
@@ -468,8 +476,9 @@ function AddRow({
       <td className={cx(idxCell, 'text-slate-400')}>+</td>
       {kind === 'behaviour' && <td className={cx(cellCls, 'bg-[#eaf5fa]')} />}
       <Cells
-        draft={draft} onDraft={setDraft} kind={kind} departments={departments}
+        draft={draft} onDraft={setDraft} kind={kind}
         people={people} onRosterChanged={onRosterChanged}
+        // departments={departments}
       />
       <td className="p-0">
         <div className="flex items-center justify-center">
