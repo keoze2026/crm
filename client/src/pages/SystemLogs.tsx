@@ -241,10 +241,24 @@ const cxRow = (open: boolean) =>
   'cursor-pointer border-b border-white/30 last:border-0 transition-colors ' +
   (open ? 'bg-white/50' : 'hover:bg-white/40')
 
-/** Entity slugs that read better with a space than a hyphen in the summary sentence. */
+/**
+ * Entity slugs that read better with a space than a hyphen in the summary sentence. Keys
+ * are the entity types produced by ENTITY_MAP in server/src/Audit.php; a slug missing here
+ * still renders, just hyphenated.
+ */
 const ENTITY_NOUN: Record<string, string> = {
   'vendor-payment': 'vendor payment',
   'portal-expense': 'portal expense',
+  'queue-assignment': 'queue record',
+  'queue-code': 'queue code',
+  'staff-member': 'staff member',
+  'staff-attendance': 'staff attendance row',
+  'staff-leave': 'staff leave',
+  'staff-salary': 'staff salary',
+  'review-department': 'department review',
+  'review-entry': 'review entry',
+  'audit-log': 'system log',
+  'access-preset': 'access preset',
 }
 
 /** A human sentence describing what happened. */
@@ -258,9 +272,12 @@ function summarize(row: AuditLog): string {
     create: 'created', update: 'updated', delete: 'deleted', deactivate: 'deactivated',
     login: 'signed in', logout: 'signed out', enrolled: 'set up their authenticator',
     login_failed: 'failed a sign-in', reset_totp: 'reset authenticator for',
+    export: 'downloaded', clear: 'cleared',
   }
   const action = past[verb] ?? verb
   if (verb === 'login' || verb === 'logout' || verb === 'enrolled') return `${who} ${action}.`
+  // Bulk verbs act on a filtered set rather than one row, so they read in the plural.
+  if (verb === 'export' || verb === 'clear') return `${who} ${action} ${entity}s.`
   return `${who} ${action} ${target}.`
 }
 

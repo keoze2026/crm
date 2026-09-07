@@ -3,15 +3,26 @@ import { api } from '../api/client'
 import { PageHeader } from '../components/Layout'
 import QueueLists from '../components/QueueLists'
 import QueuesSheet from '../components/QueuesSheet'
-import { Badge, Button, Card, CardHeader, DownloadIcon, EmptyState, Input, PageLoader, cx } from '../components/ui'
+import {
+  Badge, Button, Card, CardHeader, DownloadIcon, EmptyState, Input, PageLoader, SegmentedTabs, cx,
+} from '../components/ui'
 import { formatDate, formatDmy, num, today } from '../lib/format'
 import { buildQueuesPdf } from '../lib/sheetPdf'
 import { entryDay, entryTime, matches } from '../lib/queues'
 import { useAsync } from '../lib/useAsync'
-import type { QueueAssignment } from '../types'
+import type { QueueAssignment, QueueBoard } from '../types'
 
 /** How many past sheets the History section keeps — the newest four days, no further. */
 const HISTORY_LIMIT = 4
+
+/**
+ * The two sheets the page holds. They are the same sheet with different rows, so they
+ * share one component and one catalogue of queue codes — only the records are separate.
+ */
+const BOARDS: { id: QueueBoard; label: string }[] = [
+  { id: 'forwarding', label: 'Forwarding Queues' },
+  { id: 'camp_flow', label: 'Camp & Flow Queues' },
+]
 
 /** One day's worth of keyed-in records — the "sheet" the History pager steps through. */
 interface HistoryDay {
@@ -21,17 +32,23 @@ interface HistoryDay {
 }
 
 export default function Queues() {
-  const records = useAsync(() => api.queues(), [])
+  const [board, setBoard] = useState<QueueBoard>('forwarding')
+  const [search, setSearch] = useState('')
+
+  const records = useAsync(() => api.queues(board), [board])
   const people = useAsync(() => api.staff(), [])
   const codes = useAsync(() => api.queueCodes(), [])
 
-  const [search, setSearch] = useState('')
-
   const rows = useMemo(() => records.data ?? [], [records.data])
+  const boardLabel = BOARDS.find((b) => b.id === board)?.label ?? 'Queues'
 
   // A record touches all three lists: the sheet, a name's "on sheet" marker and a queue's
   // usage count. Reload together so nothing on the page can go stale against the rest.
   const reloadAll = () => { records.reload(); people.reload(); codes.reload() }
+
+  // Who already holds a row on THIS sheet. A person may hold one on the other sheet too,
+  // so this is a question only the board being shown can answer.
+  const taken = useMemo(() => new Map(rows.map((r) => [r.person_id, r.id])), [rows])
 
   // Search matches a name or a single queue code, so "Q04" finds everyone on that queue.
   const query = search.trim()
@@ -79,21 +96,28 @@ export default function Queues() {
         <Button
           variant="secondary"
           disabled={rows.length === 0}
-          onClick={() => buildQueuesPdf(rows).save(`Queues_${formatDmy(today())}.pdf`)}
+          onClick={() => buildQueuesPdf(rows, boardLabel).save(`${boardLabel.replace(/\W+/g, '_')}_${formatDmy(today())}.pdf`)}
         >
           <DownloadIcon />PDF
         </Button>
       </PageHeader>
 
+      <SegmentedTabs tabs={BOARDS} value={board} onChange={setBoard} className="mb-5" />
+
       {loading ? (
         <PageLoader label="Loading queues…" />
       ) : (
         <>
-          <QueueLists people={people.data ?? []} codes={codes.data ?? []} onChanged={reloadAll} />
+          <QueueLists
+            people={people.data ?? []}
+            taken={taken.size}
+            codes={codes.data ?? []}
+            onChanged={reloadAll}
+          />
 
           <Card className="mt-6">
             <CardHeader
-              title="Queue Sheet"
+              title={boardLabel}
               action={query !== '' && rows.length > 0 ? (
                 <Badge color="blue">{`${num(shown.length)} of ${num(rows.length)}`}</Badge>
               ) : undefined}
@@ -103,8 +127,12 @@ export default function Queues() {
                 <EmptyState message={`Nothing matches "${query}".`} />
               ) : (
                 <QueuesSheet
+                  // Remount on a board change so no row keeps the other sheet's draft.
+                  key={board}
+                  board={board}
                   rows={shown}
                   people={people.data ?? []}
+                  taken={taken}
                   codes={codes.data ?? []}
                   filtered={query !== ''}
                   onChanged={reloadAll}
@@ -181,7 +209,7 @@ function History({ days }: { days: HistoryDay[] }) {
                     ))}
                   </select>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
                     {at + 1} of {days.length}
                   </span>

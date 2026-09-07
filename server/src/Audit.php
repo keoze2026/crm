@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App;
 
 use App\Auth\Auth;
+use App\Auth\Config;
 
 /**
  * Audit trail writer. Two entry points:
@@ -21,15 +22,30 @@ final class Audit
 {
     private const SECRET_KEYS = ['password', 'totp_secret', 'secret', 'token', 'enroll_token'];
 
-    /** First-path-segment → singular entity type. */
+    /**
+     * First-path-segment → singular entity type. An unmapped segment falls back to the raw
+     * plural slug, so a new route still logs — it just reads as "queues.create" instead of
+     * "queue-assignment.create". Add the segment here when you add a controller, and add the
+     * matching noun to ENTITY_NOUN in client/src/pages/SystemLogs.tsx so the System Logs
+     * summary sentence reads properly.
+     */
     private const ENTITY_MAP = [
-        'buyers'           => 'buyer',
-        'campaigns'        => 'campaign',
-        'destinations'     => 'destination',
-        'records'          => 'record',
-        'vendors'          => 'vendor',
-        'vendor-payments'  => 'vendor-payment',
-        'portal-expenses'  => 'portal-expense',
+        'buyers'             => 'buyer',
+        'campaigns'          => 'campaign',
+        'destinations'       => 'destination',
+        'records'            => 'record',
+        'vendors'            => 'vendor',
+        'vendor-payments'    => 'vendor-payment',
+        'portal-expenses'    => 'portal-expense',
+        'queues'             => 'queue-assignment',
+        'queue-codes'        => 'queue-code',
+        'staff'              => 'staff-member',
+        'departments'        => 'department',
+        'staff-attendance'   => 'staff-attendance',
+        'staff-leaves'       => 'staff-leave',
+        'staff-salaries'     => 'staff-salary',
+        'review-departments' => 'review-department',
+        'review-entries'     => 'review-entry',
     ];
 
     /** @var array{method:string,path:string,body:array<string,mixed>}|null */
@@ -96,9 +112,20 @@ final class Audit
         self::write($ctx);
     }
 
-    /** @param array<string,mixed> $ctx */
+    /**
+     * @param array<string,mixed> $ctx
+     *
+     * Honours the master toggle at the single point every entry passes through. flush() is
+     * only ever registered while auth is on, but record() is called from controllers such as
+     * RecordController::export() whose routes exist either way — without this, turning auth
+     * off would still leave unattributable rows in the trail.
+     */
     private static function write(array $ctx): void
     {
+        if (!Config::enabled()) {
+            return;
+        }
+
         try {
             $user = $ctx['user'] ?? null;
             $stmt = Database::connection()->prepare(
@@ -109,8 +136,10 @@ final class Audit
             );
             $details = $ctx['details'] ?? null;
             $stmt->execute([
-                ':uid'     => $user['id']    ?? null,
-                ':email'   => $user['email'] ?? null,
+                ':uid'     => $user['id'] ?? null,
+                // Accounts may be identified by username instead of email, so fall back to it
+                // — otherwise their entries would show as "—" in the System Logs table.
+                ':email'   => $user['email'] ?? $user['username'] ?? null,
                 ':action'  => $ctx['action'],
                 ':method'  => $ctx['method'] ?? ($_SERVER['REQUEST_METHOD'] ?? null),
                 ':path'    => $ctx['path'] ?? null,

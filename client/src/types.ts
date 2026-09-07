@@ -2,7 +2,14 @@ export type RecordType = 'buyer' | 'campaign'
 
 export interface Summary {
   revenue: number
+  /** Lead cost — what was paid to campaigns and traffic sources. */
   cost: number
+  /**
+   * Portal expenses charged to the period. They are stored per month, so only months the
+   * range covers in full count. Optional: an older API predates it — treat missing as 0.
+   */
+  portal_expenses?: number
+  /** Profit: revenue − cost − portal_expenses. */
   margin: number
   margin_pct: number
   answered: number
@@ -43,6 +50,11 @@ export interface TrendPoint {
   period: string
   revenue: number
   cost: number
+  /**
+   * Portal expenses charged to this bucket. Only month and year buckets can contain a whole
+   * month, so shorter buckets carry 0. Optional — an older API predates the field.
+   */
+  portal_expenses?: number
   margin: number
   counted: number
   answered: number
@@ -122,6 +134,12 @@ export interface CompleteReport {
   }
   revenue: number
   cost: number
+  /**
+   * Portal expenses charged to this range. Monthly figures, so only months the range covers
+   * in full are counted. Optional: an older API predates the field — treat missing as 0.
+   */
+  portal_expenses?: number
+  /** Revenue − Lead cost − portal expenses. */
   profit: number
 }
 
@@ -286,7 +304,8 @@ export type Role = 'admin' | 'member' | 'user'
 
 export interface AuthUser {
   id: number
-  email: string
+  /** Optional: an account may be identified by username alone (see ManagedUser). */
+  email: string | null
   name: string | null
   role: Role
   username: string | null
@@ -297,7 +316,9 @@ export interface AuthUser {
 export interface EnrollInfo {
   otpauth_uri: string
   secret: string
-  email: string
+  email: string | null
+  /** What the authenticator app shows — the email, or the username when there is no email. */
+  label: string
 }
 
 export interface EnrollLink {
@@ -306,17 +327,44 @@ export interface EnrollLink {
   expires_at: string
 }
 
+/**
+ * An account as the Users page sees it. An account carries an email, a username, or both —
+ * never neither, since one of them is what it logs in with. `staff_id` is set when the
+ * account was created by picking someone off the Staff roster.
+ */
 export interface ManagedUser {
   id: number
-  email: string
+  email: string | null
   name: string | null
   username: string | null
+  staff_id: number | null
+  /** Attached access preset, if any — it supplies `permissions` while set. */
+  preset_id: number | null
+  preset_name: string | null
   role: Role
   is_active: boolean
   totp_enabled: boolean
+  /** EFFECTIVE pages: the preset's list while attached, otherwise the account's own. */
   permissions: string[] | null
+  /** The account's own list, kept so detaching from a preset can pre-fill the editor. */
+  own_permissions: string[] | null
   last_login_at: string | null
   created_at: string
+}
+
+/**
+ * A named bundle of page access ("Agent", "Finance", …). Accounts are *attached* to a preset,
+ * not stamped from it: adding a page here grants it to every attached user as soon as they
+ * reload. Detaching (or deleting the preset) copies the pages onto the account so nobody's
+ * access changes at that moment.
+ */
+export interface AccessPreset {
+  id: number
+  name: string
+  /** Page keys from PAGES in auth/pages.ts. */
+  pages: string[]
+  created_at: string
+  updated_at: string
 }
 
 export interface AuditLog {
@@ -396,8 +444,6 @@ export interface StaffMember {
   id: number
   name: string
   departments: { id: number; name: string }[]
-  /** Their Queues record's id, or null when they have none yet. */
-  assignment_id: number | null
   /**
    * The check-in account they clock in with, resolved from their name by the server — it
    * is never picked. null = no account, so their attendance is keyed in by hand.
@@ -494,12 +540,17 @@ export interface QueueCode {
   updated_at: string
 }
 
-/** One person's record: the name plus every queue they cover. */
+/** Which of the two Queues sheets a record belongs to. */
+export type QueueBoard = 'forwarding' | 'camp_flow'
+
+/** One person's record: the name plus every queue they cover, in the order they hold them. */
 export interface QueueAssignment {
   id: number
+  board: QueueBoard
   person_id: number
   /** Denormalised from the staff roster for display. */
   name: string
+  /** In the row's own order — this is what dragging a chip rewrites. */
   codes: { id: number; code: string }[]
   sort_order: number
   /** When the record was keyed in — the date the History section groups by. */
@@ -578,18 +629,28 @@ export interface Vendor {
   sort_order: number
 }
 
+/**
+ * One day of a traffic source's ledger.
+ *
+ * Converted Lead, Price and Payments are DERIVED from that source's campaign records — they
+ * are not stored here and cannot be edited on the Vendors page. Only `amount_paid` is
+ * hand-entered, which is why `payment_id` may be null: a day with campaign activity but no
+ * payment yet has no vendor_payments row behind it.
+ */
 export interface VendorPayment {
-  id: number
   vendor: string
-  /** Entry date, YYYY-MM-DD. */
+  /** Entry date, YYYY-MM-DD — one row per day. */
   entry_date: string
+  /** Σ counted from the campaign records for this source on this day. */
   converted_calls: number
-  /** USD per converted Lead. */
+  /** Derived rate: payments ÷ converted_calls. Display only. */
   price: number
-  /** USD actually paid. */
+  /** Σ total_bill from those same records — what the Campaigns side charged. */
+  payments: number
+  /** USD actually paid — the one hand-entered figure. */
   amount_paid: number
-  created_at: string
-  updated_at: string
+  /** The vendor_payments row holding amount_paid, or null if nothing has been paid yet. */
+  payment_id: number | null
 }
 
 /**
@@ -600,7 +661,7 @@ export interface VendorLedger {
   rows: VendorPayment[]
   /** The vendor's stored seed (`vendors.opening_advance`), before any ledger row. */
   opening_advance: number
-  /** Σ(amount_paid − converted_calls × price) over every row dated before the range. */
+  /** Σ(amount paid) − Σ(campaign charges) over every day before the range. */
   prior_net: number
   /** opening_advance + prior_net — the "Initial Advance" the period opens with. */
   initial_advance: number

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Audit;
 use App\CampaignCode;
 use App\Database;
 use App\Http;
@@ -159,11 +160,24 @@ final class RecordController
         Http::json(['deleted' => $stmt->rowCount() > 0]);
     }
 
+    /**
+     * GET /records/export — download the filtered call records as CSV.
+     *
+     * Recorded explicitly: the audit shutdown hook only logs mutations, so without this a
+     * full extract of the call data would leave no trace. Written before Http::csv(), which
+     * never returns.
+     */
     public function export(): void
     {
         [$where, $params] = RecordFilter::build();
         $stmt = Database::connection()->prepare(self::SELECT . " {$where} ORDER BY r.total_bill DESC, r.id DESC");
         $stmt->execute($params);
+
+        Audit::record('record.export', [
+            'entity_type' => 'record',
+            'details'     => ['scope' => array_filter($_GET, static fn ($v) => $v !== '' && $v !== null)],
+            'status_code' => 200,
+        ]);
 
         $rows = (function () use ($stmt) {
             while ($r = $stmt->fetch()) {

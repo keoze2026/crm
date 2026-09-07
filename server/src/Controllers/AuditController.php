@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Audit;
 use App\Database;
 use App\Http;
 
@@ -50,10 +51,22 @@ final class AuditController
         Http::json($stmt->fetchAll(\PDO::FETCH_COLUMN));
     }
 
-    /** GET /audit-logs/export — download the filtered logs as CSV. */
+    /**
+     * GET /audit-logs/export — download the filtered logs as CSV.
+     *
+     * Recorded even though it is a read: Audit::flush() only logs mutations, and taking a
+     * copy of the whole trail off the system is worth knowing about. Written before
+     * Http::csv(), which never returns.
+     */
     public function export(): void
     {
         [$clause, $params] = $this->filters();
+
+        Audit::record('audit-log.export', [
+            'entity_type' => 'audit-log',
+            'details'     => ['scope' => $this->filterDetails()],
+            'status_code' => 200,
+        ]);
         $stmt = Database::connection()->prepare(
             "SELECT created_at, user_email, action, method, path, entity_type, entity_id,
                     status_code, ip, details
@@ -76,21 +89,48 @@ final class AuditController
         Http::csv('system-logs-' . date('Y-m-d') . '.csv', $header, $rows);
     }
 
-    /** DELETE /audit-logs/{id} — delete a single log entry. */
+    /**
+     * DELETE /audit-logs/{id} — delete a single log entry.
+     *
+     * Logged explicitly: Audit::flush() skips the /audit-logs prefix so that reading the page
+     * doesn't spam the trail, which would otherwise leave pruning the trail unrecorded. The
+     * row is written after the delete, so it survives its own operation.
+     */
     public function destroy(array $params): void
     {
+        $id   = (int) $params['id'];
         $stmt = Database::connection()->prepare('DELETE FROM audit_log WHERE id = :id');
-        $stmt->execute([':id' => (int) $params['id']]);
-        Http::json(['deleted' => $stmt->rowCount() > 0]);
+        $stmt->execute([':id' => $id]);
+        $deleted = $stmt->rowCount() > 0;
+
+        Audit::record('audit-log.delete', [
+            'entity_type' => 'audit-log',
+            'entity_id'   => $id,
+            'details'     => ['deleted' => $deleted],
+            'status_code' => 200,
+        ]);
+        Http::json(['deleted' => $deleted]);
     }
 
-    /** DELETE /audit-logs — delete every log matching the current filters (all if none). */
+    /**
+     * DELETE /audit-logs — delete every log matching the current filters (all if none).
+     *
+     * Logged explicitly, and written after the delete so that wiping the whole trail always
+     * leaves the record of who wiped it.
+     */
     public function clear(): void
     {
         [$clause, $params] = $this->filters();
         $stmt = Database::connection()->prepare("DELETE FROM audit_log {$clause}");
         $stmt->execute($params);
-        Http::json(['deleted' => $stmt->rowCount()]);
+        $deleted = $stmt->rowCount();
+
+        Audit::record('audit-log.clear', [
+            'entity_type' => 'audit-log',
+            'details'     => ['deleted' => $deleted, 'scope' => $this->filterDetails()],
+            'status_code' => 200,
+        ]);
+        Http::json(['deleted' => $deleted]);
     }
 
     // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -116,6 +156,23 @@ final class AuditController
         }
 
         return [$where ? ('WHERE ' . implode(' AND ', $where)) : '', $params];
+    }
+
+    /**
+     * The filters that were in play, for the `details` of an export/clear entry — so the log
+     * says *which* logs were taken or dropped, not merely that some were.
+     *
+     * @return array<string,string>  empty when the action covered everything
+     */
+    private function filterDetails(): array
+    {
+        $out = [];
+        foreach (['user_id', 'action', 'entity_type', 'from', 'to', 'q'] as $key) {
+            if ($v = Http::query($key)) {
+                $out[$key] = (string) $v;
+            }
+        }
+        return $out;
     }
 
     private function cast(array $r): array

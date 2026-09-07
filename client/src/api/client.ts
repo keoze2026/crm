@@ -1,4 +1,5 @@
 import type {
+  AccessPreset,
   Buyer,
   Destination,
   CallRecord,
@@ -33,6 +34,7 @@ import type {
   StaffLeave,
   StaffSalary,
   QueueAssignment,
+  QueueBoard,
   QueueCode,
   ReviewDepartment,
   ReviewEntry,
@@ -205,16 +207,41 @@ export const api = {
   // Users (admin)
   users: () =>
     request<ManagedUser[]>('/admin/users'),
-  createUser: (data: { email: string; name?: string; username?: string; role: Role; permissions?: string[] }) =>
+  // An account needs at least one of `email` / `username`. Passing `staff_id` picks someone
+  // off the Staff roster: their name comes across and a username is derived from it unless
+  // one is given. Either way the response carries the one-time enrolment link.
+  // `preset_id` attaches the account to a named access preset, which then supplies its pages
+  // live. An explicit `permissions` list instead gives the account its own; admins ignore both.
+  createUser: (data: {
+    email?: string
+    name?: string
+    username?: string
+    staff_id?: number
+    preset_id?: number
+    role: Role
+    permissions?: string[]
+  }) =>
     request<ManagedUser & { enroll: EnrollLink }>('/admin/users', {
       method: 'POST', body: JSON.stringify(data),
     }),
-  updateUser: (id: number, data: { name?: string; email?: string; username?: string; role?: Role; permissions?: string[]; is_active?: boolean }) =>
+  // `email: ''` clears the address (allowed as long as a username remains). `preset_id`
+  // attaches to a preset, `preset_id: null` detaches; sending `permissions` also detaches.
+  updateUser: (id: number, data: { name?: string; email?: string; username?: string; role?: Role; permissions?: string[]; preset_id?: number | null; is_active?: boolean }) =>
     request<ManagedUser>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   resetUserTotp: (id: number) =>
     request<{ reset: boolean; enroll: EnrollLink }>(`/admin/users/${id}/reset-totp`, { method: 'POST' }),
   deleteUser: (id: number) =>
     request<{ deleted: boolean }>(`/admin/users/${id}`, { method: 'DELETE' }),
+
+  // Access presets (admin) — named page bundles the Add-user form applies.
+  accessPresets: () =>
+    request<AccessPreset[]>('/admin/access-presets'),
+  createAccessPreset: (data: { name: string; pages: string[] }) =>
+    request<AccessPreset>('/admin/access-presets', { method: 'POST', body: JSON.stringify(data) }),
+  updateAccessPreset: (id: number, data: { name?: string; pages?: string[] }) =>
+    request<AccessPreset>(`/admin/access-presets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteAccessPreset: (id: number) =>
+    request<{ deleted: boolean }>(`/admin/access-presets/${id}`, { method: 'DELETE' }),
 
   // Portal expenses (monthly provider expenses)
   portalExpenses: (month: string) =>
@@ -305,12 +332,15 @@ export const api = {
 
   // Queues — the per-person records. `day` (YYYY-MM-DD) narrows to the records keyed in
   // on one day; omit it for the whole sheet.
-  queues: (day?: string) =>
-    request<QueueAssignment[]>(`/queues${qs({ day })}`),
-  // Creating for a person who already has a record updates that record instead, so the
-  // sheet can never hold two rows for one name.
-  createQueueAssignment: (data: { person_id: number; code_ids: number[] }) =>
+  queues: (board: QueueBoard, day?: string) =>
+    request<QueueAssignment[]>(`/queues${qs({ board, day })}`),
+  // Creating for a person who already has a record ON THIS BOARD updates that record
+  // instead, so a sheet can never hold two rows for one name. The same person may still
+  // hold a row on the other sheet.
+  createQueueAssignment: (data: { board: QueueBoard; person_id: number; code_ids: number[] }) =>
     request<QueueAssignment>('/queues', { method: 'POST', body: JSON.stringify(data) }),
+  // `code_ids` is ORDER-SENSITIVE — it is the order the chips end up in, so dragging one
+  // and ticking one are the same call.
   updateQueueAssignment: (id: number, data: { person_id?: number; code_ids?: number[] }) =>
     request<QueueAssignment>(`/queues/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteQueueAssignment: (id: number) =>
@@ -369,10 +399,16 @@ export const api = {
       ? { rows: res, opening_advance: 0, prior_net: 0, initial_advance: 0 }
       : res
   },
-  createVendorPayment: (data: Partial<VendorPayment>) =>
-    request<VendorPayment>('/vendor-payments', { method: 'POST', body: JSON.stringify(data) }),
-  updateVendorPayment: (id: number, data: Partial<VendorPayment>) =>
-    request<VendorPayment>(`/vendor-payments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  // Only the amount is writable — Converted Lead and Price come from the campaign records.
+  // Posting twice for the same vendor and day SETS the amount rather than adding a row.
+  createVendorPayment: (data: { vendor: string; entry_date: string; amount_paid: number }) =>
+    request<{ id: number; vendor: string; entry_date: string; amount_paid: number }>(
+      '/vendor-payments', { method: 'POST', body: JSON.stringify(data) },
+    ),
+  updateVendorPayment: (id: number, data: { entry_date?: string; amount_paid?: number }) =>
+    request<{ id: number; vendor: string; entry_date: string; amount_paid: number }>(
+      `/vendor-payments/${id}`, { method: 'PUT', body: JSON.stringify(data) },
+    ),
   deleteVendorPayment: (id: number) =>
     request<{ deleted: boolean }>(`/vendor-payments/${id}`, { method: 'DELETE' }),
 }

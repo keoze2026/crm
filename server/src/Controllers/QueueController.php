@@ -31,12 +31,21 @@ use App\Http;
  */
 final class QueueController
 {
-    /** A record with its person's name and its queues, as every /queues response shapes it. */
+    /** The two sheets the page holds. Anything else is refused rather than guessed at. */
+    private const BOARDS = ['forwarding', 'camp_flow'];
+
+    /**
+     * A record with its person's name and its queues, as every /queues response shapes it.
+     *
+     * Codes come back in the row's OWN order (`ac.sort_order`) — that is what the page
+     * drags — with the code as a tie-break so a row written before ordering existed still
+     * reads alphabetically.
+     */
     private const RECORD_SELECT =
-        'SELECT a.id, a.person_id, p.name, a.sort_order, a.created_at, a.updated_at,
+        'SELECT a.id, a.person_id, a.board, p.name, a.sort_order, a.created_at, a.updated_at,
                 COALESCE(
                     json_agg(json_build_object(\'id\', c.id, \'code\', c.code)
-                             ORDER BY upper(btrim(c.code)))
+                             ORDER BY ac.sort_order, upper(btrim(c.code)))
                     FILTER (WHERE c.id IS NOT NULL),
                     \'[]\'
                 ) AS codes
@@ -55,14 +64,14 @@ final class QueueController
 
     public function index(): void
     {
-        $sql    = self::RECORD_SELECT;
-        $params = [];
+        $sql    = self::RECORD_SELECT . ' WHERE a.board = :board';
+        $params = [':board' => $this->board(Http::query('board'))];
 
         $day = $this->normaliseDay(Http::query('day'));
         if ($day !== null) {
             // Compared in the server's local time, so the filter lines up with the date the
             // History section shows for the same record.
-            $sql .= ' WHERE a.created_at::date = :day';
+            $sql .= ' AND a.created_at::date = :day';
             $params[':day'] = $day;
         }
         $sql .= ' GROUP BY a.id, p.id ORDER BY a.sort_order ASC, a.id ASC';
@@ -75,14 +84,16 @@ final class QueueController
     public function store(): void
     {
         $body     = Http::body();
+        $board    = $this->board($body['board'] ?? null);
         $personId = (int) ($body['person_id'] ?? 0);
         if ($personId <= 0 || !$this->personExists($personId)) {
             Http::error('Pick a name for this record', 422);
         }
 
-        // One record per person: adding for someone who already has one updates it, so the
-        // sheet can never end up with two rows for the same name.
-        $existing = $this->recordIdForPerson($personId);
+        // One record per person PER BOARD: adding for someone who already has one on this
+        // sheet updates it, so a sheet can never end up with two rows for the same name.
+        // The same person may still hold a row on the other sheet.
+        $existing = $this->recordIdForPerson($personId, $board);
         if ($existing !== null) {
             $this->writeCodes($existing, $this->codeIds($body));
             $this->touch($existing);
@@ -90,11 +101,13 @@ final class QueueController
         }
 
         $stmt = Database::connection()->prepare(
-            'INSERT INTO queue_assignments (person_id, sort_order) VALUES (:person, :sort) RETURNING id'
+            'INSERT INTO queue_assignments (board, person_id, sort_order)
+             VALUES (:board, :person, :sort) RETURNING id'
         );
         $stmt->execute([
+            ':board'  => $board,
             ':person' => $personId,
-            ':sort'   => isset($body['sort_order']) ? (int) $body['sort_order'] : $this->nextSortOrder(),
+            ':sort'   => isset($body['sort_order']) ? (int) $body['sort_order'] : $this->nextSortOrder($board),
         ]);
         $id = (int) $stmt->fetchColumn();
 
@@ -104,22 +117,23 @@ final class QueueController
 
     public function update(array $params): void
     {
-        $id   = (int) $params['id'];
-        $body = Http::body();
-        if ($this->record($id) === null) {
+        $id      = (int) $params['id'];
+        $body    = Http::body();
+        $current = $this->record($id);
+        if ($current === null) {
             Http::error('Record not found', 404);
         }
 
         // Moving a record to another name is how the page fixes "I picked the wrong
-        // person" — refused when that name already holds a record of its own.
+        // person" — refused when that name already holds a record on THIS sheet.
         if (isset($body['person_id'])) {
             $personId = (int) $body['person_id'];
             if ($personId <= 0 || !$this->personExists($personId)) {
                 Http::error('Pick a name for this record', 422);
             }
-            $owner = $this->recordIdForPerson($personId);
+            $owner = $this->recordIdForPerson($personId, (string) $current['board']);
             if ($owner !== null && $owner !== $id) {
-                Http::error('That name already has a record — edit that one instead', 409);
+                Http::error('That name already has a record on this sheet — edit that one instead', 409);
             }
             $stmt = Database::connection()->prepare(
                 'UPDATE queue_assignments SET person_id = :person, updated_at = now() WHERE id = :id'
@@ -270,6 +284,10 @@ final class QueueController
      * Replace a record's queue links in one transaction, keeping only ids that really
      * exist in the catalogue (a stale tab can't write a dangling link).
      *
+     * The ORDER of `$codeIds` is the order the chips are stored in, so dragging a chip and
+     * ticking a new one are the same write — the page always sends the row as it should
+     * end up looking.
+     *
      * @param int[] $codeIds
      */
     private function writeCodes(int $assignmentId, array $codeIds): void
@@ -282,12 +300,16 @@ final class QueueController
 
             if ($codeIds !== []) {
                 $ins = $db->prepare(
-                    'INSERT INTO queue_assignment_codes (assignment_id, code_id)
-                     SELECT :assignment, id FROM queue_codes WHERE id = :code
+                    'INSERT INTO queue_assignment_codes (assignment_id, code_id, sort_order)
+                     SELECT :assignment, id, :sort FROM queue_codes WHERE id = :code
                      ON CONFLICT DO NOTHING'
                 );
-                foreach ($codeIds as $codeId) {
-                    $ins->execute([':assignment' => $assignmentId, ':code' => $codeId]);
+                foreach (array_values($codeIds) as $position => $codeId) {
+                    $ins->execute([
+                        ':assignment' => $assignmentId,
+                        ':code'       => $codeId,
+                        ':sort'       => $position,
+                    ]);
                 }
             }
             $db->commit();
@@ -385,12 +407,22 @@ final class QueueController
         return (bool) $stmt->fetchColumn();
     }
 
-    private function recordIdForPerson(int $personId): ?int
+    /** The record this person holds on ONE board, or null when they hold none there. */
+    private function recordIdForPerson(int $personId, string $board): ?int
     {
-        $stmt = Database::connection()->prepare('SELECT id FROM queue_assignments WHERE person_id = :person');
-        $stmt->execute([':person' => $personId]);
+        $stmt = Database::connection()->prepare(
+            'SELECT id FROM queue_assignments WHERE person_id = :person AND board = :board'
+        );
+        $stmt->execute([':person' => $personId, ':board' => $board]);
         $id = $stmt->fetchColumn();
         return $id === false || $id === null ? null : (int) $id;
+    }
+
+    /** The sheet a request is for; anything unrecognised falls back to Forwarding. */
+    private function board(mixed $value): string
+    {
+        $board = \is_string($value) ? strtolower(trim($value)) : '';
+        return \in_array($board, self::BOARDS, true) ? $board : self::BOARDS[0];
     }
 
     /** True when a row other than $id already holds this value, ignoring case. */
@@ -413,11 +445,12 @@ final class QueueController
         return checkdate((int) $m[2], (int) $m[3], (int) $m[1]) ? $value : null;
     }
 
-    private function nextSortOrder(): int
+    private function nextSortOrder(string $board): int
     {
-        $stmt = Database::connection()->query(
-            'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM queue_assignments'
+        $stmt = Database::connection()->prepare(
+            'SELECT COALESCE(MAX(sort_order), -1) + 1 FROM queue_assignments WHERE board = :board'
         );
+        $stmt->execute([':board' => $board]);
         return (int) $stmt->fetchColumn();
     }
 }

@@ -193,18 +193,60 @@ final class VendorController
         $to   = Http::query('to');
         $pdo  = Database::connection();
 
-        $sql = 'SELECT id, vendor, to_char(entry_date, \'YYYY-MM-DD\') AS entry_date,
-                       converted_calls, price, amount_paid, created_at, updated_at
-                  FROM vendor_payments
-                 WHERE lower(btrim(vendor)) = lower(btrim(:vendor))';
-        $params = [':vendor' => $vendor];
-        if ($from) { $sql .= ' AND entry_date >= :from'; $params[':from'] = $from; }
-        if ($to)   { $sql .= ' AND entry_date <= :to';   $params[':to']   = $to; }
-        $sql .= ' ORDER BY entry_date ASC, id ASC';
+        // Converted Lead and Price are NOT stored here — they are read from the campaign
+        // records for this traffic source, so the sheet charges exactly what the Campaigns
+        // side charged. `payments` is the summed total_bill rather than counted × price:
+        // the two are equal by definition, but taking the sum straight from the records
+        // means a rounded display rate can never make this page disagree with that one.
+        //
+        // The row set is every DAY in range that has campaign activity for this source, plus
+        // any day carrying a hand-entered payment (so a payment against an advance still
+        // shows on a day the source ran nothing). vendor_payments now supplies only
+        // amount_paid — one row per vendor/day, enforced by migration 026.
+        $campWhere = '';
+        $mineWhere = '';
+        $params    = [':vendor' => $vendor];
+        if ($from) {
+            $campWhere .= ' AND r.record_date >= :from';
+            $mineWhere .= ' AND entry_date >= :from';
+            $params[':from'] = $from;
+        }
+        if ($to) {
+            $campWhere .= ' AND r.record_date <= :to';
+            $mineWhere .= ' AND entry_date <= :to';
+            $params[':to'] = $to;
+        }
 
+        $sql = "
+            WITH campaign AS (
+                SELECT r.record_date        AS d,
+                       SUM(r.counted)       AS counted,
+                       SUM(r.total_bill)    AS bill
+                  FROM call_records r
+                 WHERE r.record_type = 'campaign'
+                   AND lower(btrim(COALESCE(r.source, ''))) = lower(btrim(:vendor))
+                   {$campWhere}
+                 GROUP BY r.record_date
+            ),
+            manual AS (
+                SELECT entry_date AS d, MIN(id) AS payment_id, SUM(amount_paid) AS amount_paid
+                  FROM vendor_payments
+                 WHERE lower(btrim(vendor)) = lower(btrim(:vendor))
+                   {$mineWhere}
+                 GROUP BY entry_date
+            )
+            SELECT to_char(COALESCE(c.d, m.d), 'YYYY-MM-DD') AS entry_date,
+                   COALESCE(c.counted, 0)     AS converted_calls,
+                   COALESCE(c.bill, 0)        AS payments,
+                   COALESCE(m.amount_paid, 0) AS amount_paid,
+                   m.payment_id
+              FROM campaign c
+              FULL OUTER JOIN manual m ON m.d = c.d
+             ORDER BY 1
+        ";
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
-        $rows = $this->castPayments($stmt->fetchAll());
+        $rows = $this->castPayments($stmt->fetchAll(), $vendor);
 
         // The seed. Discovered vendors have no `vendors` row until one is saved -> 0.
         $seed = $pdo->prepare(
@@ -217,11 +259,17 @@ final class VendorController
         // Everything the ledger moved before the range starts — the carry-forward.
         $priorNet = 0.0;
         if ($from) {
+            // What the ledger moved before the range opens: everything paid, less everything
+            // the campaign records charged. Same two sources the visible rows are built from,
+            // so the carry-forward can't drift from the column it seeds.
             $prior = $pdo->prepare(
-                'SELECT COALESCE(SUM(amount_paid - converted_calls * price), 0)
-                   FROM vendor_payments
-                  WHERE lower(btrim(vendor)) = lower(btrim(:vendor))
-                    AND entry_date < :from'
+                "SELECT COALESCE((SELECT SUM(amount_paid) FROM vendor_payments
+                                   WHERE lower(btrim(vendor)) = lower(btrim(:vendor))
+                                     AND entry_date < :from), 0)
+                      - COALESCE((SELECT SUM(total_bill) FROM call_records
+                                   WHERE record_type = 'campaign'
+                                     AND lower(btrim(COALESCE(source, ''))) = lower(btrim(:vendor))
+                                     AND record_date < :from), 0)"
             );
             $prior->execute([':vendor' => $vendor, ':from' => $from]);
             $priorNet = (float) $prior->fetchColumn();
@@ -247,20 +295,30 @@ final class VendorController
             Http::error('A valid entry date is required', 422);
         }
 
+        // A payment is now just "this much was paid on this day", so writing one twice sets
+        // the amount rather than stacking a second row — the sheet shows one row per day and
+        // migration 026 enforces that. converted_calls/price are left at their column
+        // defaults: they are no longer read, the campaign records supply those figures.
         $stmt = Database::connection()->prepare(
-            'INSERT INTO vendor_payments (vendor, entry_date, converted_calls, price, amount_paid)
-             VALUES (:vendor, :date, :calls, :price, :paid)
-             RETURNING id, vendor, to_char(entry_date, \'YYYY-MM-DD\') AS entry_date,
-                       converted_calls, price, amount_paid, created_at, updated_at'
+            'INSERT INTO vendor_payments (vendor, entry_date, amount_paid)
+             VALUES (:vendor, :date, :paid)
+             ON CONFLICT (lower(btrim(vendor)), entry_date) DO UPDATE
+                SET amount_paid = EXCLUDED.amount_paid, updated_at = now()
+             RETURNING id, vendor, to_char(entry_date, \'YYYY-MM-DD\') AS entry_date, amount_paid'
         );
         $stmt->execute([
             ':vendor' => $vendor,
             ':date'   => $date,
-            ':calls'  => $this->count($body['converted_calls'] ?? 0),
-            ':price'  => $this->money($body['price']            ?? 0),
-            ':paid'   => $this->money($body['amount_paid']      ?? 0),
+            ':paid'   => $this->money($body['amount_paid'] ?? 0),
         ]);
-        Http::json($this->castPayments([$stmt->fetch()])[0], 201);
+
+        $row = $stmt->fetch();
+        Http::json([
+            'id'          => (int) $row['id'],
+            'vendor'      => $row['vendor'],
+            'entry_date'  => $row['entry_date'],
+            'amount_paid' => (float) $row['amount_paid'],
+        ], 201);
     }
 
     public function updatePayment(array $params): void
@@ -268,29 +326,31 @@ final class VendorController
         $body = Http::body();
         $date = array_key_exists('entry_date', $body) ? $this->date($body['entry_date']) : null;
 
+        // Only the amount (and its day) is editable now; Converted Lead and Price come from
+        // the campaign records and are changed on the Campaigns side, not here.
         $stmt = Database::connection()->prepare(
             'UPDATE vendor_payments SET
-                entry_date      = COALESCE(:date,  entry_date),
-                converted_calls = COALESCE(:calls, converted_calls),
-                price           = COALESCE(:price, price),
-                amount_paid     = COALESCE(:paid,  amount_paid),
-                updated_at      = now()
+                entry_date  = COALESCE(:date, entry_date),
+                amount_paid = COALESCE(:paid, amount_paid),
+                updated_at  = now()
              WHERE id = :id
-             RETURNING id, vendor, to_char(entry_date, \'YYYY-MM-DD\') AS entry_date,
-                       converted_calls, price, amount_paid, created_at, updated_at'
+             RETURNING id, vendor, to_char(entry_date, \'YYYY-MM-DD\') AS entry_date, amount_paid'
         );
         $stmt->execute([
-            ':id'    => (int) $params['id'],
-            ':date'  => $date,
-            ':calls' => isset($body['converted_calls']) ? $this->count($body['converted_calls']) : null,
-            ':price' => isset($body['price'])           ? $this->money($body['price'])           : null,
-            ':paid'  => isset($body['amount_paid'])     ? $this->money($body['amount_paid'])     : null,
+            ':id'   => (int) $params['id'],
+            ':date' => $date,
+            ':paid' => isset($body['amount_paid']) ? $this->money($body['amount_paid']) : null,
         ]);
         $row = $stmt->fetch();
         if (!$row) {
             Http::error('Payment row not found', 404);
         }
-        Http::json($this->castPayments([$row])[0]);
+        Http::json([
+            'id'          => (int) $row['id'],
+            'vendor'      => $row['vendor'],
+            'entry_date'  => $row['entry_date'],
+            'amount_paid' => (float) $row['amount_paid'],
+        ]);
     }
 
     public function destroyPayment(array $params): void
@@ -351,16 +411,28 @@ final class VendorController
         ];
     }
 
-    private function castPayments(array $rows): array
+    /**
+     * Shape a ledger row for the sheet.
+     *
+     * `price` is derived, not stored: the rate this source actually charged that day, i.e.
+     * total_bill ÷ counted. It is display-only — `payments` already carries the exact figure,
+     * so nothing recomputes counted × price and picks up a rounding error.
+     */
+    private function castPayments(array $rows, string $vendor): array
     {
         foreach ($rows as &$r) {
             if (!$r) {
                 continue;
             }
-            $r['id']              = (int) $r['id'];
-            $r['converted_calls'] = (int) $r['converted_calls'];
-            $r['price']           = (float) $r['price'];
+            $counted  = (int) $r['converted_calls'];
+            $payments = (float) $r['payments'];
+
+            $r['vendor']          = $vendor;
+            $r['converted_calls'] = $counted;
+            $r['payments']        = $payments;
+            $r['price']           = $counted > 0 ? $payments / $counted : 0.0;
             $r['amount_paid']     = (float) $r['amount_paid'];
+            $r['payment_id']      = $r['payment_id'] !== null ? (int) $r['payment_id'] : null;
         }
         return $rows;
     }

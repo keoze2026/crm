@@ -109,10 +109,15 @@ final class AuthController
         );
         $stmt->execute([':s' => $secret, ':id' => $user['id']]);
 
+        // The label is what shows under "Platform-CRM" in the authenticator app, so it has to
+        // fall back for accounts created without an email (username- or roster-based ones).
+        $label = (string) ($user['email'] ?? $user['username'] ?? $user['name'] ?? ('user-' . $user['id']));
+
         Http::json([
-            'otpauth_uri' => Totp::provisioningUri($secret, (string) $user['email']),
+            'otpauth_uri' => Totp::provisioningUri($secret, $label),
             'secret'      => $secret,
             'email'       => $user['email'],
+            'label'       => $label,
         ]);
     }
 
@@ -204,9 +209,13 @@ final class AuthController
     private function fetchAuthRow(int $userId): ?array
     {
         $stmt = Database::connection()->prepare(
-            'SELECT id, email, name, role, username, is_active, permissions,
-                    totp_secret, totp_confirmed_at, locked_until
-             FROM users WHERE id = :id'
+            // Same preset resolution as Session::resolve() — see the note there.
+            'SELECT u.id, u.email, u.name, u.role, u.username, u.is_active,
+                    COALESCE(ap.pages, u.permissions) AS permissions,
+                    u.totp_secret, u.totp_confirmed_at, u.locked_until
+             FROM users u
+             LEFT JOIN access_presets ap ON ap.id = u.preset_id
+             WHERE u.id = :id'
         );
         $stmt->execute([':id' => $userId]);
         return $stmt->fetch() ?: null;

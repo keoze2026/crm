@@ -122,10 +122,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         {authEnabled && user ? (
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center text-sm font-bold text-white">
-              {(user.name ?? user.email).charAt(0).toUpperCase()}
+              {/* An account may have a username instead of an email, so neither is guaranteed. */}
+              {(user.name ?? user.email ?? user.username ?? '?').charAt(0).toUpperCase()}
             </span>
             <div className="min-w-0 flex-1 leading-tight">
-              <div className="truncate text-sm font-semibold text-white">{user.name ?? user.email}</div>
+              <div className="truncate text-sm font-semibold text-white">{user.name ?? user.email ?? user.username}</div>
               <div className="truncate text-xs capitalize text-slate-400">{user.role}</div>
             </div>
             <button

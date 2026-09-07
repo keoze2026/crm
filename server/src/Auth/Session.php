@@ -63,11 +63,16 @@ final class Session
         }
 
         $stmt = Database::connection()->prepare(
+            // An account attached to an access preset takes its pages from that preset, live —
+            // so editing the preset changes what its members can open on their next request.
+            // COALESCE, not a union: the preset is the whole answer while it is attached.
             'SELECT s.id AS session_id, s.mfa_pending, s.expires_at,
-                    u.id, u.email, u.name, u.role, u.username, u.is_active, u.permissions,
+                    u.id, u.email, u.name, u.role, u.username, u.is_active,
+                    COALESCE(ap.pages, u.permissions) AS permissions,
                     (u.totp_confirmed_at IS NOT NULL) AS totp_enabled
              FROM sessions s
              JOIN users u ON u.id = s.user_id
+             LEFT JOIN access_presets ap ON ap.id = u.preset_id
              WHERE s.token_hash = :hash AND s.expires_at > now()'
         );
         $stmt->execute([':hash' => self::hash($token)]);

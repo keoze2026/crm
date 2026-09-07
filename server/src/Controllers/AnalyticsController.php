@@ -87,17 +87,38 @@ final class AnalyticsController
         $stmt = Database::connection()->prepare($sql);
         $stmt->execute($params);
 
-        $rows = array_map(function ($r) {
+        // Portal expenses are monthly, and a bucket is only charged for a month it fully
+        // covers (the same rule the summary uses). So 'month' buckets carry their own month
+        // and 'year' buckets the whole year; day / 4-day / week buckets never contain a
+        // complete month and carry none.
+        $byMonth = $granularity === 'month' || $granularity === 'year'
+            ? $this->portalExpensesByMonth(Database::connection())
+            : [];
+
+        $rows = array_map(function ($r) use ($granularity, $byMonth) {
             $revenue = (float) $r['revenue'];
             $cost = (float) $r['cost'];
+
+            $portalExpenses = 0.0;
+            if ($granularity === 'month') {
+                $portalExpenses = $byMonth[$r['period']] ?? 0.0;
+            } elseif ($granularity === 'year') {
+                foreach ($byMonth as $month => $total) {
+                    if (str_starts_with($month, $r['period'] . '-')) {
+                        $portalExpenses += $total;
+                    }
+                }
+            }
+
             return [
-                'period'   => $r['period'],
-                'revenue'  => $revenue,
-                'cost'     => $cost,
-                'margin'   => $revenue - $cost,
-                'counted'  => (int) $r['counted'],
-                'answered' => (int) $r['answered'],
-                'missed'   => (int) $r['missed'],
+                'period'          => $r['period'],
+                'revenue'         => $revenue,
+                'cost'            => $cost,
+                'portal_expenses' => $portalExpenses,
+                'margin'          => $revenue - $cost - $portalExpenses,
+                'counted'         => (int) $r['counted'],
+                'answered'        => (int) $r['answered'],
+                'missed'          => (int) $r['missed'],
             ];
         }, $stmt->fetchAll());
 
@@ -301,6 +322,12 @@ final class AnalyticsController
         $spanStmt->execute($spanParams);
         $span = $spanStmt->fetch() ?: ['from' => null, 'to' => null];
 
+        // Same profit definition as the dashboard: revenue − Lead cost − portal overheads,
+        // charging only the months the range fully covers.
+        $revenue        = array_sum(array_column($buyers, 'total_bill'));
+        $cost           = array_sum(array_column($campaigns, 'total_bill'));
+        $portalExpenses = $this->portalExpenses($pdo, Http::query('from'), Http::query('to'));
+
         Http::json([
             'from'            => $span['from'] ?? null,
             'to'              => $span['to'] ?? null,
@@ -308,14 +335,76 @@ final class AnalyticsController
             'campaigns'       => $campaigns,
             'buyer_totals'    => $this->buyerTotals($buyers),
             'campaign_totals' => $this->campaignTotals($campaigns),
-            'revenue'         => array_sum(array_column($buyers, 'total_bill')),
-            'cost'            => array_sum(array_column($campaigns, 'total_bill')),
-            'profit'          => array_sum(array_column($buyers, 'total_bill'))
-                                 - array_sum(array_column($campaigns, 'total_bill')),
+            'revenue'         => $revenue,
+            'cost'            => $cost,
+            'portal_expenses' => $portalExpenses,
+            'profit'          => $revenue - $cost - $portalExpenses,
         ]);
     }
 
     // --- helpers ----------------------------------------------------------------
+
+    /**
+     * Portal expenses charged against a date range, for the profit figure.
+     *
+     * Portal expenses are kept per MONTH, so a month is only charged when the range covers
+     * ALL of it — a partially-covered month contributes nothing. Without that rule the
+     * dashboard, which opens on today, would set a whole month of overheads against a single
+     * day of revenue and report a large false loss. The trade-off is that short ranges show
+     * no portal expenses at all; a full-month or multi-month range picks them up.
+     *
+     * An open-ended side takes everything beyond it (no `from` => every earlier month).
+     *
+     * Returns 0.0 if the portal_expenses table isn't there: the table arrives with migration
+     * 011, and a deployment that hasn't run it should still get a working dashboard rather
+     * than a 500.
+     */
+    private function portalExpenses(PDO $pdo, ?string $from, ?string $to): float
+    {
+        $where  = [];
+        $params = [];
+        if ($from) {
+            // The month must begin on or after the range starts …
+            $where[] = "date_trunc('month', month)::date >= :pe_from::date";
+            $params[':pe_from'] = $from;
+        }
+        if ($to) {
+            // … and end on or before it finishes.
+            $where[] = "(date_trunc('month', month) + interval '1 month - 1 day')::date <= :pe_to::date";
+            $params[':pe_to'] = $to;
+        }
+        $clause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+        try {
+            $stmt = $pdo->prepare("SELECT COALESCE(SUM(total_amount), 0) FROM portal_expenses {$clause}");
+            $stmt->execute($params);
+            return (float) $stmt->fetchColumn();
+        } catch (\PDOException) {
+            return 0.0;
+        }
+    }
+
+    /**
+     * Portal expenses per calendar month, keyed 'YYYY-MM' — used to charge the trend buckets.
+     *
+     * @return array<string, float>
+     */
+    private function portalExpensesByMonth(PDO $pdo): array
+    {
+        try {
+            $stmt = $pdo->query(
+                "SELECT to_char(date_trunc('month', month), 'YYYY-MM') AS m, SUM(total_amount) AS total
+                 FROM portal_expenses GROUP BY 1"
+            );
+            $out = [];
+            foreach ($stmt->fetchAll() as $r) {
+                $out[$r['m']] = (float) $r['total'];
+            }
+            return $out;
+        } catch (\PDOException) {
+            return [];
+        }
+    }
 
     /** Grand-total footer for the revenue table (one buyer per row). */
     private function buyerTotals(array $rows): array
@@ -387,11 +476,16 @@ final class AnalyticsController
         $answered = (int) $r['answered'];
         $missed = (int) $r['missed'];
 
+        // Profit is what is left after the Leads AND the portal overheads for the period.
+        $portalExpenses = $this->portalExpenses($pdo, $from, $to);
+        $profit         = $revenue - $cost - $portalExpenses;
+
         return [
             'revenue'          => $revenue,
             'cost'             => $cost,
-            'margin'           => $revenue - $cost,
-            'margin_pct'       => $revenue > 0 ? round(($revenue - $cost) / $revenue * 100, 1) : 0.0,
+            'portal_expenses'  => $portalExpenses,
+            'margin'           => $profit,
+            'margin_pct'       => $revenue > 0 ? round($profit / $revenue * 100, 1) : 0.0,
             'answered'         => $answered,
             'missed'           => $missed,
             'counted'          => (int) $r['counted'],

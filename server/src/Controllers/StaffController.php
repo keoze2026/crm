@@ -28,15 +28,17 @@ final class StaffController
     private const TZ = 'America/New_York';
 
     /**
-     * A staff row as every /staff response shapes it: their departments as a JSON array,
-     * plus `assignment_id` so the Queues page can jump from a name straight to its record.
+     * A staff row as every /staff response shapes it, with their departments as a JSON
+     * array. It deliberately says nothing about the Queues sheets: a person may hold a row
+     * on both of them, so "are they on the sheet" is a question only the Queues page can
+     * answer, from the board it is showing.
      *
      * `attendance_user_id` is read-only — it is resolved from the name, never picked — and
      * is here so the attendance sheet knows whose days arrive fetched.
      */
     private const STAFF_SELECT =
         'SELECT s.id, s.name, s.sort_order, s.status, s.attendance_user_id,
-                qa.id AS assignment_id, s.created_at, s.updated_at,
+                s.created_at, s.updated_at,
                 COALESCE(
                     json_agg(json_build_object(\'id\', d.id, \'name\', d.name)
                              ORDER BY d.sort_order, d.id)
@@ -45,15 +47,14 @@ final class StaffController
                 ) AS departments
            FROM staff s
       LEFT JOIN staff_departments sd ON sd.staff_id = s.id
-      LEFT JOIN departments d ON d.id = sd.department_id
-      LEFT JOIN queue_assignments qa ON qa.person_id = s.id';
+      LEFT JOIN departments d ON d.id = sd.department_id';
 
     // ─── Staff (/staff) ────────────────────────────────────────────────────────
 
     public function index(): void
     {
         $stmt = Database::connection()->query(
-            self::STAFF_SELECT . ' GROUP BY s.id, qa.id ORDER BY s.sort_order ASC, lower(btrim(s.name)) ASC'
+            self::STAFF_SELECT . ' GROUP BY s.id ORDER BY s.sort_order ASC, lower(btrim(s.name)) ASC'
         );
         Http::json(array_map([$this, 'castStaff'], $stmt->fetchAll()));
     }
@@ -732,7 +733,7 @@ final class StaffController
         }
         $list = implode(',', array_map(static fn ($id): string => (string) (int) $id, $ids));
         $stmt = Database::connection()->query(
-            self::STAFF_SELECT . " WHERE s.id IN ({$list}) GROUP BY s.id, qa.id"
+            self::STAFF_SELECT . " WHERE s.id IN ({$list}) GROUP BY s.id"
             . ' ORDER BY s.sort_order ASC, lower(btrim(s.name)) ASC'
         );
         return array_map([$this, 'castStaff'], $stmt->fetchAll());
@@ -970,7 +971,6 @@ final class StaffController
     {
         $row['id']            = (int) $row['id'];
         $row['sort_order']    = (int) $row['sort_order'];
-        $row['assignment_id'] = $row['assignment_id'] === null ? null : (int) $row['assignment_id'];
         // `departments` arrives as JSON text from json_agg.
         $departments = \is_string($row['departments']) ? json_decode($row['departments'], true) : $row['departments'];
         $row['departments'] = array_map(

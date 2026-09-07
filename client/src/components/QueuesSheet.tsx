@@ -4,7 +4,8 @@ import { api } from '../api/client'
 import { num } from '../lib/format'
 import { anchorTo, focusQuietly, type Anchor } from '../lib/popover'
 import { matches } from '../lib/queues'
-import type { QueueAssignment, QueueCode, StaffMember } from '../types'
+import type { QueueAssignment, QueueBoard, QueueCode, StaffMember } from '../types'
+import QueueChips, { type Chip } from './QueueChips'
 import {
   addBtnCls, addRowCls, cellCls, fieldCls, headCls, idxCell, removeBtnCls, rowCls, sheetStroke,
   tableCls, theadCls,
@@ -25,18 +26,22 @@ import { Spinner, cx } from './ui'
  * and numbering stays stable while searching.
  */
 export default function QueuesSheet({
-  rows, people, codes, filtered, onChanged,
+  board, rows, people, taken, codes, filtered, onChanged,
 }: {
+  /** Which sheet this is — new records are filed under it. */
+  board: QueueBoard
   rows: { index: number; row: QueueAssignment }[]
   people: StaffMember[]
+  /** person_id → the record they hold ON THIS SHEET; they may hold one on the other too. */
+  taken: Map<number, number>
   codes: QueueCode[]
   /** True while a search narrows the sheet — the totals bar says so. */
   filtered: boolean
   onChanged: () => void
 }) {
   const total = rows.reduce((s, r) => s + r.row.codes.length, 0)
-  // Names still free to take a record — everyone else already holds one.
-  const free = people.filter((p) => p.assignment_id === null)
+  // Names still free to take a record on THIS sheet — everyone else already holds one here.
+  const free = people.filter((p) => !taken.has(p.id))
 
   return (
     <div className="overflow-x-auto">
@@ -59,9 +64,9 @@ export default function QueuesSheet({
         </thead>
         <tbody>
           {rows.map(({ index, row }) => (
-            <Row key={row.id} index={index} row={row} people={people} codes={codes} onChanged={onChanged} />
+            <Row key={row.id} index={index} row={row} people={people} taken={taken} codes={codes} onChanged={onChanged} />
           ))}
-          {!filtered && <AddRow free={free} codes={codes} onChanged={onChanged} />}
+          {!filtered && <AddRow board={board} free={free} codes={codes} onChanged={onChanged} />}
         </tbody>
         <tfoot>
           <tr className="bg-[#1a3654] font-bold text-white">
@@ -78,13 +83,23 @@ export default function QueuesSheet({
 }
 
 const selectCls = cx(fieldCls, 'font-semibold')
-/** Queue code as it reads in the sheet — small, bordered, spreadsheet blue. */
-const chipCls = 'rounded border border-blue-300 bg-blue-50 px-1 text-[10px] font-bold leading-4 text-[#1d4ed8]'
+
+/**
+ * The picked ids as chips, in the order they are held. Resolved against the catalogue so a
+ * code renamed elsewhere reads correctly here without a reload.
+ */
+function chipsOf(ids: number[], codes: QueueCode[]): Chip[] {
+  const byId = new Map(codes.map((c) => [c.id, c]))
+  return ids.map((id) => byId.get(id)).filter((c): c is QueueCode => c !== undefined)
+}
 
 // ── Existing record ─────────────────────────────────────────────────────────────
 function Row({
-  index, row, people, codes, onChanged,
-}: { index: number; row: QueueAssignment; people: StaffMember[]; codes: QueueCode[]; onChanged: () => void }) {
+  index, row, people, taken, codes, onChanged,
+}: {
+  index: number; row: QueueAssignment; people: StaffMember[]
+  taken: Map<number, number>; codes: QueueCode[]; onChanged: () => void
+}) {
   // The queue dropdown edits this draft live (so Total moves with it) and saves once,
   // when it closes — one request per edit instead of one per tick.
   const signature = row.codes.map((c) => c.id).join(',')
@@ -107,9 +122,12 @@ function Row({
     } catch (err) { alert((err as Error).message) } finally { setBusy(false) }
   }
 
+  // Order-SENSITIVE: the order of `code_ids` is the order the chips are stored in, so a
+  // drag and a tick are the same write. Comparing unsorted is what makes a pure reorder
+  // count as a change.
   const commitCodes = async (ids: number[]) => {
-    // Order-insensitive: the draft is in tick order, the server answers in code order.
-    if ([...ids].sort().join(',') === [...row.codes.map((c) => c.id)].sort().join(',')) return
+    if (ids.join(',') === row.codes.map((c) => c.id).join(',')) return
+    setDraft(ids)
     setBusy(true)
     try {
       await api.updateQueueAssignment(row.id, { code_ids: ids })
@@ -137,14 +155,19 @@ function Row({
         >
           {people.map((p) => (
             // A name that already holds another record can't take this one too.
-            <option key={p.id} value={p.id} disabled={p.assignment_id !== null && p.assignment_id !== row.id}>
+            <option key={p.id} value={p.id} disabled={taken.has(p.id) && taken.get(p.id) !== row.id}>
               {p.name}
             </option>
           ))}
         </select>
       </td>
       <td className={cellCls}>
-        <QueuePicker codes={codes} value={draft} onChange={setDraft} onClose={() => commitCodes(draft)} />
+        <div className="flex items-start gap-1">
+          <div className="min-w-0 flex-1">
+            <QueueChips chips={chipsOf(draft, codes)} disabled={busy} onReorder={commitCodes} />
+          </div>
+          <QueuePicker codes={codes} value={draft} onChange={setDraft} onClose={() => commitCodes(draft)} />
+        </div>
       </td>
       <td className={cx(cellCls, 'text-center text-xs font-bold tabular-nums')}>{draft.length}</td>
       <td className="p-0">
@@ -166,7 +189,9 @@ function Row({
 }
 
 // ── Trailing "add a record" row ─────────────────────────────────────────────────
-function AddRow({ free, codes, onChanged }: { free: StaffMember[]; codes: QueueCode[]; onChanged: () => void }) {
+function AddRow({ board, free, codes, onChanged }: {
+  board: QueueBoard; free: StaffMember[]; codes: QueueCode[]; onChanged: () => void
+}) {
   const [personId, setPersonId] = useState<number | ''>('')
   const [picked, setPicked] = useState<number[]>([])
   const [busy, setBusy] = useState(false)
@@ -175,7 +200,7 @@ function AddRow({ free, codes, onChanged }: { free: StaffMember[]; codes: QueueC
     if (personId === '' || busy) return
     setBusy(true)
     try {
-      await api.createQueueAssignment({ person_id: Number(personId), code_ids: picked })
+      await api.createQueueAssignment({ board, person_id: Number(personId), code_ids: picked })
       setPersonId(''); setPicked([])
       onChanged()
     } catch (err) { alert((err as Error).message) } finally { setBusy(false) }
@@ -196,7 +221,12 @@ function AddRow({ free, codes, onChanged }: { free: StaffMember[]; codes: QueueC
         </select>
       </td>
       <td className={cellCls}>
-        <QueuePicker codes={codes} value={picked} onChange={setPicked} />
+        <div className="flex items-start gap-1">
+          <div className="min-w-0 flex-1">
+            <QueueChips chips={chipsOf(picked, codes)} onReorder={setPicked} />
+          </div>
+          <QueuePicker codes={codes} value={picked} onChange={setPicked} />
+        </div>
       </td>
       <td className={cx(cellCls, 'text-center text-xs font-bold tabular-nums text-slate-500')}>{picked.length}</td>
       <td className="p-0">
@@ -277,21 +307,17 @@ function QueuePicker({
         ref={triggerRef}
         type="button"
         onClick={() => (open ? close() : openPanel())}
-        title={selected.map((c) => c.code).join(', ')}
+        title={selected.length === 0 ? 'Pick queues' : `Edit queues — ${selected.map((c) => c.code).join(', ')}`}
+        aria-label="Pick queues"
         className={cx(
-          'flex w-full items-center justify-between gap-1.5 rounded border bg-white px-1.5 py-0.5 text-left transition-colors',
+          // Compact on purpose: the chips themselves now live beside it, where they can be
+          // dragged. This is only the add/remove affordance.
+          'flex shrink-0 items-center gap-1 whitespace-nowrap rounded border bg-white px-1.5 py-0.5 text-xs font-semibold transition-colors',
           open ? 'border-[#1a3654] ring-1 ring-[#1a3654]/30' : 'border-slate-300 hover:border-[#1a3654]',
+          selected.length === 0 ? 'text-slate-500' : 'text-slate-800',
         )}
       >
-        {selected.length === 0 ? (
-          <span className="py-0.5 text-xs font-medium text-slate-500">Select queues</span>
-        ) : (
-          <span className="flex flex-wrap gap-0.5 py-0.5">
-            {selected.map((c) => (
-              <span key={c.id} className={chipCls}>{c.code}</span>
-            ))}
-          </span>
-        )}
+        {selected.length === 0 ? 'Select' : 'Edit'}
         <CaretIcon open={open} />
       </button>
 

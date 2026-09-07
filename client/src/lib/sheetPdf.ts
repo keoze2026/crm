@@ -63,10 +63,14 @@ function bandRow(name: string, columns: number): RowInput {
  * The Queues sheet: one row per person, their codes as the comma-separated list the
  * client's own spreadsheet uses, and the navy TOTAL row underneath.
  */
-export function buildQueuesPdf(rows: QueueAssignment[]): jsPDF {
+export function buildQueuesPdf(rows: QueueAssignment[], title = 'Queues'): jsPDF {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
   const total = rows.reduce((s, r) => s + r.codes.length, 0)
-  const y = drawHeader(doc, 'QUEUES', `${rows.length} ${rows.length === 1 ? 'person' : 'people'} · ${total} queues assigned`)
+  const y = drawHeader(
+    doc,
+    title.toUpperCase(),
+    `${rows.length} ${rows.length === 1 ? 'person' : 'people'} · ${total} queues assigned`,
+  )
 
   const body: RowInput[] = rows.map((r, i) => [
     String(i + 1),

@@ -16,15 +16,17 @@ import { Badge, Card, Spinner, cx } from './ui'
  * panel just says how many are available and links there.
  */
 export default function QueueLists({
-  people, codes, onChanged,
+  people, taken, codes, onChanged,
 }: {
   people: StaffMember[]
+  /** How many of them already hold a row on the sheet being shown. */
+  taken: number
   codes: QueueCode[]
   onChanged: () => void
 }) {
   // Open on a fresh install (nothing to pick from yet), collapsed once the list exists.
   const [open, setOpen] = useState(codes.length === 0)
-  const unassigned = people.filter((p) => p.assignment_id === null).length
+  const unassigned = people.length - taken
 
   return (
     <Card>

@@ -72,8 +72,13 @@ function ReportView({ data }: { data: CompleteReport }) {
 
       {/* Combined — Revenue − Cost = Profit */}
       <section>
-        <SectionHeading title="Complete" note="revenue − cost = profit" />
-        <FormulaBand revenue={data.revenue} cost={data.cost} profit={data.profit} />
+        <SectionHeading title="Complete" note="revenue − cost − portal expenses = profit" />
+        <FormulaBand
+          revenue={data.revenue}
+          cost={data.cost}
+          portalExpenses={data.portal_expenses ?? 0}
+          profit={data.profit}
+        />
       </section>
     </div>
   )
@@ -81,13 +86,27 @@ function ReportView({ data }: { data: CompleteReport }) {
 
 // ─── Profit band ─────────────────────────────────────────────────────────────────
 
-/** Combined profit: Revenue − Cost = Profit, laid out as an equation. */
-function FormulaBand({ revenue, cost, profit }: { revenue: number; cost: number; profit: number }) {
+/**
+ * Combined profit: Revenue − Cost − Portal expenses = Profit, laid out as an equation.
+ *
+ * The portal-expenses term only appears when there is one to show: those figures are monthly,
+ * so a range that covers no whole month carries none, and a zero tile would just read as
+ * clutter. An older API omits the field entirely — treated the same way.
+ */
+function FormulaBand({ revenue, cost, portalExpenses, profit }: {
+  revenue: number; cost: number; portalExpenses: number; profit: number
+}) {
   return (
     <div className="flex flex-col items-stretch gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-center">
       <Tile label="Revenue" value={money2(revenue)} />
       <Operator>−</Operator>
       <Tile label="Cost" value={money2(cost)} />
+      {portalExpenses > 0 && (
+        <>
+          <Operator>−</Operator>
+          <Tile label="Portal expenses" value={money2(portalExpenses)} />
+        </>
+      )}
       <Operator>=</Operator>
       <Tile label="Profit" value={money2(profit)} highlight={profit >= 0 ? 'navy' : 'red'} />
     </div>

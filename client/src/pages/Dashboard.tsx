@@ -517,7 +517,7 @@ function HeroBanner({ value, delta, caption, series, loading }: {
         <div>
           <div className="flex items-center gap-1.5">
             <span className="text-base font-medium text-slate-500">Total Profit</span>
-            <InfoDot text="Revenue (billed) minus Expenses for the selected period. Negative means the Leads cost more than they billed." />
+            <InfoDot text="Revenue (billed) minus Lead Expenses and portal expenses for the selected period. Portal expenses are monthly, so only months the date range covers in full are charged — a shorter range carries none. Negative means the Leads and overheads cost more than they billed." />
           </div>
           {loading ? (
             <Skeleton className="mt-2 h-11 w-52" />

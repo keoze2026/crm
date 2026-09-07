@@ -6,6 +6,7 @@ use App\Audit;
 use App\Auth\Auth;
 use App\Auth\AuthMiddleware;
 use App\Auth\Config;
+use App\Controllers\AccessPresetController;
 use App\Controllers\AnalyticsController;
 use App\Controllers\AttendanceController;
 use App\Controllers\AuditController;
@@ -157,7 +158,7 @@ $router->delete('/vendors/{id}',         fn ($p) => $vendors->destroy($p));
 $router->get('/vendor-payments',         fn () => $vendors->payments());
 $router->post('/vendor-payments',        fn () => $vendors->storePayment());
 $router->put('/vendor-payments/{id}',    fn ($p) => $vendors->updatePayment($p));
-$router->delete('/vendor-payments/{id}', fn ($p) => $vendors->destroyPayment());
+$router->delete('/vendor-payments/{id}', fn ($p) => $vendors->destroyPayment($p));
 
 // Call records
 $records = new RecordController();
@@ -197,6 +198,13 @@ if ($authEnabled) {
     $router->get('/audit-logs',         fn () => $auditCtrl->index());
     $router->delete('/audit-logs/{id}', fn ($p) => $auditCtrl->destroy($p));
     $router->delete('/audit-logs',      fn () => $auditCtrl->clear());
+
+    // Named page-access presets the Add-user form picks from.
+    $presets = new AccessPresetController();
+    $router->get('/admin/access-presets',         fn () => $presets->index());
+    $router->post('/admin/access-presets',        fn () => $presets->store());
+    $router->put('/admin/access-presets/{id}',    fn ($p) => $presets->update($p));
+    $router->delete('/admin/access-presets/{id}', fn ($p) => $presets->destroy($p));
 
     $users = new UserController();
     $router->get('/admin/users',                  fn () => $users->index());
