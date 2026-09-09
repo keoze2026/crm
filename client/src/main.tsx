@@ -26,14 +26,14 @@ import UserManual from './pages/UserManual'
 // 🔑 SET YOUR SITE PASSWORD HERE
 const SITE_PASSWORD = 'crmKeozx@2026.'
 
-function SitePasswordGate({ children }) {
+function SitePasswordGate({ children }: { children: React.ReactNode }) {
   const [unlocked, setUnlocked] = useState(() => {
     return sessionStorage.getItem('site_unlocked') === 'true'
   })
   const [password, setPassword] = useState('')
   const [error, setError] = useState(false)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (password === SITE_PASSWORD) {
       sessionStorage.setItem('site_unlocked', 'true')
