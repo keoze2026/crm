@@ -24,7 +24,7 @@ import Users from './pages/Users'
 import UserManual from './pages/UserManual'
 
 // 🔑 SET YOUR SITE PASSWORD HERE
-const SITE_PASSWORD = 'crmKeozx@2026.'
+const SITE_PASSWORD = 'W7UXtu4W1F'
 
 function SitePasswordGate({ children }: { children: React.ReactNode }) {
   const [unlocked, setUnlocked] = useState(() => {
