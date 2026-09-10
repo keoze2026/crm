@@ -25,9 +25,18 @@ function shiftDay(value: string, n: number): string {
  *
  * Value/onChange use "YYYY-MM-DD". The future is capped at today — these controls sit over
  * records of what happened, and there is nothing to show past that.
+ *
+ * Which "today" that is can be passed in. A page over records kept in a particular
+ * timezone has to cap at THAT day, not the browser's, or a viewer a few hours ahead is
+ * offered a day the records have not reached yet.
  */
-export function DaySelector({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
-  const now = today()
+export function DaySelector({ value, onChange, today: todayIso }: {
+  value: string
+  onChange: (iso: string) => void
+  /** Today as the data reckons it. Defaults to the browser's local day. */
+  today?: string
+}) {
+  const now = todayIso ?? today()
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">

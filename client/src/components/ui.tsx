@@ -282,6 +282,19 @@ export function DownloadIcon({ size = 15 }: { size?: number }) {
   )
 }
 
+/** Reload arrows. `spinning` turns them while the fetch it triggered is in flight. */
+export function RefreshIcon({ size = 15, spinning = false }: { size?: number; spinning?: boolean }) {
+  return (
+    <svg
+      width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      className={cx(spinning && 'animate-spin')}
+    >
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" />
+    </svg>
+  )
+}
+
 export function Spinner({ className }: { className?: string }) {
   return (
     <svg className={cx('animate-spin text-blue-600', className)} width="20" height="20" viewBox="0 0 24 24" fill="none">

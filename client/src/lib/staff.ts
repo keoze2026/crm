@@ -22,8 +22,55 @@ export const staffStatus = (id: StaffStatus) =>
 /** Suggestions for the leave columns; the cells stay free text, so anything else fits. */
 export const LEAVE_MARKERS = ['Approved', 'Not Approved', 'Pending', 'Unpaid']
 
-/** What a hand-keyed attendance day can say. */
-export const ATTENDANCE_STATUSES = ['present', 'absent', 'half day', 'leave', 'holiday']
+/**
+ * What an attendance day can say.
+ *
+ * "still in" is the odd one out: nobody keys it, the SERVER derives it for a day with a
+ * login and no logout yet (see StaffController::fetchedDaySelect). It has to be in this
+ * list all the same, or the sheet's dropdown is handed a value it has no option for and
+ * renders blank — which is what everyone currently at their desk looked like on today's
+ * sheet. It sits last because it is the one nobody picks.
+ */
+export const ATTENDANCE_STATUSES = ['present', 'absent', 'half day', 'leave', 'holiday', 'still in']
+
+/**
+ * What a day with no status of its own should be read as, from its clock times alone: a
+ * login and no logout is someone still at their desk, any login at all is present, and a
+ * day with nothing recorded is an absence.
+ *
+ * This is only ever a reading of an empty row — the moment a status is stored, that is
+ * what shows. It exists so the Status column agrees with the scorecards above it: a sheet
+ * that says "5 of 15 in" cannot have fifteen rows reading "present".
+ */
+export const impliedStatus = (login: string | null, logout: string | null): string =>
+  !login ? 'absent' : !logout ? 'still in' : 'present'
+
+// ─── The organisation's clock ─────────────────────────────────────────────────
+
+/**
+ * The timezone attendance is kept in. Every `work_date` the API returns is a day as
+ * reckoned HERE, not where the browser happens to be sitting — so this is the clock any
+ * page showing "today's attendance" has to ask, and `StaffController::TZ` is the same
+ * value on the server side.
+ */
+export const ORG_TZ = 'America/New_York'
+
+/**
+ * Today as the ORGANISATION reckons it, "YYYY-MM-DD".
+ *
+ * Deliberately not `today()` from lib/format, which answers with the browser's local day.
+ * The two disagree for hours either side of midnight — a supervisor in Nairobi opening the
+ * sheet at 7 a.m. is in a day New York has not begun — and the sheet would then read empty
+ * with no hint as to why. Everything dated against attendance uses this.
+ */
+export const orgToday = (): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: ORG_TZ }).format(new Date())
+
+/** The wall clock in the org's timezone right now, "9:07 AM" — for an "as of" stamp. */
+export const orgNowLabel = (): string =>
+  new Intl.DateTimeFormat('en-US', {
+    timeZone: ORG_TZ, hour: 'numeric', minute: '2-digit', hour12: true,
+  }).format(new Date())
 
 /** First and last day of a "YYYY-MM" month, as the API's from/to range. */
 export function monthRange(month: string): { from: string; to: string } {

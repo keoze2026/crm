@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react'
 import { api } from '../api/client'
 import {
-  ATTENDANCE_STATUSES, clockLabel, earlyBy, gapLabel, hoursLabel, lateBy, netHours,
-  punctuality,
+  ATTENDANCE_STATUSES, clockLabel, earlyBy, gapLabel, hoursLabel, impliedStatus, lateBy,
+  netHours, punctuality,
 } from '../lib/staff'
 import type { StaffAttendanceRow, StaffMember } from '../types'
 import PunctualityBadge from './PunctualityBadge'
@@ -32,6 +32,11 @@ import { EmptyState, cx } from './ui'
  * The Flag column turns those two marks into one verdict per day — on time, late in, early
  * out, or both — so the sheet can be read down a single column, and the day that went wrong
  * at BOTH ends stands out from the day that only went wrong at one.
+ *
+ * Status shows what is stored for the day, and where nothing is, what the clock times imply
+ * — greyed and italic, because it is a reading rather than a decision. That is what keeps
+ * the column honest against the counts above it: a row nobody has touched says "absent",
+ * not "present", and someone still at their desk says "still in".
  */
 export default function StaffAttendanceSheet({
   date, rows, staff, onChanged,
@@ -120,7 +125,13 @@ interface Draft {
   status: string
 }
 
-const BLANK: Draft = { login_at: '', logout_at: '', break_min: '0', status: ATTENDANCE_STATUSES[0] }
+/**
+ * An untouched row. The status is EMPTY rather than "present": nothing is on record for
+ * this person yet, and a sheet that opens claiming the whole roster is present is the one
+ * thing it must not do. What shows in the cell is read off the clock times instead — see
+ * impliedStatus — until somebody stores a status of their own.
+ */
+const BLANK: Draft = { login_at: '', logout_at: '', break_min: '0', status: '' }
 
 const draftOf = (row: StaffAttendanceRow | null): Draft => row === null ? { ...BLANK } : {
   login_at: row.login_at ?? '',
@@ -155,6 +166,13 @@ function DayRow({
   const early = earlyBy(draft.logout_at || null, person.expected_logout)
   const flag = punctuality(late, early)
 
+  // The status on show: the one stored for this day, or — where none is — the one the
+  // clock times imply, which moves with them as the row is typed. Either way it is a real
+  // value, so what saves is what was on screen.
+  const status = draft.status === ''
+    ? impliedStatus(draft.login_at || null, draft.logout_at || null)
+    : draft.status
+
   // A day the bot recorded that nobody has touched yet: the revert control has nothing to
   // undo, and a first edit will create the record that replaces it.
   const fromBot = row?.source === 'fetched'
@@ -170,7 +188,12 @@ function DayRow({
         login_at: next.login_at === '' ? null : next.login_at,
         logout_at: next.logout_at === '' ? null : next.logout_at,
         break_min: Number(next.break_min || 0),
-        status: next.status,
+        // A row saved before anyone picked a status stores the one its clock times imply —
+        // the one that was showing in the cell. The column never records something other
+        // than what the person keying it in was looking at.
+        status: next.status === ''
+          ? impliedStatus(next.login_at || null, next.logout_at || null)
+          : next.status,
       }
       // The whole row is sent every time, so the record that replaces a bot day is complete
       // from the moment it exists rather than a patch that has to be merged.
@@ -235,9 +258,14 @@ function DayRow({
       <td className={cx(cellCls, 'text-center')}><PunctualityBadge flag={flag} compact /></td>
       <td className={cellCls}>
         <select
-          value={draft.status}
+          value={status}
           onChange={(e) => { setDraft({ ...draft, status: e.target.value }); save({ status: e.target.value }) }}
-          className={cx(fieldCls, 'capitalize', overridden && editedCls)}
+          className={cx(
+            fieldCls, 'capitalize', overridden && editedCls,
+            // An implied status is greyed: it says what the clock times mean, not what
+            // anybody decided, and nothing has been written for this day.
+            draft.status === '' && 'text-slate-500 italic',
+          )}
         >
           {ATTENDANCE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>

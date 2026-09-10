@@ -10,15 +10,18 @@ import StaffSalariesSheet from '../components/StaffSalariesSheet'
 import StaffSheet from '../components/StaffSheet'
 import {
   Badge, Button, Card, CardHeader, DownloadIcon, EmptyState, Input, PageLoader,
-  SegmentedTabs,
+  RefreshIcon, SegmentedTabs, cx,
 } from '../components/ui'
-import { formatDate, today } from '../lib/format'
+import { formatDate } from '../lib/format'
 import { matches } from '../lib/queues'
 import {
   buildLeavesPdf, buildSalariesPdf, buildStaffAttendancePdf, buildStaffPdf,
 } from '../lib/sheetPdf'
-import { monthRange, punctualityOf, tallyPunctuality } from '../lib/staff'
+import {
+  monthRange, orgNowLabel, punctualityOf, tallyPunctuality, type PunctualityTally,
+} from '../lib/staff'
 import { useAsync } from '../lib/useAsync'
+import { useOrgToday } from '../lib/useOrgToday'
 
 type Tab = 'staff' | 'attendance' | 'leaves' | 'salaries'
 
@@ -36,6 +39,42 @@ const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
 ]
 
 /**
+ * The day the attendance sheet is showing, counted up — every figure read off the SAME
+ * rows the table below renders, so a scorecard can never contradict the column under it.
+ *
+ * "In" is out of the whole roster because the sheet lists the whole roster; the punctuality
+ * figures are out of the days that could be judged, which is fewer — nobody with no
+ * schedule set, and nobody who never clocked in, is counted either way.
+ */
+function AttendanceScore({ inCount, roster, flags }: {
+  inCount: number
+  roster: number
+  flags: PunctualityTally
+}) {
+  const tiles: { label: string; value: number; of: number; tone: string }[] = [
+    { label: 'In', value: inCount, of: roster, tone: 'text-slate-900' },
+    { label: 'On time', value: flags.onTime, of: flags.judged, tone: 'text-emerald-700' },
+    { label: 'Late in', value: flags.late, of: flags.judged, tone: 'text-amber-700' },
+    { label: 'Early out', value: flags.early, of: flags.judged, tone: 'text-amber-700' },
+    { label: 'Late + early', value: flags.both, of: flags.judged, tone: 'text-rose-700' },
+  ]
+
+  return (
+    <div className="grid grid-cols-2 gap-px border-b border-white/50 bg-white/30 sm:grid-cols-5">
+      {tiles.map((t) => (
+        <div key={t.label} className="bg-white/40 px-4 py-2.5">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{t.label}</p>
+          <p className="mt-0.5 text-lg font-bold tabular-nums leading-6">
+            <span className={cx(t.value === 0 ? 'text-slate-400' : t.tone)}>{t.value}</span>
+            <span className="text-xs font-medium text-slate-400">/{t.of}</span>
+          </p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
  * Staff Management — the roster every other sheet reads, plus the three sheets that hang
  * off it.
  *
@@ -50,15 +89,28 @@ export default function Staff() {
   // in September is for August's work — so they open on last month, the way Review does.
   // Attendance is the opposite: it is a record of a day as it happens, so it opens on today.
   const [month, setMonth] = useState<string>(() => shiftMonth(currentMonth(), -1))
-  const [date, setDate] = useState<string>(today)
   const [search, setSearch] = useState('')
+
+  // Which day the attendance tab shows. Attendance days are New York days (the API says
+  // so in its `timezone`), so "today" is the ORG's, never the browser's — and it is held
+  // as null rather than a date, so a sheet left open through midnight follows the day
+  // over instead of quietly freezing on yesterday. Picking a day pins it; Today unpins.
+  const orgDay = useOrgToday()
+  const [picked, setPicked] = useState<string | null>(null)
+  const date = picked ?? orgDay
+  const onToday = picked === null
+  const setDate = (iso: string) => setPicked(iso === orgDay ? null : iso)
 
   const staff = useAsync(() => api.staff(), [])
   const departments = useAsync(() => api.departments(), [])
 
   const range = monthRange(month)
+  // The fetch stamps itself with the time it landed, so the "as of" line beside the
+  // Refresh button is the age of the figures on screen rather than the clock on the wall.
   const attendance = useAsync(
-    () => tab === 'attendance' ? api.staffAttendance({ from: date, to: date }) : Promise.resolve(null),
+    async () => tab === 'attendance'
+      ? { page: await api.staffAttendance({ from: date, to: date }), at: orgNowLabel() }
+      : null,
     [tab, date],
   )
   const leaves = useAsync(
@@ -73,9 +125,14 @@ export default function Staff() {
   // The roster feeds every tab, so a change anywhere reloads it along with the sheet.
   const reloadRoster = () => { staff.reload(); departments.reload() }
 
+  // Refresh pulls the day AND the roster: the check-in bot writes new logins and logouts
+  // between page loads, and someone's expected hours may have been set on the Staff tab in
+  // another window — both change what the sheet says without anything here having changed.
+  const refreshAttendance = () => { attendance.reload(); staff.reload() }
+
   const people = useMemo(() => staff.data ?? [], [staff.data])
   const depts = useMemo(() => departments.data ?? [], [departments.data])
-  const attendanceRows = useMemo(() => attendance.data?.rows ?? [], [attendance.data])
+  const attendanceRows = useMemo(() => attendance.data?.page.rows ?? [], [attendance.data])
   const leaveRows = leaves.data ?? []
   const salaryRows = salaries.data ?? []
 
@@ -137,7 +194,7 @@ export default function Staff() {
             />
           </div>
         ) : tab === 'attendance' ? (
-          <DaySelector value={date} onChange={setDate} />
+          <DaySelector value={date} onChange={setDate} today={orgDay} />
         ) : (
           <MonthSelector value={month} onChange={setMonth} />
         )}
@@ -176,16 +233,33 @@ export default function Staff() {
         <Card>
           <CardHeader
             title={`Attendance — ${dateLabel}`}
+            subtitle={
+              <span className="tabular-nums">
+                {onToday ? 'Today' : 'Past day'} · New York
+                {attendance.data ? ` · as of ${attendance.data.at}` : ''}
+                {onToday && ' · still filling in'}
+              </span>
+            }
             action={
-              <div className="flex flex-wrap items-center gap-1.5">
-                <Badge>{`${attendanceRows.filter((r) => r.login_at !== null).length} of ${people.length} in`}</Badge>
-                {attendanceFlags.judged > 0 && <Badge color="green">{`${attendanceFlags.onTime} on time`}</Badge>}
-                {attendanceFlags.late > 0 && <Badge color="amber">{`${attendanceFlags.late} late in`}</Badge>}
-                {attendanceFlags.early > 0 && <Badge color="amber">{`${attendanceFlags.early} early out`}</Badge>}
-                {attendanceFlags.both > 0 && <Badge color="red">{`${attendanceFlags.both} both`}</Badge>}
-              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={refreshAttendance}
+                disabled={attendance.loading || attendance.refreshing}
+                title="Re-read the day from the check-in bot"
+              >
+                <RefreshIcon spinning={attendance.loading || attendance.refreshing} />
+                {attendance.refreshing ? 'Refreshing…' : 'Refresh'}
+              </Button>
             }
           />
+
+          <AttendanceScore
+            inCount={attendanceRows.filter((r) => r.login_at !== null).length}
+            roster={people.length}
+            flags={attendanceFlags}
+          />
+
           <div className="p-4">
             <StaffAttendanceSheet
               date={date}

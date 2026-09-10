@@ -15,7 +15,9 @@ import { PageHeader } from '../components/Layout'
 import { Button, Card, CardHeader, PageLoader, SegmentedTabs, Spinner, cx } from '../components/ui'
 import type { Range } from '../components/DateRange'
 import { fileDateRange } from '../lib/format'
-import { clockLabel, gapLabel, punctuality, tallyPunctuality, type Punctuality } from '../lib/staff'
+import {
+  ORG_TZ, clockLabel, gapLabel, orgToday, punctuality, tallyPunctuality, type Punctuality,
+} from '../lib/staff'
 import PunctualityBadge from '../components/PunctualityBadge'
 import { saveXlsx } from '../lib/xlsx'
 import {
@@ -32,14 +34,15 @@ import {
   type BreakStat,
 } from '../lib/attendanceReports'
 
-const TZ = 'America/New_York'
 const TARGET_LOGIN_MIN = 9 * 60  // 9:00 AM EST — late threshold
+
+// The org clock lives in lib/staff so this page and Staff Management cannot drift apart
+// about which day "today" is — they read the same attendance days.
+const TZ = ORG_TZ
 
 // ─── Date / time helpers ───────────────────────────────────────────────────────
 
-function todayEST(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date())
-}
+const todayEST = orgToday
 
 /** Current calendar month in the org timezone, as 'YYYY-MM'. */
 function thisMonthEST(): string {
