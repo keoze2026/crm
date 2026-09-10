@@ -4,7 +4,9 @@ import type {
   Department, QueueAssignment, ReviewDepartment, ReviewEntry,
   StaffAttendanceRow, StaffLeave, StaffMember, StaffSalary,
 } from '../types'
-import { clockLabel, hoursLabel, shortDay, staffStatus } from './staff'
+import {
+  clockLabel, earlyBy, gapLabel, hoursLabel, lateBy, netHours, shortDay, staffStatus,
+} from './staff'
 
 /**
  * PDF exports for the Queues, Review and Staff Management sheets — the tables as filled
@@ -247,21 +249,26 @@ export function buildStaffPdf(staff: StaffMember[]): jsPDF {
   autoTable(doc, {
     startY: y,
     theme: 'grid',
-    head: [['SR. NO', 'NAME', 'DEPARTMENTS', 'STATUS']],
+    head: [['SR. NO', 'NAME', 'DEPARTMENTS', 'EXPECTED LOGIN', 'EXPECTED LOGOUT', 'STATUS']],
     body: staff.map((s, i) => [
       String(i + 1),
       s.name,
       s.departments.map((d) => d.name).join(', '),
+      // An em dash reads as "no schedule agreed", which is what an empty cell means.
+      clockLabel(s.expected_login),
+      clockLabel(s.expected_logout),
       staffStatus(s.status).label,
     ]),
     styles: baseStyles,
     headStyles: navyHead,
     bodyStyles: { fillColor: CYAN },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 50, fillColor: BAND, fontStyle: 'bold' },
-      1: { cellWidth: 140, fontStyle: 'bold' },
+      0: { halign: 'center', cellWidth: 42, fillColor: BAND, fontStyle: 'bold' },
+      1: { cellWidth: 116, fontStyle: 'bold' },
       2: { halign: 'left' },
-      3: { halign: 'center', cellWidth: 70 },
+      3: { halign: 'center', cellWidth: 74 },
+      4: { halign: 'center', cellWidth: 74 },
+      5: { halign: 'center', cellWidth: 60 },
     },
     margin: { left: M, right: M },
   })
@@ -271,6 +278,9 @@ export function buildStaffPdf(staff: StaffMember[]): jsPDF {
 /**
  * One day's attendance for the whole roster. Everyone appears, including the people with
  * nothing recorded — a blank line is the point of a daily sheet.
+ *
+ * A clock time that missed the hours that person is expected to keep carries how far it
+ * missed by, the way the sheet on screen marks it.
  */
 export function buildStaffAttendancePdf(
   staff: StaffMember[], rows: StaffAttendanceRow[], dateLabel: string,
@@ -278,7 +288,21 @@ export function buildStaffAttendancePdf(
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
   const byStaff = new Map(rows.map((r) => [r.staff_id, r]))
   const present = rows.filter((r) => r.login_at !== null).length
-  const y = drawHeader(doc, 'ATTENDANCE', `${dateLabel} · ${present} of ${staff.length} logged in`)
+  const marked = staff.filter((p) => {
+    const row = byStaff.get(p.id)
+    return (lateBy(row?.login_at ?? null, p.expected_login) ?? 0) > 0
+        || (earlyBy(row?.logout_at ?? null, p.expected_logout) ?? 0) > 0
+  }).length
+  const y = drawHeader(
+    doc,
+    'ATTENDANCE',
+    `${dateLabel} · ${present} of ${staff.length} logged in`
+      + (marked > 0 ? ` · ${marked} off schedule` : ''),
+  )
+
+  /** "9:07 AM (7m late)" — the time, and only where it matters how far off it was. */
+  const marks = (at: string | null, off: number | null, word: string): string =>
+    off !== null && off > 0 ? `${clockLabel(at)} (${gapLabel(off)} ${word})` : clockLabel(at)
 
   autoTable(doc, {
     startY: y,
@@ -290,12 +314,14 @@ export function buildStaffAttendancePdf(
         String(i + 1),
         person.name,
         person.departments.map((d) => d.name).join(', '),
-        clockLabel(row?.login_at ?? null),
-        clockLabel(row?.logout_at ?? null),
+        marks(row?.login_at ?? null, lateBy(row?.login_at ?? null, person.expected_login), 'late'),
+        marks(row?.logout_at ?? null, earlyBy(row?.logout_at ?? null, person.expected_logout), 'early'),
         row ? `${row.break_min}m` : '—',
-        hoursLabel(row?.net_hours ?? null),
+        // The same calculation the sheet shows, from the same clock times, so a printed
+        // day always matches the screen it was printed from.
+        hoursLabel(row ? netHours(row.login_at ?? '', row.logout_at ?? '', row.break_min) : null),
         row?.status ?? '—',
-        row === null ? '—' : row.source === 'fetched' ? 'Fetched' : 'Keyed in',
+        row === null ? '—' : row.source === 'manual' ? 'Keyed in' : row.edited ? 'Corrected' : 'Fetched',
       ]
     }),
     styles: baseStyles,
@@ -305,8 +331,8 @@ export function buildStaffAttendancePdf(
       0: { halign: 'center', cellWidth: 46, fillColor: BAND, fontStyle: 'bold' },
       1: { cellWidth: 120, fontStyle: 'bold' },
       2: { halign: 'left' },
-      3: { halign: 'center', cellWidth: 62 },
-      4: { halign: 'center', cellWidth: 62 },
+      3: { halign: 'center', cellWidth: 90 },
+      4: { halign: 'center', cellWidth: 90 },
       5: { halign: 'center', cellWidth: 48 },
       6: { halign: 'center', cellWidth: 52, fontStyle: 'bold' },
       7: { halign: 'center', cellWidth: 66 },

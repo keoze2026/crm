@@ -36,10 +36,6 @@ export const fieldCls =
   'w-full rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 '
   + 'placeholder:text-slate-400 focus:border-[#1a3654] focus:outline-none focus:ring-1 focus:ring-[#1a3654]/30'
 
-/** A read-only cell that looks like a field but isn't one — a fetched value. */
-export const lockedCls =
-  'w-full rounded border border-dashed border-slate-300 bg-slate-50 px-1.5 py-0.5 text-xs text-slate-600'
-
 /** The small square action button at the end of a row. */
 export const addBtnCls =
   'flex h-5 w-5 items-center justify-center rounded bg-[#1a3654] text-white transition-colors '

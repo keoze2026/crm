@@ -12,11 +12,15 @@ import { PlusIcon, TrashIcon } from './sheetIcons'
 import { Spinner, cx } from './ui'
 
 /**
- * The staff roster: Sr. No. · Name · Departments · Status.
+ * The staff roster: Sr. No. · Name · Departments · Expected Login · Expected Logout · Status.
  *
  * This is the one list the Queues and Review sheets pick their names from, which is why
  * departments are edited here and nowhere else. A person may belong to SEVERAL, so the
  * cell is a tick-list rather than a dropdown.
+ *
+ * The expected hours are the schedule both attendance pages judge a day against — a login
+ * after the first is marked late, a logout before the second early. Leaving either blank
+ * means no schedule was agreed, and then nothing of theirs is ever marked.
  */
 export default function StaffSheet({
   staff, departments, onChanged,
@@ -27,19 +31,23 @@ export default function StaffSheet({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className={cx(tableCls, "min-w-2xl")}>
+      <table className={cx(tableCls, "min-w-3xl")}>
         <colgroup>
-          <col style={{ width: '7%' }} />
-          <col style={{ width: '32%' }} />
-          <col style={{ width: '40%' }} />
-          <col style={{ width: '14%' }} />
-          <col style={{ width: '7%' }} />
+          <col style={{ width: '6%' }} />
+          <col style={{ width: '24%' }} />
+          <col style={{ width: '29%' }} />
+          <col style={{ width: '12%' }} />
+          <col style={{ width: '12%' }} />
+          <col style={{ width: '12%' }} />
+          <col style={{ width: '5%' }} />
         </colgroup>
         <thead>
           <tr className={theadCls}>
             <th className={headCls}>Sr. No.</th>
             <th className={headCls}>Name</th>
             <th className={headCls}>Departments</th>
+            <th className={headCls}>Expected Login</th>
+            <th className={headCls}>Expected Logout</th>
             <th className={headCls}>Status</th>
             <th className={headCls} aria-label="actions" />
           </tr>
@@ -117,6 +125,20 @@ function Row({
         />
       </td>
       <td className={cellCls}>
+        <ExpectedTime
+          value={person.expected_login}
+          label={`Expected login for ${person.name}`}
+          onSave={(expected_login) => save({ expected_login })}
+        />
+      </td>
+      <td className={cellCls}>
+        <ExpectedTime
+          value={person.expected_logout}
+          label={`Expected logout for ${person.name}`}
+          onSave={(expected_logout) => save({ expected_logout })}
+        />
+      </td>
+      <td className={cellCls}>
         <StatusSelect value={person.status} onChange={(status) => save({ status })} />
       </td>
       <td className="p-0">
@@ -138,6 +160,8 @@ function AddRow({ departments, onChanged }: { departments: Department[]; onChang
   const [name, setName] = useState('')
   const [picked, setPicked] = useState<number[]>([])
   const [status, setStatus] = useState<StaffStatus>('active')
+  const [login, setLogin] = useState<string | null>(null)
+  const [logout, setLogout] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const add = async () => {
@@ -146,10 +170,17 @@ function AddRow({ departments, onChanged }: { departments: Department[]; onChang
     setBusy(true)
     try {
       const res = await api.createStaff([name], picked)
-      if (status !== 'active') {
-        await Promise.all(res.created.map((p) => api.updateStaff(p.id, { status })))
+      // Create takes names and departments; anything else set on this row follows in the
+      // same edit the saved rows use, so there is one way to write each of these.
+      const extras = {
+        ...(status !== 'active' && { status }),
+        ...(login !== null && { expected_login: login }),
+        ...(logout !== null && { expected_logout: logout }),
       }
-      setName(''); setPicked([]); setStatus('active')
+      if (Object.keys(extras).length > 0) {
+        await Promise.all(res.created.map((p) => api.updateStaff(p.id, extras)))
+      }
+      setName(''); setPicked([]); setStatus('active'); setLogin(null); setLogout(null)
       onChanged()
     } catch (err) { alert((err as Error).message) } finally { setBusy(false) }
   }
@@ -169,6 +200,12 @@ function AddRow({ departments, onChanged }: { departments: Department[]; onChang
         <DepartmentPicker departments={departments} value={picked} onCommit={setPicked} />
       </td>
       <td className={cellCls}>
+        <ExpectedTime value={login} label="Expected login" onSave={setLogin} />
+      </td>
+      <td className={cellCls}>
+        <ExpectedTime value={logout} label="Expected logout" onSave={setLogout} />
+      </td>
+      <td className={cellCls}>
         <StatusSelect value={status} onChange={setStatus} />
       </td>
       <td className="p-0">
@@ -185,6 +222,52 @@ function AddRow({ departments, onChanged }: { departments: Department[]; onChang
         </div>
       </td>
     </tr>
+  )
+}
+
+// ── Expected hours ──────────────────────────────────────────────────────────────
+
+/**
+ * One of the two schedule cells. A native time field, saved the moment it holds a
+ * complete time — which is why there is no Save anywhere on this sheet.
+ *
+ * Blank is a real value, not a skipped edit: it means no schedule was agreed, and it is
+ * how a person is taken back out of being marked late or early. So clearing the cell
+ * writes null rather than being ignored.
+ *
+ * The draft is kept locally and adopts the server's answer when it changes, so the cell
+ * shows what was typed straight away instead of flicking back while the save is in
+ * flight — the render-phase reset React prescribes for state derived from props.
+ */
+function ExpectedTime({ value, label, onSave }: {
+  value: string | null
+  label: string
+  onSave: (next: string | null) => void
+}) {
+  const [draft, setDraft] = useState(value ?? '')
+  const [seen, setSeen] = useState(value)
+  if (seen !== value) {
+    setSeen(value)
+    setDraft(value ?? '')
+  }
+
+  // A time field only reports a value once both halves are filled, so every change here
+  // is either a whole time or a cleared cell — there is no half-typed state to guard.
+  const change = (next: string) => {
+    setDraft(next)
+    const out = next === '' ? null : next
+    if (out !== value) onSave(out)
+  }
+
+  return (
+    <input
+      type="time"
+      value={draft}
+      aria-label={label}
+      title={value === null ? 'No schedule — nothing is marked late or early' : label}
+      onChange={(e) => change(e.target.value)}
+      className={cx(fieldCls, 'tabular-nums', value === null && 'text-slate-400')}
+    />
   )
 }
 

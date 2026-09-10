@@ -263,10 +263,13 @@ export const api = {
       method: 'POST', body: JSON.stringify({ names, department_ids: departmentIds ?? [] }),
     }),
   // `department_ids` is the complete set the person should end up in, not an addition.
+  // The expected hours are "HH:MM"; send null to clear a schedule, omit to leave it alone.
   updateStaff: (id: number, data: {
     name?: string
     department_ids?: number[]
     status?: StaffStatus
+    expected_login?: string | null
+    expected_logout?: string | null
     sort_order?: number
   }) =>
     request<StaffMember>(`/staff/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

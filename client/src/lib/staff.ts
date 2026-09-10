@@ -65,6 +65,37 @@ export function netHours(login: string, logout: string, breakMin: number): numbe
   return Math.max(0, worked - breakMin) / 60
 }
 
+/**
+ * How a day sits against the hours the person is expected to keep: minutes past the
+ * expected login, and minutes short of the expected logout.
+ *
+ * null means there is nothing to compare — either no schedule has been set for them, or
+ * the clock time isn't recorded — and that is deliberately different from 0, which means
+ * they were on time. Nobody is marked late against an expectation nobody agreed.
+ *
+ * Computed from the times on display rather than read back from the server, for the same
+ * reason netHours() is: the mark then moves while a row is still being typed.
+ */
+export function lateBy(login: string | null, expected: string | null): number | null {
+  return gap(expected, login)
+}
+
+export function earlyBy(logout: string | null, expected: string | null): number | null {
+  return gap(logout, expected)
+}
+
+/** Minutes `b` runs past `a`, floored at 0; null when either is missing. */
+function gap(a: string | null, b: string | null): number | null {
+  const from = a ? minutesOf(a) : null
+  const to = b ? minutesOf(b) : null
+  if (from === null || to === null) return null
+  return Math.max(0, to - from)
+}
+
+/** How far off a day is, worded: 7 -> "7m", 95 -> "1h 35m". */
+export const gapLabel = (min: number): string =>
+  min < 60 ? `${min}m` : `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, '0')}m`
+
 /** "09:05" -> 545. Null for a blank or malformed cell. */
 function minutesOf(hhmm: string): number | null {
   const [h, m] = hhmm.split(':').map(Number)

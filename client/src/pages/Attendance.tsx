@@ -15,6 +15,7 @@ import { PageHeader } from '../components/Layout'
 import { Button, Card, CardHeader, PageLoader, SegmentedTabs, Spinner, cx } from '../components/ui'
 import type { Range } from '../components/DateRange'
 import { fileDateRange } from '../lib/format'
+import { clockLabel, gapLabel } from '../lib/staff'
 import { saveXlsx } from '../lib/xlsx'
 import {
   aggregateBreaks,
@@ -152,6 +153,53 @@ function StatusBadge({ row }: { row: AttendanceDay }) {
   if (!row.present) return <span className="text-slate-400 text-xs">—</span>
   if (row.still_in) return <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">Checked in</span>
   return <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Checked out</span>
+}
+
+/**
+ * Minutes late against the expected login kept for that person on the Staff page.
+ *
+ * Anyone with no schedule set there falls back to the flat 9:00 AM this page has always
+ * used, so the late marks don't vanish while the schedules are still being filled in.
+ */
+function lateMinutes(r: AttendanceDay): number {
+  if (r.late_min != null) return r.late_min
+  const m = minutesEST(r.login_at)
+  return m == null ? 0 : Math.max(0, m - TARGET_LOGIN_MIN)
+}
+
+/**
+ * Minutes short of the expected logout. There is no fallback here on purpose: a company
+ * -wide finishing time was never agreed the way 9:00 AM was, so a person with no schedule
+ * simply isn't marked early.
+ */
+const earlyMinutes = (r: AttendanceDay): number => r.early_min ?? 0
+
+/**
+ * A recorded clock time, with how far it missed the schedule. On time — or with no
+ * schedule to miss — it reads as a plain time, so the colour only ever means something.
+ */
+function ScheduleTime({ at, off, word, expected }: {
+  at: string | null
+  /** Minutes off schedule; 0 for on time. */
+  off: number
+  word: 'late' | 'early'
+  /** The time it was judged against, "HH:MM", for the tooltip. */
+  expected: string | null
+}) {
+  if (at == null || off <= 0) {
+    return <span className="tabular-nums text-slate-700">{fmtAttendanceTime(at)}</span>
+  }
+  return (
+    <span
+      title={`${gapLabel(off)} ${word}${expected ? ` — expected ${clockLabel(expected)}` : ''}`}
+      className="whitespace-nowrap font-medium tabular-nums text-rose-600"
+    >
+      {fmtAttendanceTime(at)}
+      <span className="ml-1 rounded bg-rose-50 px-1 text-[10px] font-bold uppercase">
+        {gapLabel(off)} {word}
+      </span>
+    </span>
+  )
 }
 
 function BreakStatusBadge({ overMin }: { overMin: number }) {
@@ -466,8 +514,12 @@ function RosterView() {
                   </td>
                   <td className="px-3 py-2.5 text-center"><ActiveBadge active={onlineIds.has(r.user_id)} /></td>
                   <td className="px-3 py-2.5 text-xs tabular-nums text-slate-400">{r.user_id}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums">{fmtAttendanceTime(r.login_at)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums">{fmtAttendanceTime(r.logout_at)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-xs">
+                    <ScheduleTime at={r.login_at} off={lateMinutes(r)} word="late" expected={r.expected_login} />
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-xs">
+                    <ScheduleTime at={r.logout_at} off={earlyMinutes(r)} word="early" expected={r.expected_logout} />
+                  </td>
                   <td className="px-3 py-2.5 text-xs tabular-nums">{r.hours != null ? r.hours : '—'}</td>
                   <td className={cx('px-3 py-2.5 text-xs tabular-nums', r.net_hours != null && r.net_hours < 0 ? 'text-red-600' : 'text-slate-700')}>
                     {r.net_hours != null ? r.net_hours : '—'}
@@ -605,7 +657,8 @@ function StaffSummaryView() {
         avgBreakMin: present.length ? totalBreakMin / present.length : null,
         overBreakDays: userRows.filter((r) => (r.over_break_min ?? 0) > 0).length,
         totalOverBreakMin: userRows.reduce((s, r) => s + (r.over_break_min ?? 0), 0),
-        lateDays: checkIns.filter((m) => m > TARGET_LOGIN_MIN).length,
+        // Judged per person against their own expected login, not one hour for everyone.
+        lateDays: userRows.filter((r) => lateMinutes(r) > 0).length,
         attendanceRate: operationalDays ? present.length / operationalDays : 0,
         completionRate: present.length ? complete.length / present.length : 0,
         lastDay: userRows.length ? userRows[userRows.length - 1].work_date : null,
@@ -715,7 +768,7 @@ function StaffSummaryView() {
         <MetricCard label="Avg attendance" value={`${Math.round(team.avgAttendance * 100)}%`} sub="of operational days" accent="#0EA5E9" />
         <MetricCard label="Avg check-in" value={fmtClock(team.avgCheckIn)} sub="team-wide, EST" accent="#F59E0B" />
         <MetricCard label="Break time" value={`${Math.round(team.totalBreakMin / 60)}h`} sub={`${team.totalBreakMin} min total`} accent="#7C3AED" />
-        <MetricCard label="Late check-ins" value={team.lateDays} sub="after 9:00 AM EST" accent="#EF4444" />
+        <MetricCard label="Late check-ins" value={team.lateDays} sub="past expected login · 9:00 AM if unset" accent="#EF4444" />
       </div>
 
       {/* Charts */}
@@ -947,12 +1000,15 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
                 {stat.rows.length === 0 ? (
                   <tr><td colSpan={6} className="py-8 text-center text-sm text-slate-400">No days recorded</td></tr>
                 ) : stat.rows.slice().reverse().map((r, i) => {
-                  const late = (minutesEST(r.login_at) ?? 0) > TARGET_LOGIN_MIN && r.login_at != null
                   return (
                     <tr key={i} className="border-t border-white/50 hover:bg-white/40">
                       <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-600">{fullDate(r.work_date)}</td>
-                      <td className={cx('whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums', late ? 'text-amber-600 font-medium' : 'text-slate-700')}>{fmtAttendanceTime(r.login_at)}</td>
-                      <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-slate-700">{fmtAttendanceTime(r.logout_at)}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right text-xs">
+                        <ScheduleTime at={r.login_at} off={lateMinutes(r)} word="late" expected={r.expected_login} />
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right text-xs">
+                        <ScheduleTime at={r.logout_at} off={earlyMinutes(r)} word="early" expected={r.expected_logout} />
+                      </td>
                       <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-700">{r.hours != null ? `${r.hours}h` : '—'}</td>
                       <td className={cx('px-3 py-2 text-right text-xs tabular-nums', r.over_break_min > 0 ? 'text-violet-600 font-medium' : 'text-slate-700')}>{r.break_min}m</td>
                       <td className="px-3 py-2 text-center"><DayStatus row={r} /></td>
@@ -1221,8 +1277,12 @@ function BreakReportsView() {
                     ) : selectedStat.rows.slice().reverse().map((r, i) => (
                       <tr key={i} className="border-t border-white/50 hover:bg-white/40">
                         <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-600">{fullDate(r.work_date)}</td>
-                        <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-slate-700">{fmtAttendanceTime(r.login_at)}</td>
-                        <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-slate-700">{fmtAttendanceTime(r.logout_at)}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right text-xs">
+                          <ScheduleTime at={r.login_at} off={lateMinutes(r)} word="late" expected={r.expected_login} />
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right text-xs">
+                          <ScheduleTime at={r.logout_at} off={earlyMinutes(r)} word="early" expected={r.expected_logout} />
+                        </td>
                         <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-700">{hoursCell(r.hours)}</td>
                         <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-700">{r.break_min}m</td>
                         <td className={cx('px-3 py-2 text-right text-xs font-medium tabular-nums', r.over_break_min > 0 ? 'text-red-600' : 'text-slate-400')}>{fmtHm(r.over_break_min)}</td>

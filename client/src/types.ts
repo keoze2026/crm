@@ -256,6 +256,19 @@ export interface AttendanceDay {
   break_count: number
   break_detail: string
   over_break_min: number
+  /**
+   * The hours this person is expected to keep, kept on the Staff page as "HH:MM". null
+   * when no schedule has been set for them — and then nothing of theirs is marked.
+   */
+  expected_login: string | null
+  expected_logout: string | null
+  /**
+   * Minutes late in and minutes early out against those, measured on the EFFECTIVE times
+   * (so a day corrected on the Staff page is judged by the corrected figures). 0 means on
+   * time; null means there was nothing to compare.
+   */
+  late_min: number | null
+  early_min: number | null
 }
 
 export interface AttendanceRoster {
@@ -450,6 +463,13 @@ export interface StaffMember {
    */
   attendance_user_id: string | null
   status: StaffStatus
+  /**
+   * The hours they are expected to keep, "HH:MM", or null for no schedule. Both attendance
+   * pages read these to mark a late login or an early logout; with neither set, none of
+   * their days is ever flagged.
+   */
+  expected_login: string | null
+  expected_logout: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -462,11 +482,17 @@ export interface StaffMember {
  */
 export interface StaffAttendanceRow {
   /**
-   * The row this app owns. For a hand-keyed day that is the day itself; for a fetched day
-   * it is the break correction sitting over it, and null until one is keyed in.
+   * The row this app owns. For a hand-keyed day that is the day itself; for a day the bot
+   * recorded it is the record that replaces it, and null until the day is first edited.
    */
   id: number | null
+  /** Whether the check-in bot recorded this day at all. */
   source: 'fetched' | 'manual'
+  /**
+   * True when the values here are this app's rather than the bot's. On a `fetched` row that
+   * means the day has been corrected and reverting will put the bot's record back.
+   */
+  edited: boolean
   staff_id: number
   staff_name: string
   work_date: string
@@ -474,12 +500,10 @@ export interface StaffAttendanceRow {
   login_at: string | null
   logout_at: string | null
   break_min: number
-  /** True when `break_min` is a correction rather than the bot's own total. */
-  break_edited: boolean
   status: string
   note: string
-  hours: number | null
-  net_hours: number | null
+  // Hours are not carried: the page computes them from the clock times it is showing, so
+  // the figure moves while a row is being typed. See netHours() in lib/staff.ts.
 }
 
 export interface StaffAttendancePage {
