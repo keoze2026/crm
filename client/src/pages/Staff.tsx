@@ -132,7 +132,19 @@ export default function Staff() {
 
   const people = useMemo(() => staff.data ?? [], [staff.data])
   const depts = useMemo(() => departments.data ?? [], [departments.data])
-  const attendanceRows = useMemo(() => attendance.data?.page.rows ?? [], [attendance.data])
+  /**
+   * The rows on screen, but ONLY when they are the day in the heading.
+   *
+   * useAsync deliberately keeps the last result up while the next is in flight, which is
+   * right for re-reading the same day and wrong the moment the DATE changes: for as long
+   * as that fetch takes, YESTERDAY's logins sit under today's heading, carrying yesterday's
+   * late marks and flags. Worse, those rows are editable, so a blur in that window would
+   * write the previous day's times onto the day now selected. The response says which day
+   * it answered for, so a result for any other day counts as nothing at all.
+   */
+  const dayOnScreen = attendance.data?.page.from === date ? attendance.data : null
+  const attendanceStale = attendance.data !== null && dayOnScreen === null
+  const attendanceRows = useMemo(() => dayOnScreen?.page.rows ?? [], [dayOnScreen])
   const leaveRows = leaves.data ?? []
   const salaryRows = salaries.data ?? []
 
@@ -154,7 +166,9 @@ export default function Staff() {
   ), [people, query])
 
   const loading = staff.loading || departments.loading
-      || (tab === 'attendance' && attendance.loading)
+      // `attendanceStale` too: rows for another day must never reach the sheet OR the
+      // scorecards, so the whole tab waits rather than showing a day it isn't titled.
+      || (tab === 'attendance' && (attendance.loading || attendanceStale))
       || (tab === 'leaves' && leaves.loading)
       || (tab === 'salaries' && salaries.loading)
   const error = staff.error ?? departments.error

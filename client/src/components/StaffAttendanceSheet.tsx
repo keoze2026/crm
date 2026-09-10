@@ -82,8 +82,13 @@ export default function StaffAttendanceSheet({
           <tbody>
             {staff.map((person, i) => (
               <DayRow
-                // Remount when the day changes so no row keeps yesterday's draft.
-                key={`${person.id}-${date}`}
+                // A row seeds its editable draft once, at mount, so the key has to change
+                // whenever the values behind it do — not only on a new day, but every time
+                // the server answers with something different for the SAME day. Without
+                // the signature a row goes on showing what it showed before: Refresh
+                // would pull a login the bot has since recorded and change nothing on
+                // screen, and a day that rolled over would keep the previous day's times.
+                key={`${person.id}-${date}-${signature(byStaff.get(person.id) ?? null)}`}
                 index={i + 1}
                 person={person}
                 row={byStaff.get(person.id) ?? null}
@@ -103,6 +108,18 @@ export default function StaffAttendanceSheet({
     </>
   )
 }
+
+/**
+ * Everything about a row that a fresh fetch could have changed, as one string.
+ *
+ * It goes in the React key, so a row is rebuilt from the server's values whenever they
+ * differ and left alone whenever they don't — which is what keeps a half-typed correction
+ * from being thrown away by an unrelated reload, while still letting Refresh actually show
+ * what it fetched.
+ */
+const signature = (row: StaffAttendanceRow | null): string => row === null ? 'none' : [
+  row.id, row.source, row.edited, row.login_at, row.logout_at, row.break_min, row.status,
+].join('|')
 
 /** The department chips, matching how the Queues sheet shows them. */
 function DepartmentCell({ person }: { person: StaffMember }) {
