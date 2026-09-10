@@ -302,7 +302,6 @@ final class StaffController
 
         $sql = $manual;
         if ($this->attendanceAvailable()) {
-            $tz = self::TZ;
             $params[':from_f'] = $from;
             $params[':to_f']   = $to;
             if ($staffId > 0) {
@@ -862,37 +861,71 @@ final class StaffController
     }
 
     /**
-     * Point a staff row at the check-in account that carries the same name — matched on the
-     * bot's display name, its username, or the raw account id, in that order of preference.
+     * A name reduced to what the two systems actually agree on: lowercased, with any
+     * `|Department|` tag the bot appends dropped, and every run of punctuation or
+     * whitespace — a doubled space or a non-breaking space included — folded to one space.
      *
-     * The name is the only thing the two systems share, so it is the only thing the link can
-     * be made from; there is nothing to pick in the UI. An account another staff row already
-     * holds is skipped, and no match clears the link, which is what makes their days
-     * hand-keyed instead of fetched.
+     * This is what lets "Zack Brown" find the bot's "Zack Brown |Audit|" and "F.5" find its
+     * "F 5". It deliberately does NOT correct spelling: "Denis" still will not match
+     * "Deniis", because guessing at a letter would risk hanging one person's attendance on
+     * another person's name. Those are renamed by hand, which is the honest fix.
+     */
+    private static function normalisedName(string $expr): string
+    {
+        return "btrim(regexp_replace("
+             . "lower(regexp_replace({$expr}, '\\|[^|]*\\|', ' ', 'g')), '[^a-z0-9]+', ' ', 'g'))";
+    }
+
+    /**
+     * The WHERE/ORDER BY that resolves a staff row to a check-in account, shared by the
+     * link-on-save path here and the one-off re-link in 028.
+     *
+     * Preference order is exactness: the bot's display name, then its username, then the
+     * raw account id, and only then the normalised forms above. An account another staff
+     * row already holds is skipped — so a duplicate staff row can never steal the days off
+     * the row that already has them — and no match at all clears the link, which is what
+     * makes that person's days hand-keyed instead of fetched.
+     */
+    public static function linkSql(string $target = 's'): string
+    {
+        $name    = "btrim({$target}.name)";
+        $normStaff = self::normalisedName('a.staff_name');
+        $normUser  = self::normalisedName('a.username');
+        $normName  = self::normalisedName("{$target}.name");
+
+        return "SELECT a.user_id::text
+                  FROM attendance_staff a
+                 WHERE (lower(a.staff_name) = lower({$name})
+                     OR lower(a.username)   = lower({$name})
+                     OR a.user_id::text     = {$name}
+                     -- Normalised forms, but never on a name that normalises to nothing.
+                     OR ({$normName} <> '' AND ({$normStaff} = {$normName}
+                                             OR {$normUser}  = {$normName})))
+                   AND NOT EXISTS (
+                       SELECT 1 FROM staff x
+                        WHERE x.attendance_user_id = a.user_id::text AND x.id <> {$target}.id
+                   )
+                 ORDER BY (lower(a.staff_name) = lower({$name})) DESC,
+                          (lower(a.username)   = lower({$name})) DESC,
+                          ({$normStaff} = {$normName}) DESC,
+                          a.user_id
+                 LIMIT 1";
+    }
+
+    /**
+     * Point a staff row at the check-in account that carries the same name. The name is the
+     * only thing the two systems share, so it is the only thing the link can be made from;
+     * there is nothing to pick in the UI.
      */
     private function linkAttendance(int $id): void
     {
         if (!$this->attendanceAvailable()) {
             return;
         }
-        // Positional placeholders: the name is compared four times, and a named parameter
-        // may appear only once when prepares aren't emulated.
+        // A positional placeholder: the name is compared many times over, and a named
+        // parameter may appear only once when prepares aren't emulated.
         $stmt = Database::connection()->prepare(
-            'UPDATE staff s
-                SET attendance_user_id = (
-                        SELECT a.user_id::text
-                          FROM attendance_staff a
-                         WHERE (lower(btrim(a.staff_name)) = lower(btrim(s.name))
-                             OR lower(btrim(a.username))   = lower(btrim(s.name))
-                             OR a.user_id::text            = btrim(s.name))
-                           AND NOT EXISTS (
-                               SELECT 1 FROM staff x
-                                WHERE x.attendance_user_id = a.user_id::text AND x.id <> s.id
-                           )
-                         ORDER BY (lower(btrim(a.staff_name)) = lower(btrim(s.name))) DESC,
-                                  a.user_id
-                         LIMIT 1
-                    ),
+            'UPDATE staff s SET attendance_user_id = (' . self::linkSql() . '),
                     updated_at = now()
               WHERE s.id = ?'
         );
