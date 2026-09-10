@@ -101,3 +101,100 @@ function minutesOf(hhmm: string): number | null {
   const [h, m] = hhmm.split(':').map(Number)
   return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null
 }
+
+// ─── Punctuality ──────────────────────────────────────────────────────────────
+
+/**
+ * How a day sat against the hours the person is expected to keep, as ONE verdict.
+ *
+ * The two clock cells are already marked individually wherever a day is shown, but a
+ * sheet of thirty rows is read down, not across, and what a supervisor is looking for is
+ * the day that went wrong twice — in late AND out early. That is `both`, and it is the
+ * only verdict carrying two marks, which is why it is the one coloured to be found.
+ */
+export type PunctualityId = 'on-time' | 'late' | 'early' | 'both'
+
+export interface Punctuality {
+  id: PunctualityId
+  /** The badge's own wording, e.g. "Late in + early out". */
+  label: string
+  /** The same verdict in the room a table cell has, e.g. "Late + early". */
+  short: string
+  /** How many marks fired: 0 for on time, 1 for one of them, 2 for both. */
+  marks: number
+  /** Badge colours — the same palette the rest of the staff sheets use. */
+  cls: string
+  /** The minutes behind the verdict, worded for a tooltip. */
+  detail: string
+}
+
+/**
+ * The verdict for one day, from minutes late in and minutes early out.
+ *
+ * Each argument is null when there was nothing to judge — no schedule agreed for that
+ * person, or no clock time recorded — and null for BOTH returns null: an absent day, or a
+ * person with no schedule, is never given a verdict. That is deliberately different from
+ * 0, which means they were on time and is worth saying out loud.
+ */
+export function punctuality(lateMin: number | null, earlyMin: number | null): Punctuality | null {
+  if (lateMin === null && earlyMin === null) return null
+  const late = (lateMin ?? 0) > 0
+  const early = (earlyMin ?? 0) > 0
+  const parts: string[] = []
+  if (late) parts.push(`${gapLabel(lateMin as number)} late in`)
+  if (early) parts.push(`${gapLabel(earlyMin as number)} early out`)
+  const detail = parts.length ? parts.join(' · ') : 'On schedule'
+
+  if (late && early) {
+    return {
+      id: 'both',
+      label: 'Late in + early out',
+      short: 'Late + early',
+      marks: 2,
+      cls: 'border-rose-300 bg-rose-100 text-rose-800',
+      detail,
+    }
+  }
+  if (late) {
+    return { id: 'late', label: 'Late in', short: 'Late in', marks: 1, cls: 'border-amber-300 bg-amber-50 text-amber-800', detail }
+  }
+  if (early) {
+    return { id: 'early', label: 'Early out', short: 'Early out', marks: 1, cls: 'border-amber-300 bg-amber-50 text-amber-800', detail }
+  }
+  return { id: 'on-time', label: 'On time', short: 'On time', marks: 0, cls: 'border-emerald-300 bg-emerald-50 text-emerald-800', detail }
+}
+
+/**
+ * A day's verdict straight from the clock times, for the sheets that hold "HH:MM" strings
+ * rather than the roster's pre-computed minutes.
+ */
+export const punctualityOf = (
+  login: string | null, logout: string | null, expectedLogin: string | null, expectedLogout: string | null,
+): Punctuality | null => punctuality(lateBy(login, expectedLogin), earlyBy(logout, expectedLogout))
+
+/** Counts of each verdict over a run of days — what the summaries tally. */
+export interface PunctualityTally {
+  onTime: number
+  late: number
+  early: number
+  /** Days that were late in AND early out. These are also counted in `late` and `early`. */
+  both: number
+  /** Every day that carried at least one mark. */
+  flagged: number
+  /** Days that got a verdict at all — the denominator the rates are out of. */
+  judged: number
+}
+
+export function tallyPunctuality(days: (Punctuality | null)[]): PunctualityTally {
+  const t: PunctualityTally = { onTime: 0, late: 0, early: 0, both: 0, flagged: 0, judged: 0 }
+  for (const d of days) {
+    if (d === null) continue
+    t.judged += 1
+    if (d.id === 'on-time') { t.onTime += 1; continue }
+    t.flagged += 1
+    if (d.id === 'both') { t.both += 1; t.late += 1; t.early += 1 }
+    else if (d.id === 'late') t.late += 1
+    else t.early += 1
+  }
+  return t
+}

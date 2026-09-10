@@ -2,8 +2,10 @@ import { useRef, useState } from 'react'
 import { api } from '../api/client'
 import {
   ATTENDANCE_STATUSES, clockLabel, earlyBy, gapLabel, hoursLabel, lateBy, netHours,
+  punctuality,
 } from '../lib/staff'
 import type { StaffAttendanceRow, StaffMember } from '../types'
+import PunctualityBadge from './PunctualityBadge'
 import {
   addRowCls, cellCls, fieldCls, headCls, idxCell, removeBtnCls, rowCls, tableCls, theadCls,
 } from './sheet'
@@ -26,6 +28,10 @@ import { EmptyState, cx } from './ui'
  *
  * Each clock cell is marked against the hours that person is expected to keep, set on the
  * Staff tab. Anyone with no schedule there is never marked.
+ *
+ * The Flag column turns those two marks into one verdict per day — on time, late in, early
+ * out, or both — so the sheet can be read down a single column, and the day that went wrong
+ * at BOTH ends stands out from the day that only went wrong at one.
  */
 export default function StaffAttendanceSheet({
   date, rows, staff, onChanged,
@@ -43,15 +49,16 @@ export default function StaffAttendanceSheet({
       <div className="overflow-x-auto">
         <table className={cx(tableCls, 'min-w-3xl')}>
           <colgroup>
-            <col style={{ width: '6%' }} />
-            <col style={{ width: '20%' }} />
-            <col style={{ width: '19%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '17%' }} />
+            <col style={{ width: '15%' }} />
             <col style={{ width: '11%' }} />
             <col style={{ width: '11%' }} />
-            <col style={{ width: '8%' }} />
-            <col style={{ width: '8%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '6%' }} />
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '5%' }} />
           </colgroup>
           <thead>
             <tr className={theadCls}>
@@ -62,6 +69,7 @@ export default function StaffAttendanceSheet({
               <th className={headCls}>Logout</th>
               <th className={headCls}>Break</th>
               <th className={headCls}>Hours</th>
+              <th className={headCls}>Flag</th>
               <th className={headCls}>Status</th>
               <th className={headCls} aria-label="actions" />
             </tr>
@@ -145,6 +153,7 @@ function DayRow({
   const hours = netHours(draft.login_at, draft.logout_at, Number(draft.break_min || 0))
   const late = lateBy(draft.login_at || null, person.expected_login)
   const early = earlyBy(draft.logout_at || null, person.expected_logout)
+  const flag = punctuality(late, early)
 
   // A day the bot recorded that nobody has touched yet: the revert control has nothing to
   // undo, and a first edit will create the record that replaces it.
@@ -223,6 +232,7 @@ function DayRow({
         />
       </td>
       <td className={cx(cellCls, 'text-center font-semibold tabular-nums')}>{hoursLabel(hours)}</td>
+      <td className={cx(cellCls, 'text-center')}><PunctualityBadge flag={flag} compact /></td>
       <td className={cellCls}>
         <select
           value={draft.status}

@@ -17,7 +17,7 @@ import { matches } from '../lib/queues'
 import {
   buildLeavesPdf, buildSalariesPdf, buildStaffAttendancePdf, buildStaffPdf,
 } from '../lib/sheetPdf'
-import { monthRange } from '../lib/staff'
+import { monthRange, punctualityOf, tallyPunctuality } from '../lib/staff'
 import { useAsync } from '../lib/useAsync'
 
 type Tab = 'staff' | 'attendance' | 'leaves' | 'salaries'
@@ -75,9 +75,19 @@ export default function Staff() {
 
   const people = useMemo(() => staff.data ?? [], [staff.data])
   const depts = useMemo(() => departments.data ?? [], [departments.data])
-  const attendanceRows = attendance.data?.rows ?? []
+  const attendanceRows = useMemo(() => attendance.data?.rows ?? [], [attendance.data])
   const leaveRows = leaves.data ?? []
   const salaryRows = salaries.data ?? []
+
+  // The day's punctuality at a glance, judged exactly as the sheet's own Flag column
+  // judges each row — from the effective clock times, against each person's own schedule.
+  const attendanceFlags = useMemo(() => {
+    const byStaff = new Map(attendanceRows.map((r) => [r.staff_id, r]))
+    return tallyPunctuality(people.map((p) => {
+      const row = byStaff.get(p.id)
+      return punctualityOf(row?.login_at ?? null, row?.logout_at ?? null, p.expected_login, p.expected_logout)
+    }))
+  }, [people, attendanceRows])
 
   const query = search.trim()
   const shownStaff = useMemo(() => (
@@ -166,7 +176,15 @@ export default function Staff() {
         <Card>
           <CardHeader
             title={`Attendance — ${dateLabel}`}
-            action={<Badge>{`${attendanceRows.filter((r) => r.login_at !== null).length} of ${people.length} in`}</Badge>}
+            action={
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Badge>{`${attendanceRows.filter((r) => r.login_at !== null).length} of ${people.length} in`}</Badge>
+                {attendanceFlags.judged > 0 && <Badge color="green">{`${attendanceFlags.onTime} on time`}</Badge>}
+                {attendanceFlags.late > 0 && <Badge color="amber">{`${attendanceFlags.late} late in`}</Badge>}
+                {attendanceFlags.early > 0 && <Badge color="amber">{`${attendanceFlags.early} early out`}</Badge>}
+                {attendanceFlags.both > 0 && <Badge color="red">{`${attendanceFlags.both} both`}</Badge>}
+              </div>
+            }
           />
           <div className="p-4">
             <StaffAttendanceSheet

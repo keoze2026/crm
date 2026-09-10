@@ -36,6 +36,24 @@ The difference between the two is the **gross margin**.
   Amount and per-provider charts.
 - **Reports** — monthly breakdown, top buyers / campaigns / sources, and
   downloadable CSV reports.
+- **Attendance** — daily roster, per-member summaries and break-overage reports,
+  fed by an external Telegram check-in bot whose tables this app only ever
+  **reads**. A day can be corrected on Staff Management and the correction shows
+  here too, and each clock time is marked **late** or **early** against that
+  person's expected hours.
+- **Queues** — two drag-orderable sheets, **Forwarding Queues** and **Camp & Flow
+  Queues**, one row per person with their queue codes as chips. The two boards are
+  one table split by a `board` discriminator, so a person can hold a row on both.
+  Sr. No. and totals are derived, never stored; PDF export.
+- **Review** — month-wise performance and behaviour reviews grouped into
+  department bands, plus a per-department monthly score. **A review judges the
+  month before it is written** — a sheet filled in during September is about
+  August — so every tab opens on last month.
+- **Staff Management** — the one roster every other sheet picks its names from:
+  **Staff** (CRUD, multi-department membership, status, and the expected
+  login/logout hours the attendance pages judge a day against), **Complete
+  Attendance** (a day at a time, fully editable whether or not the bot recorded
+  it), **Leaves** and **Salaries**. PDF export on every tab.
 - **Authentication & access control (optional)** — passwordless login via the
   Google Authenticator app (TOTP), httpOnly cookie sessions, `admin` / `user`
   roles, admin-managed accounts with QR enrolment links, per-user page
@@ -52,15 +70,37 @@ The difference between the two is the **gross margin**.
 | `portal_expenses` | Monthly per-provider expenses (Portal Expenses page). Standalone. |
 | `vendors`         | Traffic-source metadata: manual vendors + opening advance.        |
 | `vendor_payments` | Dated per-vendor ledger rows (Vendors page). Standalone.          |
+| `staff`           | The one roster. Name, status, expected login/logout, bot account.  |
+| `departments`     | The band catalogue, shared by the Staff and Review pages.          |
+| `staff_departments` | Many-to-many: a person may sit in several departments.          |
+| `staff_attendance`| A day this app owns. On a bot-recorded day it **replaces** it.    |
+| `staff_leaves` / `staff_salaries` | The Leaves and Salaries sheets.                   |
+| `queue_codes`     | The shared queue-code catalogue.                                  |
+| `queue_assignments` / `queue_assignment_codes` | One row per person per `board`, and its ordered codes. |
+| `review_entries`  | Performance and behaviour reviews, per person per `month`.        |
+| `department_reviews` | One score per department per month.                            |
 
 `call_records.total_bill` is a generated column (`counted * rate`).
 A `record_type` of `buyer` links to a buyer (revenue); `campaign` links to a
 campaign + traffic `source` (cost).
 
-`vendors` / `vendor_payments` and `portal_expenses` are standalone reference tables
-(no `call_records` link), so the 40-day cleanup never touches them — their data is
-kept indefinitely. The Vendors "Payments" figure is derived (`converted_calls × price`),
-not stored.
+`vendors` / `vendor_payments`, `portal_expenses` and all the Staff, Queues and
+Review tables are standalone reference tables (no `call_records` link), so the
+40-day cleanup never touches them — their data is kept indefinitely. The Vendors
+"Payments" figure is derived (`converted_calls × price`), not stored.
+
+**The check-in bot's tables** (`attendance_staff`, `attendance_days`,
+`attendance_breaks`) belong to a separate Telegram service. This app **only reads
+them** — never creates, writes or migrates them — and every query that touches one
+is guarded on its existence, so an install without the bot works fine and simply
+reports everything as hand-keyed. `staff.attendance_user_id` is the link, resolved
+from the person's **name** (the only thing the two systems share) and never picked
+in the UI; see MAINTENANCE.md § *Staff ↔ check-in bot* when a name won't match.
+
+A `staff_attendance` row for a day the bot recorded is an **override that replaces
+that day** — login, logout, break and status all come from it, and deleting it
+restores the bot's record untouched. That is why both the Staff and Attendance
+pages always agree.
 
 ## Prerequisites
 
@@ -200,6 +240,38 @@ DELETE /api/vendors/{id}                  # delete a manual vendor (+ its ledger
 GET    /api/vendor-payments?vendor&from&to    # -> {rows, opening_advance, prior_net, initial_advance}
                                               #    initial_advance carries the balance into the range
 POST   /api/vendor-payments   PUT /api/vendor-payments/{id}   DELETE /api/vendor-payments/{id}
+
+GET    /api/attendance/staff                  # the bot's roster (read-only)
+GET    /api/attendance/roster?date            # one day, with expected_login/logout + late_min/early_min
+GET    /api/attendance/live                   # who is checked in right now
+GET    /api/attendance/days?from&to&user_id
+GET    /api/attendance/summary?from&to
+GET    /api/attendance/breaks?user_id&date    # -> {..., overridden} when a break was corrected
+GET    /api/attendance/exceptions?type=missing_logout|over_break|late&from&to
+
+GET    /api/staff                POST /api/staff {names[], department_ids[]}
+PUT    /api/staff/{id}           # name, status, department_ids (the complete set),
+                                 # expected_login / expected_logout ("HH:MM", null clears)
+DELETE /api/staff/{id}           # cascades their queue, department, attendance, leave & salary rows
+GET    /api/departments          POST/PUT/DELETE /api/departments[/{id}]
+
+GET    /api/staff-attendance?from&to&staff_id   # fetched + hand-keyed days merged
+POST   /api/staff-attendance     PUT /api/staff-attendance/{id}   DELETE /api/staff-attendance/{id}
+                                 # DELETE on a bot-recorded day reverts to the bot's own record
+GET    /api/staff-leaves?from&to         POST/PUT/DELETE /api/staff-leaves[/{id}]
+GET    /api/staff-salaries?month         POST/PUT/DELETE /api/staff-salaries[/{id}]
+
+GET    /api/queues?board=forwarding|camp_flow    POST /api/queues
+PUT    /api/queues/{id}          DELETE /api/queues/{id}
+GET    /api/queue-codes          POST /api/queue-codes
+PUT    /api/queue-codes/{id}     DELETE /api/queue-codes/{id}
+
+GET    /api/review-departments?month     # the bands + their score for that month
+POST   /api/review-departments   PUT /api/review-departments/{id}
+DELETE /api/review-departments/{id}
+GET    /api/review-entries?month&kind=performance|behaviour
+POST   /api/review-entries       PUT /api/review-entries/{id}
+DELETE /api/review-entries/{id}
 ```
 
 ### Auth endpoints (only when `AUTH_ENABLED=true`)

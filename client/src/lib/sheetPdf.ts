@@ -5,7 +5,8 @@ import type {
   StaffAttendanceRow, StaffLeave, StaffMember, StaffSalary,
 } from '../types'
 import {
-  clockLabel, earlyBy, gapLabel, hoursLabel, lateBy, netHours, shortDay, staffStatus,
+  clockLabel, earlyBy, gapLabel, hoursLabel, lateBy, netHours, punctualityOf, shortDay,
+  staffStatus, tallyPunctuality,
 } from './staff'
 
 /**
@@ -280,7 +281,8 @@ export function buildStaffPdf(staff: StaffMember[]): jsPDF {
  * nothing recorded — a blank line is the point of a daily sheet.
  *
  * A clock time that missed the hours that person is expected to keep carries how far it
- * missed by, the way the sheet on screen marks it.
+ * missed by, the way the sheet on screen marks it — and the FLAG column carries the same
+ * one-word verdict the screen shows, so a printed sheet reads down the same column.
  */
 export function buildStaffAttendancePdf(
   staff: StaffMember[], rows: StaffAttendanceRow[], dateLabel: string,
@@ -288,16 +290,18 @@ export function buildStaffAttendancePdf(
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
   const byStaff = new Map(rows.map((r) => [r.staff_id, r]))
   const present = rows.filter((r) => r.login_at !== null).length
-  const marked = staff.filter((p) => {
+  const flags = new Map(staff.map((p) => {
     const row = byStaff.get(p.id)
-    return (lateBy(row?.login_at ?? null, p.expected_login) ?? 0) > 0
-        || (earlyBy(row?.logout_at ?? null, p.expected_logout) ?? 0) > 0
-  }).length
+    return [p.id, punctualityOf(row?.login_at ?? null, row?.logout_at ?? null, p.expected_login, p.expected_logout)]
+  }))
+  const tally = tallyPunctuality([...flags.values()])
   const y = drawHeader(
     doc,
     'ATTENDANCE',
     `${dateLabel} · ${present} of ${staff.length} logged in`
-      + (marked > 0 ? ` · ${marked} off schedule` : ''),
+      + (tally.flagged > 0
+        ? ` · ${tally.flagged} off schedule${tally.both > 0 ? ` (${tally.both} at both ends)` : ''}`
+        : ''),
   )
 
   /** "9:07 AM (7m late)" — the time, and only where it matters how far off it was. */
@@ -307,7 +311,7 @@ export function buildStaffAttendancePdf(
   autoTable(doc, {
     startY: y,
     theme: 'grid',
-    head: [['SR. NO', 'NAME', 'DEPARTMENT', 'LOGIN', 'LOGOUT', 'BREAK', 'HOURS', 'STATUS', 'SOURCE']],
+    head: [['SR. NO', 'NAME', 'DEPARTMENT', 'LOGIN', 'LOGOUT', 'BREAK', 'HOURS', 'FLAG', 'STATUS', 'SOURCE']],
     body: staff.map((person, i) => {
       const row = byStaff.get(person.id) ?? null
       return [
@@ -320,6 +324,7 @@ export function buildStaffAttendancePdf(
         // The same calculation the sheet shows, from the same clock times, so a printed
         // day always matches the screen it was printed from.
         hoursLabel(row ? netHours(row.login_at ?? '', row.logout_at ?? '', row.break_min) : null),
+        flags.get(person.id)?.label ?? '—',
         row?.status ?? '—',
         row === null ? '—' : row.source === 'manual' ? 'Keyed in' : row.edited ? 'Corrected' : 'Fetched',
       ]
@@ -328,15 +333,25 @@ export function buildStaffAttendancePdf(
     headStyles: navyHead,
     bodyStyles: { fillColor: CYAN },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 46, fillColor: BAND, fontStyle: 'bold' },
-      1: { cellWidth: 120, fontStyle: 'bold' },
+      0: { halign: 'center', cellWidth: 44, fillColor: BAND, fontStyle: 'bold' },
+      1: { cellWidth: 104, fontStyle: 'bold' },
       2: { halign: 'left' },
-      3: { halign: 'center', cellWidth: 90 },
-      4: { halign: 'center', cellWidth: 90 },
-      5: { halign: 'center', cellWidth: 48 },
-      6: { halign: 'center', cellWidth: 52, fontStyle: 'bold' },
-      7: { halign: 'center', cellWidth: 66 },
-      8: { halign: 'center', cellWidth: 62 },
+      3: { halign: 'center', cellWidth: 84 },
+      4: { halign: 'center', cellWidth: 84 },
+      5: { halign: 'center', cellWidth: 42 },
+      6: { halign: 'center', cellWidth: 48, fontStyle: 'bold' },
+      7: { halign: 'center', cellWidth: 78, fontStyle: 'bold' },
+      8: { halign: 'center', cellWidth: 60 },
+      9: { halign: 'center', cellWidth: 58 },
+    },
+    // The verdict is the column the sheet is scanned down, so it is coloured on paper too:
+    // amber for one mark, red for a day that missed at both ends.
+    didParseCell: (data) => {
+      if (data.section !== 'body' || data.column.index !== 7) return
+      const flag = flags.get(staff[data.row.index].id)
+      if (!flag || flag.id === 'on-time') return
+      data.cell.styles.textColor = flag.marks === 2 ? [159, 18, 57] : [146, 64, 14]
+      data.cell.styles.fillColor = flag.marks === 2 ? [255, 228, 230] : [254, 243, 199]
     },
     margin: { left: M, right: M },
   })

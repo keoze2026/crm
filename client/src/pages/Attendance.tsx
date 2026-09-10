@@ -15,7 +15,8 @@ import { PageHeader } from '../components/Layout'
 import { Button, Card, CardHeader, PageLoader, SegmentedTabs, Spinner, cx } from '../components/ui'
 import type { Range } from '../components/DateRange'
 import { fileDateRange } from '../lib/format'
-import { clockLabel, gapLabel } from '../lib/staff'
+import { clockLabel, gapLabel, punctuality, tallyPunctuality, type Punctuality } from '../lib/staff'
+import PunctualityBadge from '../components/PunctualityBadge'
 import { saveXlsx } from '../lib/xlsx'
 import {
   aggregateBreaks,
@@ -173,6 +174,25 @@ function lateMinutes(r: AttendanceDay): number {
  * simply isn't marked early.
  */
 const earlyMinutes = (r: AttendanceDay): number => r.early_min ?? 0
+
+/**
+ * The day's punctuality as one verdict, from the same two marks the clock cells already
+ * carry — so the badge never says something the cells beside it don't.
+ *
+ * Each end is only judged where there was something to judge it by: a missing clock time is
+ * not "on time". The two ends are not judged on the same terms, because the marks they come
+ * from aren't either — a login falls back to this page's flat 9:00 AM when no schedule is
+ * set (lateMinutes), a logout has no such fallback and simply isn't judged. That is why a
+ * person with no schedule at all can read "Late in" here while the Complete Attendance
+ * sheet, which never falls back, leaves the same day unmarked. Setting their expected hours
+ * on the Staff tab is what makes the two pages agree.
+ */
+function dayFlag(r: AttendanceDay): Punctuality | null {
+  return punctuality(
+    r.login_at == null ? null : lateMinutes(r),
+    r.logout_at == null || r.expected_logout == null ? null : earlyMinutes(r),
+  )
+}
 
 /**
  * A recorded clock time, with how far it missed the schedule. On time — or with no
@@ -351,6 +371,7 @@ function RosterView() {
       avgHours: workedRows.length
         ? (workedRows.reduce((s, r) => s + (r.hours ?? 0), 0) / workedRows.length).toFixed(1)
         : '—',
+      flags: tallyPunctuality(rows.map(dayFlag)),
     }
   }, [rows])
 
@@ -380,10 +401,21 @@ function RosterView() {
       </div>
 
       {/* Metric cards */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Present today" value={metrics.present} sub={`of ${staffReq.data?.length ?? '?'} staff`} accent="#1D9E75" />
         <MetricCard label="Still checked in" value={metrics.stillIn} sub="no logout yet" accent="#3B82F6" />
         <MetricCard label="Avg hours worked" value={metrics.avgHours !== '—' ? `${metrics.avgHours}h` : '—'} sub="checked-out only" accent="#F59E0B" />
+        <MetricCard
+          label="Off schedule"
+          value={
+            <span className={metrics.flags.both > 0 ? 'text-rose-600' : undefined}>
+              {metrics.flags.flagged}
+              <span className="text-sm text-slate-400">/{metrics.flags.judged}</span>
+            </span>
+          }
+          sub={`${metrics.flags.late} late in · ${metrics.flags.early} early out · ${metrics.flags.both} both`}
+          accent="#EF4444"
+        />
       </div>
 
       {/* Alert cards */}
@@ -473,6 +505,7 @@ function RosterView() {
                   ['User ID', 'user_id'],
                   ['Login (recorded)', 'login_at'],
                   ['Logout (recorded)', 'logout_at'],
+                  ['Flag', null],
                   ['Hours', 'hours'],
                   ['Net Hours', 'net_hours'],
                   ['Break', 'break_count'],
@@ -497,11 +530,11 @@ function RosterView() {
             </thead>
             <tbody>
               {rosterReq.loading ? (
-                <tr><td colSpan={15} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
+                <tr><td colSpan={16} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
               ) : rosterReq.error ? (
-                <tr><td colSpan={15} className="py-12 text-center text-sm text-red-500">{rosterReq.error}</td></tr>
+                <tr><td colSpan={16} className="py-12 text-center text-sm text-red-500">{rosterReq.error}</td></tr>
               ) : pageSlice.length === 0 ? (
-                <tr><td colSpan={15} className="py-12 text-center text-sm text-slate-400">No records for {date}</td></tr>
+                <tr><td colSpan={16} className="py-12 text-center text-sm text-slate-400">No records for {date}</td></tr>
               ) : pageSlice.map((r, i) => (
                 <tr key={i} className="border-b border-white/40 hover:bg-white/40 transition-colors">
                   <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums text-slate-600">{r.work_date}</td>
@@ -520,6 +553,7 @@ function RosterView() {
                   <td className="whitespace-nowrap px-3 py-2.5 text-xs">
                     <ScheduleTime at={r.logout_at} off={earlyMinutes(r)} word="early" expected={r.expected_logout} />
                   </td>
+                  <td className="px-3 py-2.5 text-center"><PunctualityBadge flag={dayFlag(r)} compact /></td>
                   <td className="px-3 py-2.5 text-xs tabular-nums">{r.hours != null ? r.hours : '—'}</td>
                   <td className={cx('px-3 py-2.5 text-xs tabular-nums', r.net_hours != null && r.net_hours < 0 ? 'text-red-600' : 'text-slate-700')}>
                     {r.net_hours != null ? r.net_hours : '—'}
@@ -581,6 +615,15 @@ interface StaffStat {
   overBreakDays: number
   totalOverBreakMin: number
   lateDays: number
+  /** Days finished before the expected logout. Only judged where a schedule was set. */
+  earlyOutDays: number
+  /** Days that were late in AND early out — also counted in the two figures above. */
+  bothDays: number
+  /** Days that were judged and carried no mark at all. */
+  onTimeDays: number
+  /** Days that carried at least one mark, out of the days that could be judged. */
+  flaggedDays: number
+  judgedDays: number
   attendanceRate: number   // 0..1 of operational days
   completionRate: number   // 0..1 of present days that logged out
   lastDay: string | null
@@ -591,6 +634,10 @@ const SUMMARY_COLUMNS: { label: string; key: keyof StaffStat | 'name'; align: 'l
   { label: 'Staff', key: 'name', align: 'left' },
   { label: 'Present', key: 'daysPresent', align: 'center' },
   { label: 'Attendance', key: 'attendanceRate', align: 'center' },
+  { label: 'On time', key: 'onTimeDays', align: 'center' },
+  { label: 'Late in', key: 'lateDays', align: 'center' },
+  { label: 'Early out', key: 'earlyOutDays', align: 'center' },
+  { label: 'Both', key: 'bothDays', align: 'center' },
   { label: 'Avg check-in', key: 'avgCheckIn', align: 'center' },
   { label: 'Total hours', key: 'totalHours', align: 'right' },
   { label: 'Avg hrs/day', key: 'avgHoursPerDay', align: 'right' },
@@ -641,6 +688,9 @@ function StaffSummaryView() {
       const totalBreakMin = userRows.reduce((s, r) => s + (r.break_min ?? 0), 0)
       const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
       const meta = dir.get(id)
+      // Every day gets the same verdict the roster and the Complete Attendance sheet give
+      // it, so the month's counts are the days a supervisor already saw flagged.
+      const flags = tallyPunctuality(userRows.map(dayFlag))
 
       out.push({
         user_id: id,
@@ -657,8 +707,13 @@ function StaffSummaryView() {
         avgBreakMin: present.length ? totalBreakMin / present.length : null,
         overBreakDays: userRows.filter((r) => (r.over_break_min ?? 0) > 0).length,
         totalOverBreakMin: userRows.reduce((s, r) => s + (r.over_break_min ?? 0), 0),
-        // Judged per person against their own expected login, not one hour for everyone.
-        lateDays: userRows.filter((r) => lateMinutes(r) > 0).length,
+        // Judged per person against their own expected hours, not one clock for everyone.
+        lateDays: flags.late,
+        earlyOutDays: flags.early,
+        bothDays: flags.both,
+        onTimeDays: flags.onTime,
+        flaggedDays: flags.flagged,
+        judgedDays: flags.judged,
         attendanceRate: operationalDays ? present.length / operationalDays : 0,
         completionRate: present.length ? complete.length / present.length : 0,
         lastDay: userRows.length ? userRows[userRows.length - 1].work_date : null,
@@ -698,6 +753,10 @@ function StaffSummaryView() {
       avgCheckIn: allCheckIns.length ? allCheckIns.reduce((a, b) => a + b, 0) / allCheckIns.length : null,
       totalBreakMin: stats.reduce((s, x) => s + x.totalBreakMin, 0),
       lateDays: stats.reduce((s, x) => s + x.lateDays, 0),
+      earlyOutDays: stats.reduce((s, x) => s + x.earlyOutDays, 0),
+      bothDays: stats.reduce((s, x) => s + x.bothDays, 0),
+      onTimeDays: stats.reduce((s, x) => s + x.onTimeDays, 0),
+      judgedDays: stats.reduce((s, x) => s + x.judgedDays, 0),
     }
   }, [stats, rows])
 
@@ -765,10 +824,22 @@ function StaffSummaryView() {
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <MetricCard label="Active staff" value={team.active} sub={`of ${team.totalStaff} on record`} accent="#3B82F6" />
         <MetricCard label="Total hours" value={fmtHours(team.totalHours)} sub="completed days" accent="#1D9E75" />
-        <MetricCard label="Avg attendance" value={`${Math.round(team.avgAttendance * 100)}%`} sub="of operational days" accent="#0EA5E9" />
-        <MetricCard label="Avg check-in" value={fmtClock(team.avgCheckIn)} sub="team-wide, EST" accent="#F59E0B" />
-        <MetricCard label="Break time" value={`${Math.round(team.totalBreakMin / 60)}h`} sub={`${team.totalBreakMin} min total`} accent="#7C3AED" />
+        <MetricCard label="On-time days" value={team.onTimeDays} sub={`of ${team.judgedDays} judged`} accent="#10B981" />
         <MetricCard label="Late check-ins" value={team.lateDays} sub="past expected login · 9:00 AM if unset" accent="#EF4444" />
+        <MetricCard label="Early logouts" value={team.earlyOutDays} sub="before expected logout" accent="#F97316" />
+        <MetricCard
+          label="Late + early"
+          value={<span className={team.bothDays > 0 ? 'text-rose-600' : undefined}>{team.bothDays}</span>}
+          sub="days that missed both ends"
+          accent="#BE123C"
+        />
+      </div>
+
+      {/* The figures the punctuality cards displaced, kept on one line rather than lost. */}
+      <div className="mb-4 flex flex-wrap gap-x-6 gap-y-1 px-1 text-xs text-slate-500">
+        <span>Avg attendance <span className="font-semibold text-slate-700">{Math.round(team.avgAttendance * 100)}%</span> of operational days</span>
+        <span>Avg check-in <span className="font-semibold text-slate-700">{fmtClock(team.avgCheckIn)}</span> team-wide, EST</span>
+        <span>Break time <span className="font-semibold text-slate-700">{Math.round(team.totalBreakMin / 60)}h</span> ({team.totalBreakMin} min total)</span>
       </div>
 
       {/* Charts */}
@@ -870,6 +941,10 @@ function StaffSummaryView() {
                   <td className="px-3 py-2.5 text-center">
                     <AttendancePill rate={s.attendanceRate} />
                   </td>
+                  <td className="px-3 py-2.5 text-center"><FlagCount n={s.onTimeDays} tone="on-time" /></td>
+                  <td className="px-3 py-2.5 text-center"><FlagCount n={s.lateDays} tone="mark" /></td>
+                  <td className="px-3 py-2.5 text-center"><FlagCount n={s.earlyOutDays} tone="mark" /></td>
+                  <td className="px-3 py-2.5 text-center"><FlagCount n={s.bothDays} tone="both" /></td>
                   <td className="px-3 py-2.5 text-center text-xs tabular-nums text-slate-700">{fmtClock(s.avgCheckIn)}</td>
                   <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-900">{fmtHours(s.totalHours)}</td>
                   <td className="px-3 py-2.5 text-right text-xs tabular-nums text-slate-700">{fmtHours(s.avgHoursPerDay)}</td>
@@ -888,6 +963,19 @@ function StaffSummaryView() {
       )}
     </div>
   )
+}
+
+/**
+ * A count of flagged days in the summary table. Zero is deliberately greyed out rather
+ * than coloured: a column of quiet dashes is what makes the one person with six late days
+ * findable without reading a single number.
+ */
+function FlagCount({ n, tone }: { n: number; tone: 'on-time' | 'mark' | 'both' }) {
+  if (n === 0) return <span className="text-xs text-slate-300">—</span>
+  const cls = tone === 'on-time' ? 'text-emerald-700'
+    : tone === 'both' ? 'rounded bg-rose-100 px-1.5 py-0.5 text-rose-800'
+      : 'text-amber-700'
+  return <span className={cx('text-xs font-semibold tabular-nums', cls)}>{n}</span>
 }
 
 function AttendancePill({ rate }: { rate: number }) {
@@ -955,12 +1043,20 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
             <DetailStat label="Avg check-in" value={fmtClock(stat.avgCheckIn)} accent="#F59E0B" />
             <DetailStat label="Avg check-out" value={fmtClock(stat.avgCheckOut)} accent="#6366F1" />
             <DetailStat label="Break used" value={`${stat.totalBreakMin}m`} accent="#7C3AED" />
+            <DetailStat label="On-time days" value={<>{stat.onTimeDays}<span className="text-sm text-slate-400">/{stat.judgedDays}</span></>} accent="#10B981" />
             <DetailStat label="Late days" value={stat.lateDays} accent="#EF4444" />
+            <DetailStat label="Early logouts" value={stat.earlyOutDays} accent="#F97316" />
+            <DetailStat
+              label="Late + early"
+              value={<span className={stat.bothDays > 0 ? 'text-rose-600' : undefined}>{stat.bothDays}</span>}
+              accent="#BE123C"
+            />
           </div>
 
           {/* Secondary line */}
           <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
             <span>Attendance <span className="font-semibold text-slate-700">{Math.round(stat.attendanceRate * 100)}%</span></span>
+            <span>Off schedule <span className={cx('font-semibold', stat.bothDays > 0 ? 'text-rose-600' : stat.flaggedDays > 0 ? 'text-amber-600' : 'text-slate-700')}>{stat.flaggedDays} of {stat.judgedDays} day{stat.judgedDays === 1 ? '' : 's'}</span></span>
             <span>Completion <span className="font-semibold text-slate-700">{Math.round(stat.completionRate * 100)}%</span></span>
             <span>Avg break <span className="font-semibold text-slate-700">{stat.avgBreakMin != null ? `${Math.round(stat.avgBreakMin)}m/day` : '—'}</span></span>
             <span>Over-allowance <span className={cx('font-semibold', stat.overBreakDays > 0 ? 'text-violet-600' : 'text-slate-700')}>{stat.overBreakDays} day{stat.overBreakDays === 1 ? '' : 's'} ({stat.totalOverBreakMin}m)</span></span>
@@ -991,14 +1087,14 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
             <table className="w-full border-collapse text-sm">
               <thead className="sticky top-0">
                 <tr className="bg-white/80 backdrop-blur">
-                  {['Date', 'Check-in', 'Check-out', 'Hours', 'Break', 'Status'].map((h, i) => (
-                    <th key={h} className={cx('whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500', i === 0 ? 'text-left' : 'text-right', h === 'Status' && 'text-center')}>{h}</th>
+                  {['Date', 'Check-in', 'Check-out', 'Flag', 'Hours', 'Break', 'Status'].map((h, i) => (
+                    <th key={h} className={cx('whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500', i === 0 ? 'text-left' : 'text-right', (h === 'Status' || h === 'Flag') && 'text-center')}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {stat.rows.length === 0 ? (
-                  <tr><td colSpan={6} className="py-8 text-center text-sm text-slate-400">No days recorded</td></tr>
+                  <tr><td colSpan={7} className="py-8 text-center text-sm text-slate-400">No days recorded</td></tr>
                 ) : stat.rows.slice().reverse().map((r, i) => {
                   return (
                     <tr key={i} className="border-t border-white/50 hover:bg-white/40">
@@ -1009,6 +1105,7 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
                       <td className="whitespace-nowrap px-3 py-2 text-right text-xs">
                         <ScheduleTime at={r.logout_at} off={earlyMinutes(r)} word="early" expected={r.expected_logout} />
                       </td>
+                      <td className="px-3 py-2 text-center"><PunctualityBadge flag={dayFlag(r)} compact /></td>
                       <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-700">{r.hours != null ? `${r.hours}h` : '—'}</td>
                       <td className={cx('px-3 py-2 text-right text-xs tabular-nums', r.over_break_min > 0 ? 'text-violet-600 font-medium' : 'text-slate-700')}>{r.break_min}m</td>
                       <td className="px-3 py-2 text-center"><DayStatus row={r} /></td>
