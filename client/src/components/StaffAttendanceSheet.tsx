@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react'
 import { api } from '../api/client'
 import {
-  ATTENDANCE_STATUSES, clockLabel, earlyBy, gapLabel, hoursLabel, impliedStatus, lateBy,
-  netHours, punctuality,
+  ATTENDANCE_STATUSES, clockLabel, earlyBy, emptyLoginTally, gapLabel, hoursLabel,
+  impliedStatus, lateBy, netHours, punctuality, type LoginTally,
 } from '../lib/staff'
 import type { StaffAttendanceRow, StaffMember } from '../types'
 import PunctualityBadge from './PunctualityBadge'
@@ -37,14 +37,23 @@ import { EmptyState, cx } from './ui'
  * — greyed and italic, because it is a reading rather than a decision. That is what keeps
  * the column honest against the counts above it: a row nobody has touched says "absent",
  * not "present", and someone still at their desk says "still in".
+ *
+ * The Late column is the one figure here that is NOT about the day on screen: it is how
+ * many times that person has logged in late so far this month. A single late morning is
+ * rarely the point — the sixth one is — and reading it off a day sheet otherwise means
+ * opening thirty of them.
  */
 export default function StaffAttendanceSheet({
-  date, rows, staff, onChanged,
+  date, rows, staff, monthTallies, monthLabel, onChanged,
 }: {
   /** The day being shown, "YYYY-MM-DD". */
   date: string
   rows: StaffAttendanceRow[]
   staff: StaffMember[]
+  /** Each person's late / on-time logins over the month this day falls in, by staff id. */
+  monthTallies: Map<number, LoginTally>
+  /** That month, worded — for the column heading and its tooltips. */
+  monthLabel: string
   onChanged: () => void
 }) {
   const byStaff = new Map(rows.map((r) => [r.staff_id, r]))
@@ -52,17 +61,18 @@ export default function StaffAttendanceSheet({
   return (
     <>
       <div className="overflow-x-auto">
-        <table className={cx(tableCls, 'min-w-3xl')}>
+        <table className={cx(tableCls, 'min-w-4xl')}>
           <colgroup>
             <col style={{ width: '5%' }} />
-            <col style={{ width: '17%' }} />
-            <col style={{ width: '15%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '7%' }} />
-            <col style={{ width: '7%' }} />
-            <col style={{ width: '12%' }} />
+            <col style={{ width: '16%' }} />
+            <col style={{ width: '13%' }} />
             <col style={{ width: '10%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '6%' }} />
+            <col style={{ width: '6%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '9%' }} />
             <col style={{ width: '5%' }} />
           </colgroup>
           <thead>
@@ -72,6 +82,7 @@ export default function StaffAttendanceSheet({
               <th className={headCls}>Department</th>
               <th className={headCls}>Login</th>
               <th className={headCls}>Logout</th>
+              <th className={headCls} title={`Late logins in ${monthLabel}`}>Late logins<br />{monthLabel}</th>
               <th className={headCls}>Break</th>
               <th className={headCls}>Hours</th>
               <th className={headCls}>Flag</th>
@@ -93,6 +104,8 @@ export default function StaffAttendanceSheet({
                 person={person}
                 row={byStaff.get(person.id) ?? null}
                 date={date}
+                monthTally={monthTallies.get(person.id) ?? emptyLoginTally()}
+                monthLabel={monthLabel}
                 onChanged={onChanged}
               />
             ))}
@@ -162,13 +175,16 @@ const draftOf = (row: StaffAttendanceRow | null): Draft => row === null ? { ...B
  * hand-keyed day, or nothing at all — and in every case it is edited the same way.
  */
 function DayRow({
-  index, person, row, date, onChanged,
+  index, person, row, date, monthTally, monthLabel, onChanged,
 }: {
   index: number
   person: StaffMember
   /** What is on record for this person and day, from either source; null if nothing is. */
   row: StaffAttendanceRow | null
   date: string
+  /** This person's late / on-time logins across the whole month — see the Late column. */
+  monthTally: LoginTally
+  monthLabel: string
   onChanged: () => void
 }) {
   const saved = draftOf(row)
@@ -263,6 +279,9 @@ function DayRow({
         />
         <ScheduleMark minutes={early} word="early" expected={person.expected_logout} />
       </td>
+      <td className={cx(cellCls, 'text-center')}>
+        <LateMonthCount tally={monthTally} monthLabel={monthLabel} name={person.name} />
+      </td>
       <td className={cellCls}>
         <input
           value={draft.break_min}
@@ -306,6 +325,43 @@ function DayRow({
         </div>
       </td>
     </tr>
+  )
+}
+
+/**
+ * How many times this person has logged in late so far this month, out of the logins they
+ * have recorded in it.
+ *
+ * It is the one red-filled cell on the sheet, and deliberately so: the day's own marks are
+ * small rose captions under the clock cells, which is right for something that may be a
+ * one-off, while a month's worth of late mornings is a pattern and should be the thing the
+ * eye lands on. Nobody late reads as a quiet dash rather than a green badge, so the column
+ * stays empty-looking until there is something in it to find.
+ */
+function LateMonthCount({ tally, monthLabel, name }: {
+  tally: LoginTally
+  monthLabel: string
+  name: string
+}) {
+  if (tally.judged === 0) {
+    return <span title={`No logins recorded for ${name} in ${monthLabel}`} className="text-slate-400">—</span>
+  }
+  if (tally.late === 0) {
+    return (
+      <span title={`${name} was on time for all ${tally.judged} logins in ${monthLabel}`} className="font-semibold text-emerald-700">
+        0<span className="font-normal text-slate-400">/{tally.judged}</span>
+      </span>
+    )
+  }
+  return (
+    <span
+      title={`${name}: ${tally.late} late login${tally.late === 1 ? '' : 's'} of ${tally.judged} in ${monthLabel}`
+        + ` · ${gapLabel(tally.lateMin)} lost · worst ${gapLabel(tally.worstLateMin)}`}
+      className="inline-flex items-center rounded border border-rose-400 bg-rose-100 px-1.5 py-0.5 font-bold tabular-nums text-rose-800"
+    >
+      {tally.late}
+      <span className="font-medium text-rose-500">/{tally.judged}</span>
+    </span>
   )
 }
 

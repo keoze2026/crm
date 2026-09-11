@@ -4,7 +4,7 @@
  * lookup table.
  */
 
-import type { StaffStatus } from '../types'
+import type { StaffMember, StaffStatus } from '../types'
 
 /** The SALARY cell, worded as the client's sheet words it. */
 export const SALARY_STATUSES = ['Received', 'Pending', 'Not Paid', 'On Hold']
@@ -242,6 +242,82 @@ export function tallyPunctuality(days: (Punctuality | null)[]): PunctualityTally
     if (d.id === 'both') { t.both += 1; t.late += 1; t.early += 1 }
     else if (d.id === 'late') t.late += 1
     else t.early += 1
+  }
+  return t
+}
+
+// ─── Late logins ──────────────────────────────────────────────────────────────
+
+/**
+ * How a run of days sat against the expected LOGIN alone.
+ *
+ * Punctuality above is the whole day's verdict, which is the right thing to read down a
+ * sheet; this is the narrower question the attendance summaries are actually asked — who
+ * turned up late, and how often — so a day that was late in AND early out counts once
+ * here, as one late login, rather than being split across two columns.
+ *
+ * `judged` is the denominator: days with a login recorded for somebody whose expected
+ * hours are set. A person with no schedule is never counted late, and never counted on
+ * time either — there is nothing to be on time for.
+ */
+export interface LoginTally {
+  late: number
+  onTime: number
+  judged: number
+  /** Minutes late summed over the late days — what ranks "10 minutes once" below "an hour". */
+  lateMin: number
+  /** The single worst day in the run, in minutes. */
+  worstLateMin: number
+}
+
+export const emptyLoginTally = (): LoginTally =>
+  ({ late: 0, onTime: 0, judged: 0, lateMin: 0, worstLateMin: 0 })
+
+/** Fold one day's lateness (null = nothing to judge) into a tally. */
+export function addLogin(t: LoginTally, lateMin: number | null): LoginTally {
+  if (lateMin === null) return t
+  t.judged += 1
+  if (lateMin > 0) {
+    t.late += 1
+    t.lateMin += lateMin
+    t.worstLateMin = Math.max(t.worstLateMin, lateMin)
+  } else t.onTime += 1
+  return t
+}
+
+/** One person's login record over a run of days, judged against their own expected login. */
+export function tallyLogins(logins: (string | null)[], expectedLogin: string | null): LoginTally {
+  const t = emptyLoginTally()
+  for (const login of logins) addLogin(t, lateBy(login, expectedLogin))
+  return t
+}
+
+/**
+ * Every person's login tally over a run of days, keyed by staff id — the month-wise count
+ * the attendance sheets carry in their own column. Everyone on the roster gets an entry,
+ * including the people with no days at all, so a table can read it without a fallback.
+ */
+export function loginTallies(
+  staff: StaffMember[], rows: { staff_id: number; login_at: string | null }[],
+): Map<number, LoginTally> {
+  const byStaff = new Map<number, (string | null)[]>()
+  for (const r of rows) {
+    const arr = byStaff.get(r.staff_id) ?? []
+    arr.push(r.login_at)
+    byStaff.set(r.staff_id, arr)
+  }
+  return new Map(staff.map((p) => [p.id, tallyLogins(byStaff.get(p.id) ?? [], p.expected_login)]))
+}
+
+/** Roster-wide totals from per-person tallies — the figures the scorecards show. */
+export function sumLoginTallies(tallies: Iterable<LoginTally>): LoginTally {
+  const t = emptyLoginTally()
+  for (const x of tallies) {
+    t.late += x.late
+    t.onTime += x.onTime
+    t.judged += x.judged
+    t.lateMin += x.lateMin
+    t.worstLateMin = Math.max(t.worstLateMin, x.worstLateMin)
   }
   return t
 }

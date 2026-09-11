@@ -18,10 +18,12 @@ import {
   buildLeavesPdf, buildSalariesPdf, buildStaffAttendancePdf, buildStaffPdf,
 } from '../lib/sheetPdf'
 import {
-  monthRange, orgNowLabel, punctualityOf, tallyPunctuality, type PunctualityTally,
+  clockLabel, gapLabel, lateBy, loginTallies, monthRange, orgNowLabel, punctualityOf,
+  sumLoginTallies, tallyPunctuality, type LoginTally, type PunctualityTally,
 } from '../lib/staff'
 import { useAsync } from '../lib/useAsync'
 import { useOrgToday } from '../lib/useOrgToday'
+import type { StaffMember } from '../types'
 
 type Tab = 'staff' | 'attendance' | 'leaves' | 'salaries'
 
@@ -75,6 +77,85 @@ function AttendanceScore({ inCount, roster, flags }: {
 }
 
 /**
+ * The same day counted a month at a time — every login recorded so far in the month the
+ * sheet is showing a day of.
+ *
+ * A day's own scorecards say whether THIS morning went well; these say whether the month
+ * is going well, which is the question a late login is actually asked about. They sit
+ * beside each other so the two are never confused: the row above is dated, this one is
+ * labelled with its month.
+ */
+function MonthLoginScore({ label, tally, lateStaff, roster }: {
+  label: string
+  tally: LoginTally
+  /** How many people have logged in late at least once this month. */
+  lateStaff: number
+  roster: number
+}) {
+  const tiles: { label: string; value: string; of?: string; tone: string }[] = [
+    { label: 'On-time logins', value: String(tally.onTime), of: String(tally.judged), tone: 'text-emerald-700' },
+    { label: 'Late logins', value: String(tally.late), of: String(tally.judged), tone: 'text-rose-700' },
+    { label: 'Time lost', value: tally.lateMin > 0 ? gapLabel(tally.lateMin) : '0m', tone: 'text-rose-700' },
+    { label: 'Staff late', value: String(lateStaff), of: String(roster), tone: 'text-rose-700' },
+  ]
+
+  return (
+    <div className="border-b border-white/50 bg-rose-50/40">
+      <p className="px-4 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        Logins this month — {label}
+      </p>
+      <div className="grid grid-cols-2 gap-px bg-white/30 sm:grid-cols-4">
+        {tiles.map((t) => (
+          <div key={t.label} className="bg-white/40 px-4 py-2.5">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{t.label}</p>
+            <p className="mt-0.5 text-lg font-bold tabular-nums leading-6">
+              <span className={cx(t.value === '0' || t.value === '0m' ? 'text-slate-400' : t.tone)}>{t.value}</span>
+              {t.of !== undefined && <span className="text-xs font-medium text-slate-400">/{t.of}</span>}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Who logged in late on the day the sheet is showing, named and worst first.
+ *
+ * The scorecards say how many; this says who, without the sheet having to be read down.
+ * It is judged exactly as the Login column beside it is — against each person's own
+ * expected login — so a name can never appear here that the sheet shows unmarked.
+ */
+function LateTodayStrip({ late, dateLabel }: {
+  late: { person: StaffMember; at: string; minutes: number }[]
+  dateLabel: string
+}) {
+  return (
+    <div className="border-b border-white/50 px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          Late logins · {dateLabel}
+        </span>
+        {late.length === 0 ? (
+          <span className="text-xs text-emerald-600">✓ Nobody logged in late on this date</span>
+        ) : late.map(({ person, at, minutes }) => (
+          <span
+            key={person.id}
+            title={`Logged in ${clockLabel(at)} — expected ${clockLabel(person.expected_login)}`}
+            className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-800 ring-1 ring-rose-300"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+            {person.name}
+            <span className="font-bold tabular-nums">{gapLabel(minutes)}</span>
+            <span className="tabular-nums text-rose-500">{clockLabel(at)}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
  * Staff Management — the roster every other sheet reads, plus the three sheets that hang
  * off it.
  *
@@ -113,6 +194,16 @@ export default function Staff() {
       : null,
     [tab, date],
   )
+  // The whole month the selected day falls in, for the month-wise late-login tally the
+  // sheet carries in its own column. It is a separate fetch from the day because the day
+  // is edited and re-read constantly while the month only changes when the date crosses
+  // into one — and because the sheet must never be handed month rows by mistake.
+  const attendanceMonth = date.slice(0, 7)
+  const monthAttendance = useAsync(
+    async () => tab === 'attendance' ? api.staffAttendance(monthRange(attendanceMonth)) : null,
+    [tab, attendanceMonth],
+  )
+
   const leaves = useAsync(
     () => tab === 'leaves' ? api.staffLeaves(range) : Promise.resolve([]),
     [tab, range.from, range.to],
@@ -128,7 +219,7 @@ export default function Staff() {
   // Refresh pulls the day AND the roster: the check-in bot writes new logins and logouts
   // between page loads, and someone's expected hours may have been set on the Staff tab in
   // another window — both change what the sheet says without anything here having changed.
-  const refreshAttendance = () => { attendance.reload(); staff.reload() }
+  const refreshAttendance = () => { attendance.reload(); monthAttendance.reload(); staff.reload() }
 
   const people = useMemo(() => staff.data ?? [], [staff.data])
   const depts = useMemo(() => departments.data ?? [], [departments.data])
@@ -158,6 +249,38 @@ export default function Staff() {
     }))
   }, [people, attendanceRows])
 
+  /**
+   * Each person's late / on-time logins over the month the selected day falls in — the
+   * tally the sheet's own column shows, and the one its scorecards and PDF add up.
+   *
+   * Like the day rows, month rows are only trusted when they ARE this month's: a fetch
+   * still in flight after the date crossed into a new month would otherwise put the
+   * previous month's count against every name.
+   */
+  const monthRows = useMemo(
+    () => (monthAttendance.data?.from.slice(0, 7) === attendanceMonth ? monthAttendance.data.rows : []),
+    [monthAttendance.data, attendanceMonth],
+  )
+  const monthTallies = useMemo(() => loginTallies(people, monthRows), [people, monthRows])
+  const monthTotals = useMemo(() => sumLoginTallies(monthTallies.values()), [monthTallies])
+  const monthLateStaff = useMemo(
+    () => [...monthTallies.values()].filter((t) => t.late > 0).length,
+    [monthTallies],
+  )
+
+  /** Who logged in late on the day being shown, worst first — the strip above the sheet. */
+  const lateToday = useMemo(() => {
+    const byStaff = new Map(attendanceRows.map((r) => [r.staff_id, r]))
+    return people
+      .map((person) => {
+        const at = byStaff.get(person.id)?.login_at ?? null
+        return { person, at, minutes: lateBy(at, person.expected_login) }
+      })
+      .filter((x): x is { person: StaffMember; at: string; minutes: number } =>
+        x.at !== null && x.minutes !== null && x.minutes > 0)
+      .sort((a, b) => b.minutes - a.minutes)
+  }, [people, attendanceRows])
+
   const query = search.trim()
   const shownStaff = useMemo(() => (
     query === ''
@@ -168,11 +291,11 @@ export default function Staff() {
   const loading = staff.loading || departments.loading
       // `attendanceStale` too: rows for another day must never reach the sheet OR the
       // scorecards, so the whole tab waits rather than showing a day it isn't titled.
-      || (tab === 'attendance' && (attendance.loading || attendanceStale))
+      || (tab === 'attendance' && (attendance.loading || attendanceStale || monthAttendance.loading))
       || (tab === 'leaves' && leaves.loading)
       || (tab === 'salaries' && salaries.loading)
   const error = staff.error ?? departments.error
-      ?? attendance.error ?? leaves.error ?? salaries.error
+      ?? attendance.error ?? monthAttendance.error ?? leaves.error ?? salaries.error
 
   const monthLabel = formatMonth(month)
   const dateLabel = formatDate(date)
@@ -184,7 +307,9 @@ export default function Staff() {
     },
     attendance: {
       enabled: people.length > 0,
-      run: () => buildStaffAttendancePdf(people, attendanceRows, dateLabel).save(`Attendance_${date}.pdf`),
+      run: () => buildStaffAttendancePdf(
+        people, attendanceRows, dateLabel, monthTallies, formatMonth(attendanceMonth),
+      ).save(`Attendance_${date}.pdf`),
     },
     leaves: {
       enabled: leaveRows.length > 0,
@@ -274,12 +399,26 @@ export default function Staff() {
             flags={attendanceFlags}
           />
 
+          <MonthLoginScore
+            label={formatMonth(attendanceMonth)}
+            tally={monthTotals}
+            lateStaff={monthLateStaff}
+            roster={people.length}
+          />
+
+          <LateTodayStrip late={lateToday} dateLabel={dateLabel} />
+
           <div className="p-4">
             <StaffAttendanceSheet
               date={date}
               rows={attendanceRows}
               staff={people}
-              onChanged={attendance.reload}
+              monthTallies={monthTallies}
+              monthLabel={formatMonth(attendanceMonth)}
+              // A corrected login changes the month's late count as well as the day's, so
+              // an edit re-reads both. Without this the column beside the cell just edited
+              // would go on showing the count from before the correction.
+              onChanged={() => { attendance.reload(); monthAttendance.reload() }}
             />
           </div>
         </Card>

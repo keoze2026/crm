@@ -19,12 +19,22 @@ import { formatDmy } from './format'
 const TZ = 'America/New_York'
 export const BREAK_ALLOWANCE_MIN = 60
 
+/**
+ * The flat late threshold — 9:00 AM EST — used only for someone whose expected hours have
+ * not been set on the Staff page. It is the same fallback the Attendance roster marks its
+ * clock cells with, so a report and the screen it was exported from never disagree about
+ * who was late.
+ */
+export const TARGET_LOGIN_MIN = 9 * 60
+
 // Company report palette (matches the Reports page exports).
 const NAVY: [number, number, number] = [26, 54, 84]
 const CYAN: [number, number, number] = [212, 233, 242]
 const INK: [number, number, number] = [15, 23, 42]
 const WHITE: [number, number, number] = [255, 255, 255]
 const RED: [number, number, number] = [185, 28, 28]
+const ROSE: [number, number, number] = [255, 228, 230]
+const GREEN: [number, number, number] = [4, 120, 87]
 const MUTED: [number, number, number] = [100, 116, 139]
 
 // ─── Aggregation ────────────────────────────────────────────────────────────────
@@ -41,8 +51,43 @@ export interface BreakStat {
   overDays: number          // days that exceeded the allowance
   avgBreakMin: number       // mean break minutes per logged-in day
   worstOverMin: number      // single worst day's overage
+  lateDays: number          // days the login was past the expected hour
+  onTimeDays: number        // days the login was on or before it
+  totalLateMin: number      // minutes late summed over the late days
+  worstLateMin: number      // single worst late login
   rows: AttendanceDay[]     // day rows, ascending by date
 }
+
+// ─── Late logins ────────────────────────────────────────────────────────────────
+
+/** Minutes-since-midnight of a UTC timestamp, in the org timezone. */
+function minutesEST(iso: string | null): number | null {
+  if (!iso) return null
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date(iso))
+  const h = Number(parts.find((p) => p.type === 'hour')?.value) % 24
+  const m = Number(parts.find((p) => p.type === 'minute')?.value)
+  if (Number.isNaN(h) || Number.isNaN(m)) return null
+  return h * 60 + m
+}
+
+/**
+ * How late the login was, in minutes, against the hours kept for that person on the Staff
+ * page — falling back to the flat 9:00 AM this app has always used where none are set.
+ *
+ * null means there was nothing to judge: no login recorded at all. 0 means on time, and
+ * that is worth saying out loud, which is why it is not folded in with null.
+ */
+export function loginLateMinutes(r: AttendanceDay): number | null {
+  if (r.login_at == null) return null
+  if (r.late_min != null) return r.late_min
+  const m = minutesEST(r.login_at)
+  return m == null ? null : Math.max(0, m - TARGET_LOGIN_MIN)
+}
+
+/** Was this day a late login? The one question the summaries and scorecards are read for. */
+export const isLateLogin = (r: AttendanceDay): boolean => (loginLateMinutes(r) ?? 0) > 0
 
 /** Display label: name → @handle → user id. */
 export const labelOf = (s: { staff_name: string | null; username: string | null; user_id: string }): string =>
@@ -83,6 +128,7 @@ export function aggregateBreaks(rows: AttendanceDay[]): BreakStat[] {
     const totalHours = sorted.reduce((s, r) => s + (r.hours ?? 0), 0)
     const totalBreakMin = sorted.reduce((s, r) => s + (r.break_min ?? 0), 0)
     const totalOverMin = sorted.reduce((s, r) => s + (r.over_break_min ?? 0), 0)
+    const lateMins = present.map(loginLateMinutes).filter((m): m is number => m != null)
     out.push({
       user_id: id,
       staff_name: sorted[0]?.staff_name ?? null,
@@ -95,6 +141,10 @@ export function aggregateBreaks(rows: AttendanceDay[]): BreakStat[] {
       overDays: sorted.filter((r) => (r.over_break_min ?? 0) > 0).length,
       avgBreakMin: present.length ? totalBreakMin / present.length : 0,
       worstOverMin: sorted.reduce((m, r) => Math.max(m, r.over_break_min ?? 0), 0),
+      lateDays: lateMins.filter((m) => m > 0).length,
+      onTimeDays: lateMins.filter((m) => m === 0).length,
+      totalLateMin: lateMins.reduce((s, m) => s + m, 0),
+      worstLateMin: lateMins.reduce((a, m) => Math.max(a, m), 0),
       rows: sorted,
     })
   }
@@ -150,19 +200,180 @@ function drawHeader(doc: jsPDF, subtitle: string, from: string, to: string): num
   return 92
 }
 
+// ─── Scorecards ─────────────────────────────────────────────────────────────────
+
+/** One KPI tile on a report's scorecard strip. */
+interface Score {
+  label: string
+  value: string
+  sub?: string
+  /** Red marks a figure nobody wants to see rise; green, one they do. */
+  tone?: 'red' | 'green'
+}
+
+/**
+ * The strip of KPI tiles every report opens with — the same figures, in the same order,
+ * as the cards on the page above the table, so a printed report answers "how many late
+ * logins?" without anyone having to count a column.
+ */
+function drawScores(doc: jsPDF, scores: Score[], y: number): number {
+  const pageW = doc.internal.pageSize.getWidth()
+  const gap = 8
+  const w = (pageW - 2 * M - gap * (scores.length - 1)) / scores.length
+  const h = 44
+
+  scores.forEach((s, i) => {
+    const x = M + i * (w + gap)
+    doc.setFillColor(...(s.tone === 'red' ? ([254, 226, 226] as [number, number, number]) : CYAN))
+    doc.roundedRect(x, y, w, h, 4, 4, 'F')
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor(...MUTED)
+    doc.text(s.label.toUpperCase(), x + 8, y + 14)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(14)
+    doc.setTextColor(...(s.tone === 'red' ? RED : s.tone === 'green' ? GREEN : NAVY))
+    doc.text(s.value, x + 8, y + 31)
+
+    if (s.sub) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7)
+      doc.setTextColor(...MUTED)
+      doc.text(s.sub, x + 8, y + 40)
+    }
+  })
+
+  return y + h + 14
+}
+
+// ─── By month ───────────────────────────────────────────────────────────────────
+
+/** A month's login record, for the breakdown every report carries under its scorecards. */
+export interface MonthScore {
+  /** 'YYYY-MM'. */
+  month: string
+  label: string
+  late: number
+  onTime: number
+  lateMin: number
+  days: number
+}
+
+/** Human label for a 'YYYY-MM' month, e.g. "June 2026". */
+export function monthName(ym: string): string {
+  const [y, m] = ym.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+}
+
+/**
+ * Late and on-time logins split by calendar month, oldest first.
+ *
+ * A report's period is whatever was asked for — a week, a fortnight, a run of months — but
+ * the question put to it is nearly always monthly, so every report carries the split rather
+ * than only a period total that a two-month range would quietly blur together.
+ */
+export function tallyByMonth(rows: AttendanceDay[]): MonthScore[] {
+  const byMonth = new Map<string, MonthScore>()
+  const dates = new Map<string, Set<string>>()
+
+  for (const r of rows) {
+    const ym = r.work_date.slice(0, 7)
+    const m = byMonth.get(ym) ?? { month: ym, label: monthName(ym), late: 0, onTime: 0, lateMin: 0, days: 0 }
+    const late = loginLateMinutes(r)
+    if (late !== null) {
+      if (late > 0) { m.late += 1; m.lateMin += late } else m.onTime += 1
+    }
+    byMonth.set(ym, m)
+    const seen = dates.get(ym) ?? new Set<string>()
+    seen.add(r.work_date)
+    dates.set(ym, seen)
+  }
+
+  for (const [ym, m] of byMonth) m.days = dates.get(ym)?.size ?? 0
+  return [...byMonth.values()].sort((a, b) => (a.month < b.month ? -1 : 1))
+}
+
+/** The by-month table drawn under a report's scorecards. Returns the y beneath it. */
+function drawMonthTable(doc: jsPDF, months: MonthScore[], startY: number): number {
+  if (months.length === 0) return startY
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(...NAVY)
+  doc.text('LATE LOGINS BY MONTH', M, startY)
+
+  autoTable(doc, {
+    startY: startY + 8,
+    theme: 'grid',
+    head: [['MONTH', 'OPERATIONAL DAYS', 'ON-TIME LOGINS', 'LATE LOGINS', 'TIME LOST']],
+    body: months.map((m) => [m.label, String(m.days), String(m.onTime), String(m.late), fmtHm(m.lateMin)]),
+    styles: { ...baseStyles, fontSize: 8, cellPadding: 4 },
+    headStyles: navyHead,
+    bodyStyles: { fillColor: CYAN },
+    columnStyles: {
+      0: { halign: 'left', fontStyle: 'bold' }, 1: { halign: 'center' },
+      2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'right' },
+    },
+    margin: { left: M, right: M },
+    didParseCell: (d) => {
+      if (d.section !== 'body') return
+      const m = months[d.row.index]
+      if (!m) return
+      if (d.column.index === 2 && m.onTime > 0) d.cell.styles.textColor = GREEN
+      if ((d.column.index === 3 || d.column.index === 4) && m.late > 0) {
+        d.cell.styles.textColor = RED
+        d.cell.styles.fontStyle = 'bold'
+        d.cell.styles.fillColor = ROSE
+      }
+    },
+  })
+
+  return lastY(doc) + 18
+}
+
+/** The scorecard strip + by-month breakdown both reports open with. */
+function drawLoginSummary(doc: jsPDF, stats: BreakStat[], rows: AttendanceDay[], y: number): number {
+  const late = stats.reduce((s, x) => s + x.lateDays, 0)
+  const onTime = stats.reduce((s, x) => s + x.onTimeDays, 0)
+  const lateMin = stats.reduce((s, x) => s + x.totalLateMin, 0)
+  const judged = late + onTime
+  const lateMembers = stats.filter((x) => x.lateDays > 0).length
+
+  const next = drawScores(doc, [
+    { label: 'Late logins', value: String(late), sub: `of ${judged} logins`, tone: 'red' },
+    { label: 'On-time logins', value: String(onTime), sub: `of ${judged} logins`, tone: 'green' },
+    { label: 'Time lost to late starts', value: fmtHm(lateMin), sub: 'summed over late days', tone: late > 0 ? 'red' : undefined },
+    { label: 'Staff logging in late', value: String(lateMembers), sub: `of ${stats.length} active` },
+  ], y)
+
+  return drawMonthTable(doc, tallyByMonth(rows), next)
+}
+
 // ─── Team report ─────────────────────────────────────────────────────────────────
 
-/** One page: every member as a row, ranked by break-time exceeding the allowance. */
-export function buildTeamBreakPdf(stats: BreakStat[], from: string, to: string): jsPDF {
+/**
+ * One page: every member as a row, opening on the late-login scorecards and the month
+ * breakdown behind them, then the table ranked by break-time exceeding the allowance.
+ *
+ * `rows` is the raw day list the stats were aggregated from — the month split needs the
+ * dates, which the per-member totals no longer carry.
+ */
+export function buildTeamBreakPdf(stats: BreakStat[], from: string, to: string, rows: AttendanceDay[] = []): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
-  const y = drawHeader(doc, `Worked hours and break time over the ${BREAK_ALLOWANCE_MIN}-minute daily allowance`, from, to)
+  const header = drawHeader(doc, `Late logins, worked hours and break time over the ${BREAK_ALLOWANCE_MIN}-minute daily allowance`, from, to)
+  const y = drawLoginSummary(doc, stats, rows.length ? rows : stats.flatMap((s) => s.rows), header)
 
   const totalOver = stats.reduce((s, x) => s + x.totalOverMin, 0)
   const totalBreak = stats.reduce((s, x) => s + x.totalBreakMin, 0)
   const totalHours = stats.reduce((s, x) => s + x.totalHours, 0)
   const totalDays = stats.reduce((s, x) => s + x.daysPresent, 0)
+  const totalLate = stats.reduce((s, x) => s + x.lateDays, 0)
+  const totalOnTime = stats.reduce((s, x) => s + x.onTimeDays, 0)
   const overMembers = stats.filter((x) => x.totalOverMin > 0).length
 
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(...INK)
   doc.text(
@@ -174,25 +385,36 @@ export function buildTeamBreakPdf(stats: BreakStat[], from: string, to: string):
   const body: RowInput[] = stats.map((s) => [
     labelOf(s),
     String(s.daysPresent),
+    String(s.onTimeDays),
+    String(s.lateDays),
+    fmtHm(s.totalLateMin),
     fmtHm(s.totalBreakMin),
     fmtHm(s.totalOverMin),
     hoursCell(s.totalHours),
   ])
-  if (body.length === 0) body.push(['No members active in this period', '0', '0m', '0m', '0.0h'])
-  body.push(['TEAM TOTAL', String(totalDays), fmtHm(totalBreak), fmtHm(totalOver), hoursCell(totalHours)])
+  if (body.length === 0) body.push(['No members active in this period', '0', '0', '0', '0m', '0m', '0m', '0.0h'])
+  body.push([
+    'TEAM TOTAL', String(totalDays), String(totalOnTime), String(totalLate),
+    fmtHm(stats.reduce((s, x) => s + x.totalLateMin, 0)),
+    fmtHm(totalBreak), fmtHm(totalOver), hoursCell(totalHours),
+  ])
   const totalIdx = body.length - 1
 
   autoTable(doc, {
     startY: y + 16,
     theme: 'grid',
-    head: [['STAFF', 'DAYS LOGGED IN', 'BREAK USED', 'BREAK-TIME\nEXCEEDING\nALLOWANCE', 'WORKED HOURS']],
+    head: [[
+      'STAFF', 'DAYS\nLOGGED IN', 'ON-TIME\nLOGINS', 'LATE\nLOGINS', 'TIME\nLOST',
+      'BREAK USED', 'BREAK-TIME\nEXCEEDING\nALLOWANCE', 'WORKED\nHOURS',
+    ]],
     body,
-    styles: baseStyles,
+    styles: { ...baseStyles, fontSize: 8, cellPadding: 4 },
     headStyles: navyHead,
     bodyStyles: { fillColor: CYAN },
     columnStyles: {
-      0: { halign: 'left' }, 1: { halign: 'center' }, 2: { halign: 'right' },
-      3: { halign: 'right' }, 4: { halign: 'right' },
+      0: { halign: 'left' }, 1: { halign: 'center' }, 2: { halign: 'center' },
+      3: { halign: 'center' }, 4: { halign: 'right' }, 5: { halign: 'right' },
+      6: { halign: 'right' }, 7: { halign: 'right' },
     },
     margin: { left: M, right: M },
     didParseCell: (d) => {
@@ -205,7 +427,16 @@ export function buildTeamBreakPdf(stats: BreakStat[], from: string, to: string):
       }
       const stat = stats[d.row.index]
       if (!stat) return
-      if (d.column.index === 3 && stat.totalOverMin > 0) {
+      // Late logins are the column this report is scanned down, so they are the ones
+      // printed in red on their own tint — a page of black figures with three red cells
+      // answers "who is turning up late?" before anything is read.
+      if ((d.column.index === 3 || d.column.index === 4) && stat.lateDays > 0) {
+        d.cell.styles.textColor = RED
+        d.cell.styles.fontStyle = 'bold'
+        d.cell.styles.fillColor = ROSE
+      }
+      if (d.column.index === 2 && stat.onTimeDays > 0) d.cell.styles.textColor = GREEN
+      if (d.column.index === 6 && stat.totalOverMin > 0) {
         d.cell.styles.textColor = RED
         d.cell.styles.fontStyle = 'bold'
       }
@@ -234,30 +465,45 @@ function renderUserSection(doc: jsPDF, stat: BreakStat, startY: number): void {
     M, startY + 14,
   )
 
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(...(stat.lateDays > 0 ? RED : GREEN))
+  doc.text(
+    `Late logins ${stat.lateDays} of ${stat.lateDays + stat.onTimeDays}` +
+      (stat.lateDays > 0 ? `  ·  ${fmtHm(stat.totalLateMin)} lost  ·  worst ${fmtHm(stat.worstLateMin)}` : '  ·  never late in this period'),
+    M, startY + 26,
+  )
+
+  const lateOf = (r: AttendanceDay): number | null => loginLateMinutes(r)
+
   const body: RowInput[] = stat.rows.map((r) => [
     formatDmy(r.work_date),
     fmtClockEST(r.login_at),
+    (lateOf(r) ?? 0) > 0 ? fmtHm(lateOf(r) as number) : r.login_at ? 'On time' : '—',
     fmtClockEST(r.logout_at),
     hoursCell(r.hours),
     `${r.break_min ?? 0}m`,
     `${BREAK_ALLOWANCE_MIN}m`,
     fmtHm(r.over_break_min ?? 0),
   ])
-  if (body.length === 0) body.push(['—', '—', '—', '—', '0m', `${BREAK_ALLOWANCE_MIN}m`, '0m'])
-  body.push(['TOTAL', '', '', hoursCell(stat.totalHours), `${stat.totalBreakMin}m`, '', fmtHm(stat.totalOverMin)])
+  if (body.length === 0) body.push(['—', '—', '—', '—', '—', '0m', `${BREAK_ALLOWANCE_MIN}m`, '0m'])
+  body.push([
+    'TOTAL', '', `${stat.lateDays} late`, '', hoursCell(stat.totalHours),
+    `${stat.totalBreakMin}m`, '', fmtHm(stat.totalOverMin),
+  ])
   const totalIdx = body.length - 1
 
   autoTable(doc, {
-    startY: startY + 22,
+    startY: startY + 34,
     theme: 'grid',
-    head: [['DATE', 'LOGIN', 'LOGOUT', 'WORKED HOURS', 'BREAK', 'ALLOWANCE', 'EXCEEDING\nALLOWANCE']],
+    head: [['DATE', 'LOGIN', 'LATE BY', 'LOGOUT', 'WORKED HOURS', 'BREAK', 'ALLOWANCE', 'EXCEEDING\nALLOWANCE']],
     body,
     styles: { ...baseStyles, fontSize: 8, cellPadding: 4 },
     headStyles: navyHead,
     bodyStyles: { fillColor: CYAN },
     columnStyles: {
-      0: { halign: 'left' }, 1: { halign: 'center' }, 2: { halign: 'center' },
-      3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'center' }, 6: { halign: 'right' },
+      0: { halign: 'left' }, 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' },
+      4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'center' }, 7: { halign: 'right' },
     },
     margin: { left: M, right: M },
     didParseCell: (d) => {
@@ -266,7 +512,20 @@ function renderUserSection(doc: jsPDF, stat: BreakStat, startY: number): void {
         d.cell.styles.fillColor = NAVY
         d.cell.styles.textColor = WHITE
         d.cell.styles.fontStyle = 'bold'
-      } else if (d.column.index === 6 && (stat.rows[d.row.index]?.over_break_min ?? 0) > 0) {
+        return
+      }
+      const row = stat.rows[d.row.index]
+      if (!row) return
+      // A late day is marked across BOTH clock columns — the time it happened and how far
+      // out it was — so the day itself is findable, not just the number beside it.
+      if ((d.column.index === 1 || d.column.index === 2) && isLateLogin(row)) {
+        d.cell.styles.textColor = RED
+        d.cell.styles.fontStyle = 'bold'
+        d.cell.styles.fillColor = ROSE
+      } else if (d.column.index === 2 && row.login_at != null) {
+        d.cell.styles.textColor = GREEN
+      }
+      if (d.column.index === 7 && (row.over_break_min ?? 0) > 0) {
         d.cell.styles.textColor = RED
         d.cell.styles.fontStyle = 'bold'
       }
@@ -274,10 +533,11 @@ function renderUserSection(doc: jsPDF, stat: BreakStat, startY: number): void {
   })
 }
 
-/** Single member, day-by-day. */
+/** Single member, day-by-day, opening on their own late-login scorecards. */
 export function buildUserBreakPdf(stat: BreakStat, from: string, to: string): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
-  const y = drawHeader(doc, `Individual report — ${labelOf(stat)}`, from, to)
+  const header = drawHeader(doc, `Individual report — ${labelOf(stat)}`, from, to)
+  const y = drawLoginSummary(doc, [stat], stat.rows, header)
   renderUserSection(doc, stat, y + 8)
   return doc
 }
@@ -286,7 +546,8 @@ export function buildUserBreakPdf(stat: BreakStat, from: string, to: string): js
 export function buildAllUsersBreakPdf(stats: BreakStat[], from: string, to: string): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
   const pageH = doc.internal.pageSize.getHeight()
-  let y = drawHeader(doc, 'Per-member breakdown for every active member', from, to) + 8
+  const header = drawHeader(doc, 'Per-member breakdown for every active member', from, to)
+  let y = (stats.length ? drawLoginSummary(doc, stats, stats.flatMap((s) => s.rows), header) : header) + 8
 
   if (stats.length === 0) {
     doc.setFontSize(10)
@@ -295,10 +556,11 @@ export function buildAllUsersBreakPdf(stats: BreakStat[], from: string, to: stri
     return doc
   }
 
-  stats.forEach((stat, i) => {
-    // Avoid orphaning a member's heading at the foot of a page; long tables
-    // paginate themselves inside autoTable.
-    if (i > 0 && y > pageH - 140) {
+  stats.forEach((stat) => {
+    // Avoid orphaning a member's heading at the foot of a page; long tables paginate
+    // themselves inside autoTable. The FIRST section is checked too, because the scorecards
+    // and the month breakdown now sit above it and a long enough period can push it down.
+    if (y > pageH - 140) {
       doc.addPage()
       y = 56
     }
@@ -313,23 +575,39 @@ export function buildAllUsersBreakPdf(stats: BreakStat[], from: string, to: stri
 
 const round1 = (n: number): number => Math.round(n * 10) / 10
 
-/** Team report as a single .xlsx sheet with a TOTAL footer. */
+/**
+ * Team report as a single .xlsx sheet with a TOTAL footer.
+ *
+ * The two late-login columns are printed red on a pale red fill exactly as the PDF prints
+ * them, so a workbook mailed on is read the same way as a page pinned to a wall.
+ */
 export function teamBreakSheet(stats: BreakStat[]): XlsxSheet {
+  const LATE = 4  // the "Late logins" column — the one highlighted
   return {
     name: 'Overall Staff Report',
-    head: ['Staff', 'Username', 'Days logged in', 'Break used (min)', 'Break-time exceeding allowance (min)', 'Worked hours'],
-    formats: ['text', 'text', 'integer', 'integer', 'integer', 'number'],
+    head: [
+      'Staff', 'Username', 'Days logged in', 'On-time logins', 'Late logins', 'Late by (min)',
+      'Break used (min)', 'Break-time exceeding allowance (min)', 'Worked hours',
+    ],
+    formats: ['text', 'text', 'integer', 'integer', 'integer', 'integer', 'integer', 'integer', 'number'],
     rows: stats.map((s) => [
       s.staff_name ?? '',
       s.username ? `@${s.username}` : '',
       s.daysPresent,
+      s.onTimeDays,
+      s.lateDays,
+      s.totalLateMin,
       s.totalBreakMin,
       s.totalOverMin,
       round1(s.totalHours),
     ]),
+    red: (row, col) => (col === LATE || col === LATE + 1) && (stats[row]?.lateDays ?? 0) > 0,
     foot: [
       'TOTAL', '',
       stats.reduce((s, x) => s + x.daysPresent, 0),
+      stats.reduce((s, x) => s + x.onTimeDays, 0),
+      stats.reduce((s, x) => s + x.lateDays, 0),
+      stats.reduce((s, x) => s + x.totalLateMin, 0),
       stats.reduce((s, x) => s + x.totalBreakMin, 0),
       stats.reduce((s, x) => s + x.totalOverMin, 0),
       round1(stats.reduce((s, x) => s + x.totalHours, 0)),
@@ -337,21 +615,54 @@ export function teamBreakSheet(stats: BreakStat[]): XlsxSheet {
   }
 }
 
-/** One member's day-by-day breakdown as an .xlsx sheet. */
+/** One member's day-by-day breakdown as an .xlsx sheet; late days highlighted in red. */
 export function userBreakSheet(stat: BreakStat): XlsxSheet {
   return {
     name: 'Overall Staff Report',
-    head: ['Date', 'Login', 'Logout', 'Worked hours', 'Break (min)', 'Allowance (min)', 'Break-time exceeding allowance (min)'],
-    formats: ['text', 'text', 'text', 'number', 'integer', 'integer', 'integer'],
+    head: [
+      'Date', 'Login', 'Late by (min)', 'Logout', 'Worked hours', 'Break (min)',
+      'Allowance (min)', 'Break-time exceeding allowance (min)',
+    ],
+    formats: ['text', 'text', 'integer', 'text', 'number', 'integer', 'integer', 'integer'],
     rows: stat.rows.map((r) => [
       r.work_date,
       fmtClockEST(r.login_at),
+      loginLateMinutes(r) ?? '',
       fmtClockEST(r.logout_at),
       r.hours == null ? '' : round1(r.hours),
       r.break_min ?? 0,
       BREAK_ALLOWANCE_MIN,
       r.over_break_min ?? 0,
     ]),
-    foot: ['TOTAL', '', '', round1(stat.totalHours), stat.totalBreakMin, '', stat.totalOverMin],
+    // A late day is marked along its date and both login columns, so the DAY stands out in
+    // the sheet rather than one lone number in the middle of it.
+    red: (row, col) => col <= 2 && !!stat.rows[row] && isLateLogin(stat.rows[row]),
+    foot: [
+      'TOTAL', '', stat.totalLateMin, '', round1(stat.totalHours),
+      stat.totalBreakMin, '', stat.totalOverMin,
+    ],
+  }
+}
+
+/**
+ * The late-login scorecards, month by month, as their own sheet — the figure the reports
+ * are actually asked for, kept out of the per-person tables so it can be charted or pasted
+ * into a monthly summary on its own.
+ */
+export function loginMonthSheet(rows: AttendanceDay[]): XlsxSheet {
+  const months = tallyByMonth(rows)
+  return {
+    name: 'Late Logins by Month',
+    head: ['Month', 'Operational days', 'On-time logins', 'Late logins', 'Late by (min)'],
+    formats: ['text', 'integer', 'integer', 'integer', 'integer'],
+    rows: months.map((m) => [m.label, m.days, m.onTime, m.late, m.lateMin]),
+    red: (row, col) => col >= 3 && (months[row]?.late ?? 0) > 0,
+    foot: [
+      'TOTAL',
+      months.reduce((s, m) => s + m.days, 0),
+      months.reduce((s, m) => s + m.onTime, 0),
+      months.reduce((s, m) => s + m.late, 0),
+      months.reduce((s, m) => s + m.lateMin, 0),
+    ],
   }
 }

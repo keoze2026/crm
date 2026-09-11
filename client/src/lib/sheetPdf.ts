@@ -5,8 +5,8 @@ import type {
   StaffAttendanceRow, StaffLeave, StaffMember, StaffSalary,
 } from '../types'
 import {
-  clockLabel, earlyBy, gapLabel, hoursLabel, lateBy, netHours, punctualityOf, shortDay,
-  staffStatus, tallyPunctuality,
+  clockLabel, earlyBy, emptyLoginTally, gapLabel, hoursLabel, lateBy, netHours, punctualityOf,
+  shortDay, staffStatus, sumLoginTallies, tallyPunctuality, type LoginTally,
 } from './staff'
 
 /**
@@ -26,6 +26,10 @@ const BAND: [number, number, number] = [191, 222, 235]
 const INK: [number, number, number] = [15, 23, 42]
 const WHITE: [number, number, number] = [255, 255, 255]
 const MUTED: [number, number, number] = [100, 116, 139]
+const RED: [number, number, number] = [185, 28, 28]
+const ROSE: [number, number, number] = [255, 228, 230]
+const PALE_RED: [number, number, number] = [254, 226, 226]
+const GREEN: [number, number, number] = [4, 120, 87]
 const M = 40
 
 const baseStyles: Partial<Styles> = {
@@ -49,6 +53,46 @@ function drawHeader(doc: jsPDF, title: string, subtitle: string): number {
   if (subtitle !== '') doc.text(subtitle, M, 62)
   doc.text(`Generated ${new Date().toLocaleString()}`, pageW - M, 62, { align: 'right' })
   return 78
+}
+
+/**
+ * A strip of KPI tiles under a sheet's title — the scorecards the screen shows above the
+ * same table, printed so a sheet handed round answers "how many late logins?" on its face.
+ */
+function drawScores(
+  doc: jsPDF,
+  scores: { label: string; value: string; sub?: string; tone?: 'red' | 'green' }[],
+  y: number,
+): number {
+  const pageW = doc.internal.pageSize.getWidth()
+  const gap = 8
+  const w = (pageW - 2 * M - gap * (scores.length - 1)) / scores.length
+  const h = 42
+
+  scores.forEach((s, i) => {
+    const x = M + i * (w + gap)
+    doc.setFillColor(...(s.tone === 'red' ? PALE_RED : CYAN))
+    doc.roundedRect(x, y, w, h, 4, 4, 'F')
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor(...MUTED)
+    doc.text(s.label.toUpperCase(), x + 8, y + 13)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(13)
+    doc.setTextColor(...(s.tone === 'red' ? RED : s.tone === 'green' ? GREEN : NAVY))
+    doc.text(s.value, x + 8, y + 29)
+
+    if (s.sub) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7)
+      doc.setTextColor(...MUTED)
+      doc.text(s.sub, x + 8, y + 38)
+    }
+  })
+
+  return y + h + 14
 }
 
 /** A full-width navy band naming the department a run of rows belongs to. */
@@ -285,7 +329,12 @@ export function buildStaffPdf(staff: StaffMember[]): jsPDF {
  * one-word verdict the screen shows, so a printed sheet reads down the same column.
  */
 export function buildStaffAttendancePdf(
-  staff: StaffMember[], rows: StaffAttendanceRow[], dateLabel: string,
+  staff: StaffMember[],
+  rows: StaffAttendanceRow[],
+  dateLabel: string,
+  /** Each person's late / on-time logins over the month the day falls in, by staff id. */
+  monthTallies: Map<number, LoginTally> = new Map(),
+  monthLabel = '',
 ): jsPDF {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
   const byStaff = new Map(rows.map((r) => [r.staff_id, r]))
@@ -295,7 +344,21 @@ export function buildStaffAttendancePdf(
     return [p.id, punctualityOf(row?.login_at ?? null, row?.logout_at ?? null, p.expected_login, p.expected_logout)]
   }))
   const tally = tallyPunctuality([...flags.values()])
-  const y = drawHeader(
+
+  // How late each person was on the day being printed — read once, used by the summary
+  // line, the LOGIN column's red fill and the list of names under the scorecards.
+  const lateToday = new Map(staff.map((p) => {
+    const at = byStaff.get(p.id)?.login_at ?? null
+    return [p.id, at === null ? null : lateBy(at, p.expected_login)]
+  }))
+  const lateNames = staff
+    .filter((p) => (lateToday.get(p.id) ?? 0) > 0)
+    .sort((a, b) => (lateToday.get(b.id) ?? 0) - (lateToday.get(a.id) ?? 0))
+
+  const month = sumLoginTallies(monthTallies.values())
+  const monthLateStaff = [...monthTallies.values()].filter((t) => t.late > 0).length
+
+  const header = drawHeader(
     doc,
     'ATTENDANCE',
     `${dateLabel} · ${present} of ${staff.length} logged in`
@@ -304,6 +367,48 @@ export function buildStaffAttendancePdf(
         : ''),
   )
 
+  // The scorecards: the day's late logins first, then the month behind them, because a
+  // late morning is only worth acting on once you know whether it is the first or the sixth.
+  let y = drawScores(doc, [
+    { label: `Late logins · ${dateLabel}`, value: String(lateNames.length), sub: `of ${present} logged in`, tone: 'red' },
+    {
+      label: `On-time logins · ${dateLabel}`,
+      value: String(present - lateNames.length),
+      sub: `of ${present} logged in`,
+      tone: 'green',
+    },
+    {
+      label: monthLabel ? `Late logins · ${monthLabel}` : 'Late logins this month',
+      value: String(month.late),
+      sub: `of ${month.judged} logins · ${gapLabel(month.lateMin)} lost`,
+      tone: 'red',
+    },
+    {
+      label: monthLabel ? `On-time logins · ${monthLabel}` : 'On-time logins this month',
+      value: String(month.onTime),
+      sub: `of ${month.judged} logins`,
+      tone: 'green',
+    },
+    {
+      label: 'Staff late this month',
+      value: String(monthLateStaff),
+      sub: `of ${staff.length} on the roster`,
+    },
+  ], header)
+
+  // Who, by name — the same strip that sits above the sheet on screen. It wraps, so the
+  // table below starts from however many lines the names actually took.
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(...(lateNames.length > 0 ? RED : GREEN))
+  const lateLine = lateNames.length === 0
+    ? `Late in on ${dateLabel}: nobody`
+    : `Late in on ${dateLabel}: `
+      + lateNames.map((p) => `${p.name} (${gapLabel(lateToday.get(p.id) as number)})`).join(',  ')
+  const lateLines: string[] = doc.splitTextToSize(lateLine, doc.internal.pageSize.getWidth() - 2 * M)
+  doc.text(lateLines, M, y)
+  y += 10 * lateLines.length + 8
+
   /** "9:07 AM (7m late)" — the time, and only where it matters how far off it was. */
   const marks = (at: string | null, off: number | null, word: string): string =>
     off !== null && off > 0 ? `${clockLabel(at)} (${gapLabel(off)} ${word})` : clockLabel(at)
@@ -311,15 +416,21 @@ export function buildStaffAttendancePdf(
   autoTable(doc, {
     startY: y,
     theme: 'grid',
-    head: [['SR. NO', 'NAME', 'DEPARTMENT', 'LOGIN', 'LOGOUT', 'BREAK', 'HOURS', 'FLAG', 'STATUS', 'SOURCE']],
+    head: [[
+      'SR. NO', 'NAME', 'DEPARTMENT', 'LOGIN', 'LOGOUT',
+      monthLabel ? `LATE LOGINS\n${monthLabel.toUpperCase()}` : 'LATE LOGINS\nTHIS MONTH',
+      'BREAK', 'HOURS', 'FLAG', 'STATUS', 'SOURCE',
+    ]],
     body: staff.map((person, i) => {
       const row = byStaff.get(person.id) ?? null
+      const t = monthTallies.get(person.id) ?? emptyLoginTally()
       return [
         String(i + 1),
         person.name,
         person.departments.map((d) => d.name).join(', '),
         marks(row?.login_at ?? null, lateBy(row?.login_at ?? null, person.expected_login), 'late'),
         marks(row?.logout_at ?? null, earlyBy(row?.logout_at ?? null, person.expected_logout), 'early'),
+        t.judged === 0 ? '—' : `${t.late}/${t.judged}`,
         row ? `${row.break_min}m` : '—',
         // The same calculation the sheet shows, from the same clock times, so a printed
         // day always matches the screen it was printed from.
@@ -329,29 +440,51 @@ export function buildStaffAttendancePdf(
         row === null ? '—' : row.source === 'manual' ? 'Keyed in' : row.edited ? 'Corrected' : 'Fetched',
       ]
     }),
-    styles: baseStyles,
+    styles: { ...baseStyles, fontSize: 8, cellPadding: 4 },
     headStyles: navyHead,
     bodyStyles: { fillColor: CYAN },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 44, fillColor: BAND, fontStyle: 'bold' },
-      1: { cellWidth: 104, fontStyle: 'bold' },
+      0: { halign: 'center', cellWidth: 34, fillColor: BAND, fontStyle: 'bold' },
+      1: { cellWidth: 96, fontStyle: 'bold' },
       2: { halign: 'left' },
-      3: { halign: 'center', cellWidth: 84 },
-      4: { halign: 'center', cellWidth: 84 },
-      5: { halign: 'center', cellWidth: 42 },
-      6: { halign: 'center', cellWidth: 48, fontStyle: 'bold' },
-      7: { halign: 'center', cellWidth: 78, fontStyle: 'bold' },
-      8: { halign: 'center', cellWidth: 60 },
-      9: { halign: 'center', cellWidth: 58 },
+      3: { halign: 'center', cellWidth: 80 },
+      4: { halign: 'center', cellWidth: 80 },
+      5: { halign: 'center', cellWidth: 56, fontStyle: 'bold' },
+      6: { halign: 'center', cellWidth: 36 },
+      7: { halign: 'center', cellWidth: 42, fontStyle: 'bold' },
+      8: { halign: 'center', cellWidth: 72, fontStyle: 'bold' },
+      9: { halign: 'center', cellWidth: 54 },
+      10: { halign: 'center', cellWidth: 52 },
     },
-    // The verdict is the column the sheet is scanned down, so it is coloured on paper too:
-    // amber for one mark, red for a day that missed at both ends.
     didParseCell: (data) => {
-      if (data.section !== 'body' || data.column.index !== 7) return
-      const flag = flags.get(staff[data.row.index].id)
-      if (!flag || flag.id === 'on-time') return
-      data.cell.styles.textColor = flag.marks === 2 ? [159, 18, 57] : [146, 64, 14]
-      data.cell.styles.fillColor = flag.marks === 2 ? [255, 228, 230] : [254, 243, 199]
+      if (data.section !== 'body') return
+      const person = staff[data.row.index]
+      if (!person) return
+
+      // A late login is printed red on its own tint in BOTH the day's login cell and the
+      // month's count — the two questions a supervisor reading this page is asking.
+      if (data.column.index === 3 && (lateToday.get(person.id) ?? 0) > 0) {
+        data.cell.styles.textColor = RED
+        data.cell.styles.fontStyle = 'bold'
+        data.cell.styles.fillColor = ROSE
+      }
+      if (data.column.index === 5) {
+        const t = monthTallies.get(person.id) ?? emptyLoginTally()
+        if (t.late > 0) {
+          data.cell.styles.textColor = RED
+          data.cell.styles.fillColor = ROSE
+        } else if (t.judged > 0) {
+          data.cell.styles.textColor = GREEN
+        }
+      }
+      // The verdict is the column the sheet is scanned down, so it is coloured on paper
+      // too: amber for one mark, red for a day that missed at both ends.
+      if (data.column.index === 8) {
+        const flag = flags.get(person.id)
+        if (!flag || flag.id === 'on-time') return
+        data.cell.styles.textColor = flag.marks === 2 ? [159, 18, 57] : [146, 64, 14]
+        data.cell.styles.fillColor = flag.marks === 2 ? ROSE : [254, 243, 199]
+      }
     },
     margin: { left: M, right: M },
   })

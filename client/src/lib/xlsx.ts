@@ -17,6 +17,12 @@ export interface XlsxSheet {
   foot?: XlsxValue[]
   /** Per-column number format (index → format). Defaults to text/auto. */
   formats?: XlsxFormat[]
+  /**
+   * Which body cells to print in red on a pale red fill — the same emphasis the PDF
+   * exports give a late login, so a downloaded sheet is read the same way as a printed
+   * one. Indices are into `rows`, zero-based; the head and foot are never marked.
+   */
+  red?: (row: number, col: number) => boolean
 }
 
 const enc = new TextEncoder()
@@ -64,14 +70,16 @@ function sheetName(name: string, i: number): string {
 }
 
 /* ── cell styles ───────────────────────────────────────────────────────────────
-   0 default | 1 header | 2 currency | 3 integer | 4 foot | 5 foot$ | 6 foot int */
-function styleFor(fmt: XlsxFormat | undefined, foot: boolean): number {
+   0 default | 1 header | 2 currency | 3 integer | 4 foot | 5 foot$ | 6 foot int
+   7 red | 8 red int | 9 red currency */
+function styleFor(fmt: XlsxFormat | undefined, foot: boolean, red = false): number {
   if (foot) return fmt === 'currency' ? 5 : fmt === 'integer' ? 6 : 4
+  if (red) return fmt === 'currency' ? 9 : fmt === 'integer' ? 8 : 7
   return fmt === 'currency' ? 2 : fmt === 'integer' ? 3 : 0
 }
 
-function cell(ref: string, value: XlsxValue, fmt: XlsxFormat | undefined, foot: boolean): string {
-  const s = styleFor(fmt, foot)
+function cell(ref: string, value: XlsxValue, fmt: XlsxFormat | undefined, foot: boolean, red = false): string {
+  const s = styleFor(fmt, foot, red)
   if (typeof value === 'number' && Number.isFinite(value)) {
     return `<c r="${ref}" s="${s}"><v>${value}</v></c>`
   }
@@ -80,12 +88,15 @@ function cell(ref: string, value: XlsxValue, fmt: XlsxFormat | undefined, foot: 
   return `<c r="${ref}" s="${s}" t="inlineStr"><is><t xml:space="preserve">${esc(text)}</t></is></c>`
 }
 
-function rowXml(r: number, values: XlsxValue[], formats: XlsxFormat[], mode: 'head' | 'body' | 'foot'): string {
+function rowXml(
+  r: number, values: XlsxValue[], formats: XlsxFormat[], mode: 'head' | 'body' | 'foot',
+  red?: (col: number) => boolean,
+): string {
   const cells = values.map((v, c) => {
     if (mode === 'head') {
       return `<c r="${colRef(c)}${r}" s="1" t="inlineStr"><is><t xml:space="preserve">${esc(String(v ?? ''))}</t></is></c>`
     }
-    return cell(`${colRef(c)}${r}`, v, formats[c], mode === 'foot')
+    return cell(`${colRef(c)}${r}`, v, formats[c], mode === 'foot', mode === 'body' && red?.(c) === true)
   })
   return `<row r="${r}">${cells.join('')}</row>`
 }
@@ -102,9 +113,13 @@ function sheetXml(sheet: XlsxSheet): string {
     return `<col min="${c + 1}" max="${c + 1}" width="${w}" customWidth="1"/>`
   }).join('')
 
+  const red = sheet.red
   let body = rowXml(1, sheet.head, formats, 'head')
   let r = 2
-  for (const row of sheet.rows) { body += rowXml(r, row, formats, 'body'); r++ }
+  for (const [i, row] of sheet.rows.entries()) {
+    body += rowXml(r, row, formats, 'body', red && ((c) => red(i, c)))
+    r++
+  }
   if (sheet.foot) body += rowXml(r, sheet.foot, formats, 'foot')
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
@@ -118,12 +133,14 @@ const STYLES =
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
   `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
   `<numFmts count="2"><numFmt numFmtId="164" formatCode="&quot;$&quot;#,##0.00"/><numFmt numFmtId="165" formatCode="#,##0"/></numFmts>` +
-  `<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts>` +
-  `<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>` +
-  `<fill><patternFill patternType="solid"><fgColor rgb="FF1A3654"/><bgColor indexed="64"/></patternFill></fill></fills>` +
+  `<fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>` +
+  `<font><b/><sz val="11"/><color rgb="FFB91C1C"/><name val="Calibri"/></font></fonts>` +
+  `<fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>` +
+  `<fill><patternFill patternType="solid"><fgColor rgb="FF1A3654"/><bgColor indexed="64"/></patternFill></fill>` +
+  `<fill><patternFill patternType="solid"><fgColor rgb="FFFFE4E6"/><bgColor indexed="64"/></patternFill></fill></fills>` +
   `<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>` +
   `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>` +
-  `<cellXfs count="7">` +
+  `<cellXfs count="10">` +
   `<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>` +
   `<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center"/></xf>` +
   `<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>` +
@@ -131,6 +148,9 @@ const STYLES =
   `<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>` +
   `<xf numFmtId="164" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyNumberFormat="1"/>` +
   `<xf numFmtId="165" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyNumberFormat="1"/>` +
+  `<xf numFmtId="0" fontId="2" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"/>` +
+  `<xf numFmtId="165" fontId="2" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1" applyNumberFormat="1"/>` +
+  `<xf numFmtId="164" fontId="2" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1" applyNumberFormat="1"/>` +
   `</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`
 
 const ROOT_RELS =
