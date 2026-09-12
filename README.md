@@ -97,6 +97,13 @@ reports everything as hand-keyed. `staff.attendance_user_id` is the link, resolv
 from the person's **name** (the only thing the two systems share) and never picked
 in the UI; see MAINTENANCE.md § *Staff ↔ check-in bot* when a name won't match.
 
+**Breaks are read the bot's way.** `duration_min` is what the person *said* ("taking 30") and
+is what the 60-minute allowance is judged on. `returned_at` is when they posted "I'm back".
+From those the app derives, exactly as the bot does and without storing any of it: minutes
+actually away, a **late return** (back more than stated + 10 min grace), and **Out till EOD**
+(no return by the first 07:00 after the break started). The grace and cutoff are constants in
+`AttendanceController` and must match the bot's `BREAK_GRACE_MIN` / `BREAK_EOD_CUTOFF`.
+
 A `staff_attendance` row for a day the bot recorded is an **override that replaces
 that day** — login, logout, break and status all come from it, and deleting it
 restores the bot's record untouched. That is why both the Staff and Attendance
@@ -244,10 +251,12 @@ POST   /api/vendor-payments   PUT /api/vendor-payments/{id}   DELETE /api/vendor
 GET    /api/attendance/staff                  # the bot's roster (read-only)
 GET    /api/attendance/roster?date            # one day, with expected_login/logout + late_min/early_min
 GET    /api/attendance/live                   # who is checked in right now
-GET    /api/attendance/days?from&to&user_id
+GET    /api/attendance/on-break               # who is out on a break right now
+GET    /api/attendance/days?from&to&user_id   # rows carry late_return_count/_min, out_till_eod_count, on_break
 GET    /api/attendance/summary?from&to
-GET    /api/attendance/breaks?user_id&date    # -> {..., overridden} when a break was corrected
-GET    /api/attendance/exceptions?type=missing_logout|over_break|late&from&to
+GET    /api/attendance/breaks?user_id&date    # each break: returned_at, actual_min, late_min, still_out, out_till_eod
+                                              #   -> {..., overridden} when the day's break total was corrected
+GET    /api/attendance/exceptions?type=missing_logout|over_break|late|late_return&from&to
 
 GET    /api/staff                POST /api/staff {names[], department_ids[]}
 PUT    /api/staff/{id}           # name, status, department_ids (the complete set),
@@ -291,7 +300,9 @@ DELETE /api/audit-logs/{id}        DELETE /api/audit-logs        (clear filtered
 
 GET    /api/admin/users            POST /api/admin/users         (-> enrolment link)
 PATCH  /api/admin/users/{id}       DELETE /api/admin/users/{id}  (hard delete)
-POST   /api/admin/users/{id}/reset-totp
+POST   /api/admin/users/{id}/reset-totp       # lost device: wipes the authenticator, new link
+POST   /api/admin/users/{id}/enroll-link      # pending only: new link, old one stops working (409 once enrolled)
+POST   /api/admin/users/enroll-links          # new links for every active pending account at once
 ```
 
 ## Project layout

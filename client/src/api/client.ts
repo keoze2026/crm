@@ -17,6 +17,7 @@ import type {
   AttendanceRoster,
   AttendanceDay,
   AttendanceBreaks,
+  AttendanceOnBreak,
   AttendanceExceptions,
   AuthUser,
   EnrollInfo,
@@ -159,13 +160,15 @@ export const api = {
     request<AttendanceRoster>(`/attendance/roster${qs({ date })}`),
   attendanceLive: () =>
     request<AttendanceDay[]>('/attendance/live'),
+  attendanceOnBreak: () =>
+    request<AttendanceOnBreak[]>('/attendance/on-break'),
   attendanceDays: (params: { from?: string; to?: string; user_id?: string }) =>
     request<{ timezone: string; breakAllowanceMin: number; rows: AttendanceDay[] }>(`/attendance/days${qs(params)}`),
   attendanceSummary: (params: { from?: string; to?: string }) =>
     request<{ user_id: string; staff_name: string | null; days_present: number; days_complete: number; total_hours: number; first_day: string; last_day: string }[]>(`/attendance/summary${qs(params)}`),
   attendanceBreaks: (userId: string, date: string) =>
     request<AttendanceBreaks>(`/attendance/breaks${qs({ user_id: userId, date })}`),
-  attendanceExceptions: (type: 'missing_logout' | 'over_break' | 'late', from?: string, to?: string) =>
+  attendanceExceptions: (type: 'missing_logout' | 'over_break' | 'late' | 'late_return', from?: string, to?: string) =>
     request<AttendanceExceptions>(`/attendance/exceptions${qs({ type, from, to })}`),
 
   // Auth
@@ -230,6 +233,15 @@ export const api = {
     request<ManagedUser>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   resetUserTotp: (id: number) =>
     request<{ reset: boolean; enroll: EnrollLink }>(`/admin/users/${id}/reset-totp`, { method: 'POST' }),
+  // A new link for an account still pending setup. Refused (409) once they have enrolled, so
+  // it can't wipe a working authenticator the way resetUserTotp does.
+  refreshEnrollLink: (id: number) =>
+    request<{ enroll: EnrollLink }>(`/admin/users/${id}/enroll-link`, { method: 'POST' }),
+  // New links for every active account still pending setup; the links sent before stop working.
+  refreshPendingEnrollLinks: () =>
+    request<{ links: (Pick<ManagedUser, 'id' | 'email' | 'name' | 'username'> & { enroll: EnrollLink })[] }>(
+      '/admin/users/enroll-links', { method: 'POST' },
+    ),
   deleteUser: (id: number) =>
     request<{ deleted: boolean }>(`/admin/users/${id}`, { method: 'DELETE' }),
 

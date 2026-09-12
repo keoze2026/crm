@@ -173,6 +173,7 @@ $attendance = new AttendanceController();
 $router->get('/attendance/staff',      fn () => $attendance->staff());
 $router->get('/attendance/roster',     fn () => $attendance->roster());
 $router->get('/attendance/live',       fn () => $attendance->live());
+$router->get('/attendance/on-break',   fn () => $attendance->onBreak());
 $router->get('/attendance/days',       fn () => $attendance->days());
 $router->get('/attendance/summary',    fn () => $attendance->summary());
 $router->get('/attendance/breaks',     fn () => $attendance->breaks());
@@ -211,6 +212,8 @@ if ($authEnabled) {
     $router->post('/admin/users',                 fn () => $users->store());
     $router->patch('/admin/users/{id}',           fn ($p) => $users->update($p));
     $router->post('/admin/users/{id}/reset-totp', fn ($p) => $users->resetTotp($p));
+    $router->post('/admin/users/{id}/enroll-link', fn ($p) => $users->refreshEnrollLink($p));
+    $router->post('/admin/users/enroll-links',    fn () => $users->refreshPendingEnrollLinks());
     $router->delete('/admin/users/{id}',          fn ($p) => $users->destroy($p));
 
     // Authenticate the request and enforce access before dispatch. The audit trail is

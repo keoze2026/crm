@@ -18,9 +18,10 @@ declare(strict_types=1);
  *   php database/seed_attendance_dev.php --drop   # remove the stand-ins again
  *
  * Days are generated around today in the org timezone, weekends skipped, with a couple of
- * deliberate oddities to exercise the page: one missing logout, and one person over the
+ * deliberate oddities to exercise the page: one missing logout, one person over the
  * 60-minute break allowance so the over-break exception and the break correction have
- * something to act on.
+ * something to act on, and every state a break's return can be in — back in time, back late,
+ * out on a break right now, and never back ("Out till EOD").
  */
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -66,13 +67,27 @@ CREATE TABLE IF NOT EXISTS attendance_days (
     logout_stated TEXT
 );
 CREATE TABLE IF NOT EXISTS attendance_breaks (
+    id           BIGSERIAL PRIMARY KEY,
     user_id      BIGINT NOT NULL,
     work_date    DATE   NOT NULL,
-    taken_at     TIMESTAMPTZ,
+    staff_name   TEXT,
+    taken_at     TIMESTAMPTZ NOT NULL,
+    returned_at  TIMESTAMPTZ,
     duration_min INTEGER NOT NULL DEFAULT 0,
     urgent       BOOLEAN NOT NULL DEFAULT false,
-    raw          TEXT
+    raw          TEXT,
+    group_id     TEXT,
+    message_id   BIGINT,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- A stand-in made before the bot's migration 007 lacks the return columns; bring it level.
+ALTER TABLE attendance_breaks
+    ADD COLUMN IF NOT EXISTS id          BIGSERIAL,
+    ADD COLUMN IF NOT EXISTS staff_name  TEXT,
+    ADD COLUMN IF NOT EXISTS returned_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS group_id    TEXT,
+    ADD COLUMN IF NOT EXISTS message_id  BIGINT,
+    ADD COLUMN IF NOT EXISTS created_at  TIMESTAMPTZ NOT NULL DEFAULT now();
 CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_days_dev ON attendance_days (user_id, work_date);
 SQL);
 
@@ -85,6 +100,10 @@ if ($roster === []) {
 }
 
 $db->exec('TRUNCATE attendance_breaks, attendance_days, attendance_staff');
+// Release the dev accounts from whoever held them last run. The roster's order moves as people
+// are added, so account 900 may now belong to a different row, and one account per person is
+// enforced by a unique index.
+$db->exec("UPDATE staff SET attendance_user_id = NULL WHERE attendance_user_id ~ '^9[0-9][0-9]$'");
 
 $account = $db->prepare(
     'INSERT INTO attendance_staff (user_id, username, staff_name) VALUES (:id, :username, :name)'
@@ -98,13 +117,18 @@ $day = $db->prepare(
      VALUES (:id, :name, :username, :date, :login, :logout)'
 );
 $break = $db->prepare(
-    'INSERT INTO attendance_breaks (user_id, work_date, taken_at, duration_min, urgent, raw)
-     VALUES (:id, :date, :taken, :mins, false, :raw)'
+    'INSERT INTO attendance_breaks (user_id, work_date, staff_name, taken_at, returned_at, duration_min, urgent, raw)
+     VALUES (:id, :date, :name, :taken, :returned, :mins, :urgent, :raw)'
 );
 
 $tz    = new DateTimeZone('America/New_York');
 $today = new DateTimeImmutable('now', $tz);
 $days  = 0;
+
+// Who plays which break state. Clamped to the roster so a short one still gets them all.
+$lateBack  = min(2, \count($roster) - 1);   // always back 25 minutes past what they said
+$abandoner = min(3, \count($roster) - 1);   // one past day with a break nobody came back from
+$abandoned = false;
 
 foreach ($roster as $i => $person) {
     $userId = 900 + $i;                       // a range no real account will collide with
@@ -142,12 +166,30 @@ foreach ($roster as $i => $person) {
         $mins  = $over ? [45, 45] : [30, 15];
         $taken = $login->add(new DateInterval('PT3H'));
         foreach ($mins as $n => $duration) {
+            $start    = $taken->add(new DateInterval('PT' . ($n * 3) . 'H'));
+            $returned = $start->add(new DateInterval('PT' . ($i === $lateBack ? $duration + 25 : $duration - 2) . 'M'));
+            $urgent   = $i === $abandoner && $n === 1;
+
+            // Today's still-checked-in person is out on a break right now.
+            if ($stillIn && $n === 1) {
+                $start    = $today->sub(new DateInterval('PT20M'));
+                $returned = null;
+            }
+            // ...and one past day has a break nobody came back from: "Out till EOD".
+            if (!$abandoned && $i === $abandoner && $back > 1 && $n === 1) {
+                $returned  = null;
+                $abandoned = true;
+            }
+
             $break->execute([
-                ':id'    => $userId,
-                ':date'  => $date->format('Y-m-d'),
-                ':taken' => $taken->add(new DateInterval('PT' . ($n * 3) . 'H'))->format(DateTimeInterface::ATOM),
-                ':mins'  => $duration,
-                ':raw'   => $n === 0 ? 'lunch' : 'tea',
+                ':id'       => $userId,
+                ':date'     => $date->format('Y-m-d'),
+                ':name'     => $person['name'],
+                ':taken'    => $start->format(DateTimeInterface::ATOM),
+                ':returned' => $returned?->format(DateTimeInterface::ATOM),
+                ':mins'     => $duration,
+                ':urgent'   => $urgent ? 'true' : 'false',
+                ':raw'      => ($urgent ? 'taking urgent ' : 'taking ') . $duration,
             ]);
         }
     }

@@ -272,6 +272,7 @@ function summarize(row: AuditLog): string {
     create: 'created', update: 'updated', delete: 'deleted', deactivate: 'deactivated',
     login: 'signed in', logout: 'signed out', enrolled: 'set up their authenticator',
     login_failed: 'failed a sign-in', reset_totp: 'reset authenticator for',
+    refresh_enroll_link: 'issued a new enrolment link for', refresh_enroll_links: 'refreshed all pending enrolment links',
     export: 'downloaded', clear: 'cleared',
   }
   const action = past[verb] ?? verb

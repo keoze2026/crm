@@ -24,6 +24,9 @@ function displayNameOf(u: ManagedUser): string {
   return u.name ?? identifierOf(u)
 }
 
+/** A pending account's fresh link, as a bulk refresh hands it back. */
+type RefreshedLink = Pick<ManagedUser, 'id' | 'email' | 'name' | 'username'> & { enroll: EnrollLink }
+
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'admin', label: 'Admins' },
@@ -41,7 +44,9 @@ export default function Users() {
   const presets = useAsync(() => api.accessPresets(), [])
   const [addOpen, setAddOpen] = useState(false)
   const [presetsOpen, setPresetsOpen] = useState(false)
-  const [link, setLink] = useState<{ label: string; enroll: EnrollLink } | null>(null)
+  const [link, setLink] = useState<{ label: string; enroll: EnrollLink; refreshed?: boolean } | null>(null)
+  const [bulkLinks, setBulkLinks] = useState<RefreshedLink[] | null>(null)
+  const [bulkBusy, setBulkBusy] = useState(false)
   const [editing, setEditing] = useState<{ user: ManagedUser; rect: DOMRect } | null>(null)
   const [busyId, setBusyId] = useState<number | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
@@ -52,6 +57,7 @@ export default function Users() {
     total: users.length,
     active: users.filter((u) => u.is_active && u.totp_enabled).length,
     pending: users.filter((u) => u.is_active && !u.totp_enabled).length,
+    expired: users.filter((u) => u.is_active && !u.totp_enabled && !u.enroll_link_active).length,
     admins: users.filter((u) => u.role === 'admin' && u.is_active).length,
   }), [users])
 
@@ -79,6 +85,32 @@ export default function Users() {
       setLink({ label: identifierOf(u), enroll: res.enroll })
       list.reload()
     } finally { setBusyId(null) }
+  }
+
+  // A pending account's link expired or went astray: issue another. Only ask first when the
+  // link they may already hold is still live, since that is the one that stops working.
+  const refreshLink = async (u: ManagedUser) => {
+    if (u.enroll_link_active && !confirm(`Issue a new link for ${identifierOf(u)}? The link sent to them earlier stops working.`)) return
+    setBusyId(u.id)
+    try {
+      const res = await api.refreshEnrollLink(u.id)
+      setLink({ label: identifierOf(u), enroll: res.enroll, refreshed: true })
+      list.reload()
+    } catch (err) {
+      alert((err as Error).message)
+    } finally { setBusyId(null) }
+  }
+
+  const refreshAllPending = async () => {
+    if (!confirm(`Issue new links for all ${stats.pending} pending users? Every link sent to them earlier stops working.`)) return
+    setBulkBusy(true)
+    try {
+      const res = await api.refreshPendingEnrollLinks()
+      setBulkLinks(res.links)
+      list.reload()
+    } catch (err) {
+      alert((err as Error).message)
+    } finally { setBulkBusy(false) }
   }
 
   const setActive = async (u: ManagedUser, is_active: boolean) => {
@@ -118,14 +150,22 @@ export default function Users() {
           icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /></svg>} />
         <StatTile label="Active" value={stats.active} hint="Authenticator set up"
           icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>} />
-        <StatTile label="Pending setup" value={stats.pending} hint="Awaiting enrolment"
+        <StatTile label="Pending setup" value={stats.pending}
+          hint={stats.expired > 0 ? `${stats.expired} link${stats.expired === 1 ? '' : 's'} expired` : 'Awaiting enrolment'}
           icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></svg>} />
         <StatTile label="Admins" value={stats.admins}
           icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /></svg>} />
       </div>
 
       {/* Filter tabs */}
-      <SegmentedTabs tabs={FILTERS} value={filter} onChange={setFilter} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SegmentedTabs tabs={FILTERS} value={filter} onChange={setFilter} />
+        {stats.pending > 0 && (
+          <Button variant="secondary" size="sm" disabled={bulkBusy} onClick={refreshAllPending}>
+            {bulkBusy && <Spinner className="h-4 w-4 text-slate-800" />} Refresh all pending links ({stats.pending})
+          </Button>
+        )}
+      </div>
 
       <Card className="overflow-hidden">
         {list.loading ? (
@@ -173,7 +213,16 @@ export default function Users() {
                     <td className="px-5 py-3">
                       {!u.is_active ? <Badge color="red">Deactivated</Badge>
                         : u.totp_enabled ? <Badge color="green">Active</Badge>
-                        : <Badge color="amber">Pending setup</Badge>}
+                        : (
+                          <div className="space-y-0.5">
+                            <Badge color="amber">Pending setup</Badge>
+                            <div className={cx('text-[11px]', u.enroll_link_active ? 'text-slate-400' : 'font-medium text-rose-600')}>
+                              {u.enroll_link_active && u.enroll_expires_at
+                                ? `Link valid until ${new Date(u.enroll_expires_at).toLocaleString()}`
+                                : 'Link expired, refresh it'}
+                            </div>
+                          </div>
+                        )}
                     </td>
                     <td className="whitespace-nowrap px-5 py-3 text-slate-500">
                       {u.last_login_at ? new Date(u.last_login_at).toLocaleString() : '—'}
@@ -182,10 +231,17 @@ export default function Users() {
                       <div className="flex items-center justify-end gap-1">
                         {u.is_active ? (
                           <>
-                            <Button variant="secondary" size="sm" disabled={busyId === u.id}
-                              onClick={() => resetTotp(u)}>
-                              {u.totp_enabled ? 'Reset authenticator' : 'New link'}
-                            </Button>
+                            {u.totp_enabled ? (
+                              <Button variant="secondary" size="sm" disabled={busyId === u.id}
+                                onClick={() => resetTotp(u)}>
+                                Reset authenticator
+                              </Button>
+                            ) : (
+                              <Button variant="secondary" size="sm" disabled={busyId === u.id}
+                                onClick={() => refreshLink(u)}>
+                                Refresh link
+                              </Button>
+                            )}
                             <Button variant="secondary" size="sm" disabled={busyId === u.id}
                               onClick={() => setActive(u, false)}>
                               Deactivate
@@ -236,6 +292,7 @@ export default function Users() {
         />
       )}
       {link && <EnrollLinkPopup info={link} onClose={() => setLink(null)} />}
+      {bulkLinks && <BulkEnrollLinksPopup links={bulkLinks} onClose={() => setBulkLinks(null)} />}
     </div>
   )
 }
@@ -796,7 +853,7 @@ function IconButton({ title, onClick, disabled, danger, children }: {
 
 // ─── Enrolment-link popup (compact, centred, no screen blur) ────────────────────
 
-function EnrollLinkPopup({ info, onClose }: { info: { label: string; enroll: EnrollLink }; onClose: () => void }) {
+function EnrollLinkPopup({ info, onClose }: { info: { label: string; enroll: EnrollLink; refreshed?: boolean }; onClose: () => void }) {
   const [copied, setCopied] = useState(false)
 
   const url = `${window.location.origin}${info.enroll.path}`
@@ -818,7 +875,9 @@ function EnrollLinkPopup({ info, onClose }: { info: { label: string; enroll: Enr
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900">User added — send them this link</h3>
+            <h3 className="text-sm font-semibold text-slate-900">
+              {info.refreshed ? 'New link issued — send them this one' : 'User added — send them this link'}
+            </h3>
             <p className="mt-0.5 truncate text-xs text-slate-500">{info.label}</p>
           </div>
           <button onClick={onClose} aria-label="Close" className="-mr-1 -mt-1 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
@@ -827,7 +886,10 @@ function EnrollLinkPopup({ info, onClose }: { info: { label: string; enroll: Enr
         </div>
 
         <ol className="mb-3 list-decimal space-y-1 pl-4 text-xs text-slate-600 marker:text-slate-400">
-          <li>Send this link to the user (it's one-time, valid until {expires}).</li>
+          <li>
+            Send this link to the user (it's one-time, valid until {expires}).
+            {info.refreshed && ' Any link sent to them before no longer works.'}
+          </li>
           <li>They open it — the <span className="font-medium">Set up sign-in</span> page appears.</li>
           <li>On that page they scan the QR with any authenticator app (Google Authenticator,
             Authy, Microsoft…) or type the key, then enter the 6-digit code.</li>
@@ -846,6 +908,87 @@ function EnrollLinkPopup({ info, onClose }: { info: { label: string; enroll: Enr
         <p className="mt-2 text-[11px] text-slate-400">
           Tip: the QR to scan with an authenticator app is on the setup page the link opens — not here.
         </p>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Every pending account's fresh link at once, for handing a batch out together. "Copy all" puts
+ * one "name<TAB>link" line per person on the clipboard, so it pastes straight into a two-column
+ * table in Word or a spreadsheet.
+ */
+function BulkEnrollLinksPopup({ links, onClose }: { links: RefreshedLink[]; onClose: () => void }) {
+  const [copied, setCopied] = useState<number | 'all' | null>(null)
+
+  const urlOf = (l: RefreshedLink) => `${window.location.origin}${l.enroll.path}`
+  const nameOf = (l: RefreshedLink) => l.name ?? l.email ?? l.username ?? `user #${l.id}`
+  const expires = links[0] ? new Date(links[0].enroll.expires_at).toLocaleString() : ''
+
+  const copy = async (text: string, which: number | 'all') => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(which)
+      setTimeout(() => setCopied(null), 1800)
+    } catch { /* clipboard blocked — the fields are selectable as a fallback */ }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4" onClick={onClose}>
+      <div
+        className="animate-fade-in-up flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-900/25"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">
+              {links.length === 0
+                ? 'Nobody is pending setup'
+                : `${links.length} new link${links.length === 1 ? '' : 's'} — send each person their own`}
+            </h3>
+            {links.length > 0 && (
+              <p className="mt-0.5 text-xs text-slate-500">
+                One-time, valid until {expires}. Links sent before this no longer work.
+              </p>
+            )}
+          </div>
+          <button onClick={onClose} aria-label="Close" className="-mr-1 -mt-1 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        {links.length > 0 && (
+          <>
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+              {links.map((l) => (
+                <div key={l.id} className="flex items-center gap-2">
+                  <span className="w-28 shrink-0 truncate text-xs font-medium text-slate-700 sm:w-40" title={nameOf(l)}>
+                    {nameOf(l)}
+                  </span>
+                  <input
+                    readOnly
+                    value={urlOf(l)}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 font-mono text-[11px] text-slate-700"
+                  />
+                  <Button type="button" variant="secondary" size="sm" onClick={() => copy(urlOf(l), l.id)}>
+                    {copied === l.id ? 'Copied' : 'Copy'}
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+              <p className="text-[11px] text-slate-400">Copy all pastes as name ⇥ link, one person per line.</p>
+              <Button
+                type="button"
+                style={greenBtn}
+                onClick={() => copy(links.map((l) => `${nameOf(l)}\t${urlOf(l)}`).join('\n'), 'all')}
+              >
+                {copied === 'all' ? 'Copied' : 'Copy all'}
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

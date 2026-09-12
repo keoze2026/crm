@@ -257,6 +257,17 @@ export interface AttendanceDay {
   break_detail: string
   over_break_min: number
   /**
+   * What the returns show, from the bot's `returned_at`. `break_min` above is the STATED
+   * minutes the allowance is judged on; these are measured — minutes actually away, breaks
+   * back later than stated + grace (and the minutes past it), breaks never returned from once
+   * the end-of-day cutoff passed, and whether one is running now. Roster and days rows only.
+   */
+  break_actual_min: number
+  late_return_count: number
+  late_return_min: number
+  out_till_eod_count: number
+  on_break: boolean
+  /**
    * The hours this person is expected to keep, kept on the Staff page as "HH:MM". null
    * when no schedule has been set for them — and then nothing of theirs is marked.
    */
@@ -279,8 +290,21 @@ export interface AttendanceRoster {
 }
 
 export interface AttendanceBreakRecord {
+  id: string
   taken_at: string
+  /** null = the bot never saw an "I'm back" — `still_out` or `out_till_eod` says which. */
+  returned_at: string | null
+  /** What they said they would take. A claim, not a measurement. */
   duration_min: number
+  /** Measured: to the return or, with none, to now but never past `eod_at`. */
+  actual_min: number
+  /** Minutes past stated + grace; 0 when back in time. */
+  late_min: number
+  /** Never returned, and the end-of-day cutoff has passed. */
+  out_till_eod: boolean
+  /** Never returned, and the cutoff hasn't passed yet — a break in progress. */
+  still_out: boolean
+  eod_at: string
   urgent: boolean
   raw: string | null
 }
@@ -288,10 +312,33 @@ export interface AttendanceBreakRecord {
 export interface AttendanceBreaks {
   userId: string
   date: string
+  timezone: string
   allowanceMin: number
+  graceMin: number
+  /** "HH:MM" in the org timezone. */
+  eodCutoff: string
+  /** Stated minutes — the corrected figure when `overridden`. */
   totalMin: number
   overMin: number
+  actualMin: number
+  lateMin: number
+  /** The day's break total was corrected on Staff Management; `breaks` stay the bot's own. */
+  overridden: boolean
   breaks: AttendanceBreakRecord[]
+}
+
+/** Someone out on a break right now. */
+export interface AttendanceOnBreak {
+  user_id: string
+  staff_name: string | null
+  username: string | null
+  work_date: string
+  taken_at: string
+  duration_min: number
+  urgent: boolean
+  raw: string | null
+  out_for_min: number
+  late_min: number
 }
 
 export interface AttendanceException {
@@ -302,6 +349,14 @@ export interface AttendanceException {
   local_login?: string
   break_min?: number
   over_min?: number
+  expected_login?: string
+  late_min?: number
+  taken_at?: string
+  returned_at?: string | null
+  duration_min?: number
+  actual_min?: number
+  urgent?: boolean
+  out_till_eod?: boolean
 }
 
 export interface AttendanceExceptions {
@@ -357,6 +412,10 @@ export interface ManagedUser {
   role: Role
   is_active: boolean
   totp_enabled: boolean
+  /** When the current enrolment link stops working; null once enrolled. */
+  enroll_expires_at: string | null
+  /** A link has been issued and hasn't expired — false means a pending user needs a new one. */
+  enroll_link_active: boolean
   /** EFFECTIVE pages: the preset's list while attached, otherwise the account's own. */
   permissions: string[] | null
   /** The account's own list, kept so detaching from a preset can pre-fill the editor. */

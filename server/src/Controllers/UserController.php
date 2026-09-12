@@ -21,6 +21,16 @@ final class UserController
     private const ROLES = ['admin', 'member', 'user'];
     private const ENROLL_TTL_HOURS = 24;
 
+    /**
+     * Swap a still-pending account's enrolment token for a new one. The WHERE is the guard:
+     * an enrolled or deactivated account matches nothing, so it is never touched.
+     */
+    private const REFRESH_PENDING_LINK_SQL =
+        'UPDATE users
+            SET totp_secret = NULL, enroll_token_hash = :hash, enroll_expires_at = :expires,
+                failed_attempts = 0, locked_until = NULL, updated_at = now()
+          WHERE id = :id AND totp_confirmed_at IS NULL AND is_active';
+
     /** GET /admin/users — list all accounts (no secrets). */
     public function index(): void
     {
@@ -33,6 +43,8 @@ final class UserController
                     u.permissions AS own_permissions,
                     u.preset_id, ap.name AS preset_name,
                     (u.totp_confirmed_at IS NOT NULL) AS totp_enabled,
+                    u.enroll_expires_at,
+                    (u.enroll_token_hash IS NOT NULL AND u.enroll_expires_at > now()) AS enroll_link_active,
                     u.last_login_at, u.created_at
              FROM users u
              LEFT JOIN access_presets ap ON ap.id = u.preset_id
@@ -321,6 +333,79 @@ final class UserController
         Http::json(['reset' => true, 'enroll' => $this->enrollPayload($token, $expires)]);
     }
 
+    /**
+     * POST /admin/users/{id}/enroll-link — a fresh enrolment link for an account that hasn't
+     * finished setup: the old link expired, went astray, or was never sent.
+     *
+     * Unlike reset-totp this refuses an account that has already enrolled, so refreshing a link
+     * can never wipe someone's working authenticator. The previous link stops working, and any
+     * setup half-started from it is cleared so that QR can't be confirmed afterwards.
+     */
+    public function refreshEnrollLink(array $params): void
+    {
+        $id = (int) $params['id'];
+        [$token, $hash, $expires] = $this->newEnrollToken();
+
+        $stmt = Database::connection()->prepare(self::REFRESH_PENDING_LINK_SQL);
+        $stmt->execute([':hash' => $hash, ':expires' => $expires, ':id' => $id]);
+        if ($stmt->rowCount() === 0) {
+            $check = Database::connection()->prepare('SELECT is_active FROM users WHERE id = :id');
+            $check->execute([':id' => $id]);
+            $row = $check->fetch();
+            if (!$row) {
+                Http::error('User not found', 404);
+            }
+            if (!$row['is_active']) {
+                Http::error('This account is deactivated. Activate it before issuing a link.', 409);
+            }
+            Http::error('This user has already set up their authenticator. Use Reset authenticator instead.', 409);
+        }
+
+        Audit::record('user.refresh_enroll_link', ['entity_type' => 'user', 'entity_id' => $id, 'status_code' => 200]);
+        Http::json(['enroll' => $this->enrollPayload($token, $expires)]);
+    }
+
+    /**
+     * POST /admin/users/enroll-links — a fresh link for EVERY active account still pending
+     * setup, for handing a batch out together. Each person gets their own token; every pending
+     * link issued before this stops working. Enrolled and deactivated accounts are untouched.
+     */
+    public function refreshPendingEnrollLinks(): void
+    {
+        $db      = Database::connection();
+        $pending = $db->query(
+            'SELECT id, email, name, username FROM users
+              WHERE totp_confirmed_at IS NULL AND is_active
+              ORDER BY lower(COALESCE(name, username, email)), id'
+        )->fetchAll();
+        $update  = $db->prepare(self::REFRESH_PENDING_LINK_SQL);
+
+        $links = [];
+        $db->beginTransaction();
+        foreach ($pending as $u) {
+            [$token, $hash, $expires] = $this->newEnrollToken();
+            $update->execute([':hash' => $hash, ':expires' => $expires, ':id' => $u['id']]);
+            if ($update->rowCount() === 0) {
+                continue; // finished enrolling between the read and the write
+            }
+            $links[] = [
+                'id'       => (int) $u['id'],
+                'email'    => $u['email'],
+                'name'     => $u['name'],
+                'username' => $u['username'],
+                'enroll'   => $this->enrollPayload($token, $expires),
+            ];
+        }
+        $db->commit();
+
+        Audit::record('user.refresh_enroll_links', [
+            'entity_type' => 'user',
+            'details'     => ['count' => \count($links), 'user_ids' => array_column($links, 'id')],
+            'status_code' => 200,
+        ]);
+        Http::json(['links' => $links]);
+    }
+
     /** DELETE /admin/users/{id} — permanently delete the account (sessions cascade). */
     public function destroy(array $params): void
     {
@@ -452,6 +537,9 @@ final class UserController
         $r['id']           = (int) $r['id'];
         $r['is_active']    = (bool) $r['is_active'];
         $r['totp_enabled'] = (bool) $r['totp_enabled'];
+        if (array_key_exists('enroll_link_active', $r)) {
+            $r['enroll_link_active'] = (bool) $r['enroll_link_active'];
+        }
         $r['staff_id']     = isset($r['staff_id']) && $r['staff_id'] !== null ? (int) $r['staff_id'] : null;
         $r['preset_id']    = isset($r['preset_id']) && $r['preset_id'] !== null ? (int) $r['preset_id'] : null;
         if (array_key_exists('own_permissions', $r)) {

@@ -10,9 +10,9 @@ import {
 } from 'recharts'
 import { api, fmtAttendanceTime } from '../api/client'
 import { useAsync } from '../lib/useAsync'
-import type { AttendanceDay, AttendanceStaff } from '../types'
+import type { AttendanceBreakRecord, AttendanceDay, AttendanceOnBreak, AttendanceStaff } from '../types'
 import { PageHeader } from '../components/Layout'
-import { Button, Card, CardHeader, PageLoader, SegmentedTabs, Spinner, cx } from '../components/ui'
+import { Button, Card, CardHeader, Modal, PageLoader, SegmentedTabs, Spinner, cx } from '../components/ui'
 import type { Range } from '../components/DateRange'
 import { fileDateRange } from '../lib/format'
 import {
@@ -230,6 +230,99 @@ function BreakStatusBadge({ overMin }: { overMin: number }) {
   return <span className="inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-700">OK</span>
 }
 
+/**
+ * A break's "Returned" cell in the bot's three states: the time they came back, `Out till
+ * EOD` once the end-of-day cutoff has passed with no return, or still out.
+ */
+function ReturnedCell({ b }: { b: AttendanceBreakRecord }) {
+  if (b.returned_at) return <span className="tabular-nums text-slate-700">{fmtAttendanceTime(b.returned_at)}</span>
+  if (b.out_till_eod) return <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-rose-700">Out till EOD</span>
+  return <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-700">Still out</span>
+}
+
+/**
+ * The day's late returns — how many breaks came back past stated + grace and by how much in
+ * all — with any never returned from called out, since those are the ones to chase.
+ */
+function LateReturnBadge({ row }: { row: AttendanceDay }) {
+  if (row.late_return_count === 0) return <span className="text-xs text-slate-400">—</span>
+  return (
+    <span
+      title={`${row.late_return_count} break${row.late_return_count === 1 ? '' : 's'} back later than stated + grace`}
+      className="inline-flex items-center gap-1 whitespace-nowrap rounded bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700"
+    >
+      {row.late_return_count}× · +{gapLabel(row.late_return_min)}
+      {row.out_till_eod_count > 0 && (
+        <span className="rounded bg-rose-100 px-1 text-[10px] font-bold uppercase">{row.out_till_eod_count} EOD</span>
+      )}
+    </span>
+  )
+}
+
+/**
+ * Every break one person took on one day, as the bot recorded it: what they said, when they
+ * actually came back, and how late that was. The stated minutes are what the allowance is
+ * judged on and the measured ones are what the late flag is, so the two sit side by side.
+ */
+function BreakDetailModal({ row, onClose }: { row: AttendanceDay; onClose: () => void }) {
+  const req = useAsync(() => api.attendanceBreaks(row.user_id, row.work_date), [row.user_id, row.work_date])
+  const d = req.data
+  return (
+    <Modal open onClose={onClose} title={`Breaks · ${labelFor(row)} · ${fullDate(row.work_date)}`}>
+      {req.loading ? (
+        <PageLoader label="" size={40} className="py-6" />
+      ) : req.error ? (
+        <p className="text-sm text-red-600">{req.error}</p>
+      ) : !d || d.breaks.length === 0 ? (
+        <p className="text-sm text-slate-400">No breaks recorded.</p>
+      ) : (
+        <div className="space-y-3">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="py-2 pr-3">Taken</th>
+                  <th className="py-2 pr-3 text-right">Stated</th>
+                  <th className="py-2 pr-3">Returned</th>
+                  <th className="py-2 pr-3 text-right">Actual</th>
+                  <th className="py-2 text-right">Late</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.breaks.map((b) => (
+                  <tr key={b.id} title={b.raw ?? undefined} className="border-b border-slate-100">
+                    <td className="whitespace-nowrap py-2 pr-3 text-xs">
+                      <span className="tabular-nums">{fmtAttendanceTime(b.taken_at)}</span>
+                      {b.urgent && <span className="ml-1.5 rounded bg-amber-50 px-1 text-[10px] font-bold uppercase text-amber-700">urgent</span>}
+                    </td>
+                    <td className="py-2 pr-3 text-right text-xs tabular-nums">{b.duration_min}m</td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-xs"><ReturnedCell b={b} /></td>
+                    <td className="py-2 pr-3 text-right text-xs tabular-nums">{gapLabel(b.actual_min)}</td>
+                    <td className={cx('py-2 text-right text-xs font-medium tabular-nums', b.late_min > 0 ? 'text-rose-600' : 'text-slate-400')}>
+                      {b.late_min > 0 ? `+${gapLabel(b.late_min)}` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-slate-500">
+            Stated <b>{d.totalMin}m</b> of {d.allowanceMin}m allowed
+            {d.overMin > 0 && <span className="text-red-600"> · over by {d.overMin}m</span>}
+            {' '}· actually away <b>{gapLabel(d.actualMin)}</b>. Late means back more than {d.graceMin}m after
+            the stated length; a break nobody returns from stops counting at {clockLabel(d.eodCutoff)}.
+          </p>
+          {d.overridden && (
+            <p className="text-xs text-amber-700">
+              This day's break total was corrected on Staff Management. The breaks above are the bot's own record.
+            </p>
+          )}
+        </div>
+      )}
+    </Modal>
+  )
+}
+
 /** Status derived from raw timestamps — works for /days rows that lack present/still_in. */
 function DayStatus({ row }: { row: AttendanceDay }) {
   if (row.login_at == null) return <span className="text-slate-400 text-xs">—</span>
@@ -399,6 +492,9 @@ function RosterView() {
   const staffReq = useAsync(() => api.attendanceStaff(), [])
   const liveReq = useAsync(() => api.attendanceLive(), [])
   const overBreakReq = useAsync(() => api.attendanceExceptions('over_break', date, date), [date])
+  const onBreakReq = useAsync(() => api.attendanceOnBreak(), [])
+  const lateReturnReq = useAsync(() => api.attendanceExceptions('late_return', date, date), [date])
+  const [breakRow, setBreakRow] = useState<AttendanceDay | null>(null)
 
   const rows = useMemo(() => rosterReq.data?.rows ?? [], [rosterReq.data])
   const onlineIds = useMemo(() => new Set((liveReq.data ?? []).map((m: AttendanceDay) => m.user_id)), [liveReq.data])
@@ -477,6 +573,25 @@ function RosterView() {
             </span>
           ))
         }
+        <span className="mx-2 hidden h-4 w-px bg-slate-200 sm:inline-block" />
+        <span className="mr-2 text-xs font-medium text-slate-500">On a break</span>
+        {(onBreakReq.data ?? []).length === 0
+          ? <span className="text-xs text-slate-400">Nobody right now</span>
+          : (onBreakReq.data ?? []).map((m: AttendanceOnBreak) => (
+            <span
+              key={`${m.user_id}-${m.taken_at}`}
+              title={`Took ${m.duration_min}m at ${fmtAttendanceTime(m.taken_at)}${m.late_min > 0 ? ` — ${gapLabel(m.late_min)} past the grace` : ''}`}
+              className={cx(
+                'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium',
+                m.late_min > 0 ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700',
+              )}
+            >
+              <span className={cx('h-1.5 w-1.5 rounded-full', m.late_min > 0 ? 'bg-rose-500' : 'bg-amber-500')} />
+              {m.staff_name || m.username || m.user_id}
+              <span className="tabular-nums opacity-70">{gapLabel(m.out_for_min)} / {m.duration_min}m</span>
+            </span>
+          ))
+        }
       </div>
 
       {/* Metric cards */}
@@ -507,7 +622,7 @@ function RosterView() {
       <LateLoginPanel rows={lateLogins} onTime={onTimeLogins} date={date} />
 
       {/* Alert cards */}
-      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {/* Absent */}
         <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/50">
@@ -557,6 +672,39 @@ function RosterView() {
             }
           </div>
         </div>
+
+        {/* Late returns */}
+        <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/50">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Late returns</p>
+              <p className="text-xs text-slate-400 mt-0.5">Back after stated time + 10-min grace</p>
+            </div>
+            <span className="text-2xl font-semibold text-slate-800">
+              {lateReturnReq.data?.rows?.length ?? 0}
+            </span>
+          </div>
+          <div className="px-4 py-3 min-h-12">
+            {(lateReturnReq.data?.rows?.length ?? 0) === 0
+              ? <p className="text-xs text-emerald-600">✓ Everyone back on time</p>
+              : <div className="flex flex-col gap-1.5">
+                {(lateReturnReq.data?.rows ?? []).map((r, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <span className="rounded-full bg-rose-50 px-2.5 py-1 font-medium text-rose-700">{r.staff_name || r.user_id}</span>
+                    <span
+                      className="tabular-nums text-rose-500"
+                      title={`Took ${r.duration_min}m at ${fmtAttendanceTime(r.taken_at ?? null)}`}
+                    >
+                      {r.out_till_eod ? 'Out till EOD'
+                        : r.returned_at ? `+${gapLabel(r.late_min ?? 0)}`
+                        : `still out · +${gapLabel(r.late_min ?? 0)}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            }
+          </div>
+        </div>
       </div>
 
       {/* Filters */}
@@ -600,6 +748,7 @@ function RosterView() {
                   ['Break M', 'break_min'],
                   ['Over (m)', 'over_break_min'],
                   ['Break Status', null],
+                  ['Late Back', 'late_return_min'],
                   ['Break Detail', null],
                   ['Status', null],
                 ].map(([label, key]) => (
@@ -618,11 +767,11 @@ function RosterView() {
             </thead>
             <tbody>
               {rosterReq.loading ? (
-                <tr><td colSpan={16} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
+                <tr><td colSpan={17} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
               ) : rosterReq.error ? (
-                <tr><td colSpan={16} className="py-12 text-center text-sm text-red-500">{rosterReq.error}</td></tr>
+                <tr><td colSpan={17} className="py-12 text-center text-sm text-red-500">{rosterReq.error}</td></tr>
               ) : pageSlice.length === 0 ? (
-                <tr><td colSpan={16} className="py-12 text-center text-sm text-slate-400">No records for {date}</td></tr>
+                <tr><td colSpan={17} className="py-12 text-center text-sm text-slate-400">No records for {date}</td></tr>
               ) : pageSlice.map((r, i) => (
                 <tr key={i} className="border-b border-white/40 hover:bg-white/40 transition-colors">
                   <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums text-slate-600">{r.work_date}</td>
@@ -652,7 +801,19 @@ function RosterView() {
                     {r.over_break_min}
                   </td>
                   <td className="px-3 py-2.5"><BreakStatusBadge overMin={r.over_break_min} /></td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-600">{r.break_detail || '—'}</td>
+                  <td className="px-3 py-2.5"><LateReturnBadge row={r} /></td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-600">
+                    {r.break_count > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setBreakRow(r)}
+                        title="Each break, when they came back and how late"
+                        className="rounded px-1 text-blue-600 underline decoration-dotted underline-offset-2 hover:bg-blue-50"
+                      >
+                        {r.break_detail}
+                      </button>
+                    ) : '—'}
+                  </td>
                   <td className="px-3 py-2.5"><StatusBadge row={r} /></td>
                 </tr>
               ))}
@@ -679,6 +840,8 @@ function RosterView() {
           </div>
         </div>
       </div>
+
+      {breakRow && <BreakDetailModal row={breakRow} onClose={() => setBreakRow(null)} />}
     </div>
   )
 }
