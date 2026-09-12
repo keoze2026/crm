@@ -1,4 +1,4 @@
-import { StrictMode, useState } from 'react'
+import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import './index.css'
@@ -22,106 +22,6 @@ import Enroll from './pages/Enroll'
 import SystemLogs from './pages/SystemLogs'
 import Users from './pages/Users'
 import UserManual from './pages/UserManual'
-
-// 🔑 SET YOUR SITE PASSWORD HERE
-const SITE_PASSWORD = 'W7UXtu4W1F'
-
-function SitePasswordGate({ children }: { children: React.ReactNode }) {
-  const [unlocked, setUnlocked] = useState(() => {
-    return sessionStorage.getItem('site_unlocked') === 'true'
-  })
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState(false)
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (password === SITE_PASSWORD) {
-      sessionStorage.setItem('site_unlocked', 'true')
-      setUnlocked(true)
-    } else {
-      setError(true)
-    }
-  }
-
-  if (unlocked) {
-    return children
-  }
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100vh',
-        width: '100vw',
-        backgroundColor: '#f3f4f6',
-        fontFamily: 'sans-serif',
-      }}
-    >
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          padding: '2rem',
-          backgroundColor: '#ffffff',
-          borderRadius: '8px',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '1rem',
-          minWidth: '320px',
-        }}
-      >
-        <h2 style={{ margin: 0, textAlign: 'center', color: '#1f2937' }}>
-          Access Restricted
-        </h2>
-        <p style={{ margin: 0, textAlign: 'center', fontSize: '0.875rem', color: '#6b7280' }}>
-          Please enter the site password to continue.
-        </p>
-
-        <div>
-          <input
-            type="password"
-            placeholder="Enter Password"
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value)
-              setError(false)
-            }}
-            style={{
-              width: '100%',
-              padding: '0.6rem 0.8rem',
-              borderRadius: '4px',
-              border: error ? '1px solid #ef4444' : '1px solid #d1d5db',
-              boxSizing: 'border-box',
-              outline: 'none',
-            }}
-          />
-          {error && (
-            <p style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '0.3rem', marginBottom: 0 }}>
-              Incorrect password. Try again.
-            </p>
-          )}
-        </div>
-
-        <button
-          type="submit"
-          style={{
-            padding: '0.6rem 1rem',
-            backgroundColor: '#2563eb',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontWeight: '600',
-          }}
-        >
-          Enter Site
-        </button>
-      </form>
-    </div>
-  )
-}
 
 const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
@@ -157,10 +57,8 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <SitePasswordGate>
-      <AuthProvider>
-        <RouterProvider router={router} />
-      </AuthProvider>
-    </SitePasswordGate>
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
   </StrictMode>,
 )
