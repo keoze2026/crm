@@ -27,8 +27,14 @@ final class AuditController
         $countStmt->execute($params);
         $total = (int) $countStmt->fetchColumn();
 
+        // `entity_label` names the account an entry is about, by its CURRENT name, so entries
+        // written before names were snapshotted into `details` read as a person rather than
+        // "user #17". A subquery rather than a join keeps the filter clause's bare column names
+        // (created_at, id…) unambiguous.
         $sql = "SELECT id, user_id, user_email, action, method, path, entity_type, entity_id,
-                       details, status_code, ip, user_agent, created_at
+                       details, status_code, ip, user_agent, created_at,
+                       (SELECT COALESCE(u.name, u.username, u.email) FROM users u
+                         WHERE audit_log.entity_type = 'user' AND u.id = audit_log.entity_id) AS entity_label
                 FROM audit_log {$clause}
                 ORDER BY created_at DESC, id DESC
                 LIMIT :limit OFFSET :offset";

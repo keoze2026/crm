@@ -448,6 +448,8 @@ export interface AuditLog {
   path: string | null
   entity_type: string | null
   entity_id: number | null
+  /** The account an entry is about, by its current name — only for entries about a user. */
+  entity_label?: string | null
   details: Record<string, unknown> | null
   status_code: number | null
   ip: string | null

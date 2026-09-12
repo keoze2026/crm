@@ -154,8 +154,8 @@ function LogRow({ row, open, onToggle, onDelete, busy }: {
         <td className="whitespace-nowrap px-4 py-2.5 text-slate-500">{fmtTime(row.created_at)}</td>
         <td className="px-4 py-2.5 font-medium text-slate-700">{row.user_email ?? '—'}</td>
         <td className="px-4 py-2.5"><span className="font-mono text-xs text-slate-700">{row.action}</span></td>
-        <td className="px-4 py-2.5 text-slate-600">
-          {row.entity_type ? `${row.entity_type}${row.entity_id != null ? ` #${row.entity_id}` : ''}` : '—'}
+        <td className="px-4 py-2.5 text-slate-600" title={row.entity_id != null ? `#${row.entity_id}` : undefined}>
+          {entityCell(row)}
         </td>
         <td className="px-4 py-2.5">{status ? <Badge color={color}>{status}</Badge> : '—'}</td>
         <td className="px-4 py-2.5 text-right">
@@ -201,7 +201,12 @@ function Detail({ row }: { row: AuditLog }) {
         <Meta label="Request" value={`${row.method ?? ''} ${row.path ?? ''}`.trim() || '—'} mono />
         <Meta label="Status" value={row.status_code != null ? String(row.status_code) : '—'} />
         <Meta label="IP address" value={row.ip ?? '—'} mono />
-        <Meta label="Entity" value={row.entity_type ? `${row.entity_type}${row.entity_id != null ? ` #${row.entity_id}` : ''}` : '—'} />
+        <Meta
+          label="Entity"
+          value={row.entity_type
+            ? `${entityCell(row)}${row.entity_id != null && subjectOf(row) !== `#${row.entity_id}` ? ` (#${row.entity_id})` : ''}`
+            : '—'}
+        />
       </div>
 
       {entries.length > 0 && (
@@ -261,13 +266,32 @@ const ENTITY_NOUN: Record<string, string> = {
   'access-preset': 'access preset',
 }
 
+/**
+ * Who or what an entry is about, by name where one is known: the account's current name from
+ * the server, else the name recorded into the entry when it was written (so a deleted account
+ * still reads as someone), else the bare "#id".
+ */
+function subjectOf(row: AuditLog): string {
+  const d = row.details ?? {}
+  const recorded = [d.name, d.username, d.email].find((v): v is string => typeof v === 'string' && v !== '')
+  return row.entity_label ?? recorded ?? (row.entity_id != null ? `#${row.entity_id}` : '')
+}
+
+/** The Entity column: its type, then who it is about. */
+function entityCell(row: AuditLog): string {
+  if (!row.entity_type) return '—'
+  const subject = subjectOf(row)
+  return subject ? `${row.entity_type} ${subject}` : row.entity_type
+}
+
 /** A human sentence describing what happened. */
 function summarize(row: AuditLog): string {
   const who = row.user_email ?? 'Someone'
   const [entityRaw, verbRaw] = row.action.split('.')
   const entity = ENTITY_NOUN[entityRaw] ?? entityRaw
   const verb = verbRaw ?? ''
-  const target = row.entity_id != null ? `${entity} #${row.entity_id}` : entity
+  const subject = subjectOf(row)
+  const target = subject ? `${entity} ${subject}` : entity
   const past: Record<string, string> = {
     create: 'created', update: 'updated', delete: 'deleted', deactivate: 'deactivated',
     login: 'signed in', logout: 'signed out', enrolled: 'set up their authenticator',
@@ -279,6 +303,11 @@ function summarize(row: AuditLog): string {
   if (verb === 'login' || verb === 'logout' || verb === 'enrolled') return `${who} ${action}.`
   // Bulk verbs act on a filtered set rather than one row, so they read in the plural.
   if (verb === 'export' || verb === 'clear') return `${who} ${action} ${entity}s.`
+  // One entry for many accounts — the names are listed under Values.
+  if (verb === 'refresh_enroll_links') {
+    const n = row.details?.count
+    return `${who} ${action}${typeof n === 'number' ? ` (${n} user${n === 1 ? '' : 's'})` : ''}.`
+  }
   return `${who} ${action} ${target}.`
 }
 

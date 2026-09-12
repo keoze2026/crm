@@ -29,7 +29,8 @@ final class UserController
         'UPDATE users
             SET totp_secret = NULL, enroll_token_hash = :hash, enroll_expires_at = :expires,
                 failed_attempts = 0, locked_until = NULL, updated_at = now()
-          WHERE id = :id AND totp_confirmed_at IS NULL AND is_active';
+          WHERE id = :id AND totp_confirmed_at IS NULL AND is_active
+          RETURNING id, name, username, email';
 
     /** GET /admin/users — list all accounts (no secrets). */
     public function index(): void
@@ -321,15 +322,21 @@ final class UserController
                     enroll_token_hash = :hash, enroll_expires_at = :expires,
                     failed_attempts = 0, locked_until = NULL, updated_at = now()
               WHERE id = :id
-              RETURNING id'
+              RETURNING id, name, username, email'
         );
         $stmt->execute([':hash' => $hash, ':expires' => $expires, ':id' => $id]);
-        if (!$stmt->fetch()) {
+        $row = $stmt->fetch();
+        if (!$row) {
             Http::error('User not found', 404);
         }
         Session::destroyForUser($id);
 
-        Audit::record('user.reset_totp', ['entity_type' => 'user', 'entity_id' => $id, 'status_code' => 200]);
+        Audit::record('user.reset_totp', [
+            'entity_type' => 'user',
+            'entity_id'   => $id,
+            'details'     => $this->identityOf($row),
+            'status_code' => 200,
+        ]);
         Http::json(['reset' => true, 'enroll' => $this->enrollPayload($token, $expires)]);
     }
 
@@ -348,7 +355,8 @@ final class UserController
 
         $stmt = Database::connection()->prepare(self::REFRESH_PENDING_LINK_SQL);
         $stmt->execute([':hash' => $hash, ':expires' => $expires, ':id' => $id]);
-        if ($stmt->rowCount() === 0) {
+        $row = $stmt->fetch();
+        if (!$row) {
             $check = Database::connection()->prepare('SELECT is_active FROM users WHERE id = :id');
             $check->execute([':id' => $id]);
             $row = $check->fetch();
@@ -361,7 +369,12 @@ final class UserController
             Http::error('This user has already set up their authenticator. Use Reset authenticator instead.', 409);
         }
 
-        Audit::record('user.refresh_enroll_link', ['entity_type' => 'user', 'entity_id' => $id, 'status_code' => 200]);
+        Audit::record('user.refresh_enroll_link', [
+            'entity_type' => 'user',
+            'entity_id'   => $id,
+            'details'     => $this->identityOf($row),
+            'status_code' => 200,
+        ]);
         Http::json(['enroll' => $this->enrollPayload($token, $expires)]);
     }
 
@@ -400,7 +413,11 @@ final class UserController
 
         Audit::record('user.refresh_enroll_links', [
             'entity_type' => 'user',
-            'details'     => ['count' => \count($links), 'user_ids' => array_column($links, 'id')],
+            'details'     => [
+                'count'    => \count($links),
+                'users'    => array_map(static fn (array $l) => $l['name'] ?? $l['username'] ?? $l['email'] ?? "user #{$l['id']}", $links),
+                'user_ids' => array_column($links, 'id'),
+            ],
             'status_code' => 200,
         ]);
         Http::json(['links' => $links]);
@@ -436,6 +453,21 @@ final class UserController
     }
 
     // ─── Helpers ────────────────────────────────────────────────────────────────
+
+    /**
+     * Who an audit entry is about, snapshotted when it is written — so System Logs can still
+     * name the person after the account is renamed or deleted.
+     *
+     * @return array<string,string>
+     */
+    private function identityOf(array $row): array
+    {
+        return array_filter([
+            'name'     => $row['name'] ?? null,
+            'username' => $row['username'] ?? null,
+            'email'    => $row['email'] ?? null,
+        ], static fn ($v) => $v !== null && $v !== '');
+    }
 
     /** @return array{0:string,1:string,2:string} [rawToken, sha256hash, expiresIso] */
     private function newEnrollToken(): array
