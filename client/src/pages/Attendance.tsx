@@ -12,7 +12,8 @@ import { api, fmtAttendanceTime } from '../api/client'
 import { useAsync } from '../lib/useAsync'
 import type { AttendanceBreakRecord, AttendanceDay, AttendanceOnBreak, AttendanceStaff } from '../types'
 import { PageHeader } from '../components/Layout'
-import { Button, Card, CardHeader, Modal, PageLoader, SegmentedTabs, Spinner, cx } from '../components/ui'
+import { Button, CardHeader, Modal, PageLoader, SegmentedTabs, Spinner, cx } from '../components/ui'
+import { BRAND } from '../lib/theme'
 import type { Range } from '../components/DateRange'
 import { fileDateRange } from '../lib/format'
 import {
@@ -140,15 +141,12 @@ const labelFor = (s: { staff_name: string | null; username: string | null; user_
 
 function Avatar({ name, size = 28 }: { name: string | null; size?: number }) {
   const initials = (name || '?').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
-  const COLORS = ['#B5D4F4', '#9FE1CB', '#F4C0D1', '#CECBF6', '#FAC775', '#C0DD97']
-  const TEXT = ['#0C447C', '#085041', '#72243E', '#3C3489', '#633806', '#27500A']
-  const idx = (initials.charCodeAt(0) || 0) % COLORS.length
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%',
-      background: COLORS[idx], color: TEXT[idx],
+      background: BRAND, color: '#fff',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: size * 0.36, fontWeight: 600, flexShrink: 0,
+      fontSize: size * 0.36, fontWeight: 700, flexShrink: 0,
     }}>
       {initials}
     </div>
@@ -237,7 +235,7 @@ function BreakStatusBadge({ overMin }: { overMin: number }) {
 function ReturnedCell({ b }: { b: AttendanceBreakRecord }) {
   if (b.returned_at) return <span className="tabular-nums text-slate-700">{fmtAttendanceTime(b.returned_at)}</span>
   if (b.out_till_eod) return <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-rose-700">Out till EOD</span>
-  return <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-700">Still out</span>
+  return <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-rose-700">Still out</span>
 }
 
 /**
@@ -278,9 +276,9 @@ function BreakDetailModal({ row, onClose }: { row: AttendanceDay; onClose: () =>
       ) : (
         <div className="space-y-3">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="table-airy w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <tr className="border-b border-slate-200 text-left text-xs font-semibold text-slate-700">
                   <th className="py-2 pr-3">Taken</th>
                   <th className="py-2 pr-3 text-right">Stated</th>
                   <th className="py-2 pr-3">Returned</th>
@@ -293,7 +291,7 @@ function BreakDetailModal({ row, onClose }: { row: AttendanceDay; onClose: () =>
                   <tr key={b.id} title={b.raw ?? undefined} className="border-b border-slate-100">
                     <td className="whitespace-nowrap py-2 pr-3 text-xs">
                       <span className="tabular-nums">{fmtAttendanceTime(b.taken_at)}</span>
-                      {b.urgent && <span className="ml-1.5 rounded bg-amber-50 px-1 text-[10px] font-bold uppercase text-amber-700">urgent</span>}
+                      {b.urgent && <span className="ml-1.5 rounded bg-rose-50 px-1 text-[10px] font-bold uppercase text-rose-700">urgent</span>}
                     </td>
                     <td className="py-2 pr-3 text-right text-xs tabular-nums">{b.duration_min}m</td>
                     <td className="whitespace-nowrap py-2 pr-3 text-xs"><ReturnedCell b={b} /></td>
@@ -313,7 +311,7 @@ function BreakDetailModal({ row, onClose }: { row: AttendanceDay; onClose: () =>
             the stated length; a break nobody returns from stops counting at {clockLabel(d.eodCutoff)}.
           </p>
           {d.overridden && (
-            <p className="text-xs text-amber-700">
+            <p className="text-xs text-rose-700">
               This day's break total was corrected on Staff Management. The breaks above are the bot's own record.
             </p>
           )}
@@ -326,7 +324,7 @@ function BreakDetailModal({ row, onClose }: { row: AttendanceDay; onClose: () =>
 /** Status derived from raw timestamps — works for /days rows that lack present/still_in. */
 function DayStatus({ row }: { row: AttendanceDay }) {
   if (row.login_at == null) return <span className="text-slate-400 text-xs">—</span>
-  if (row.logout_at == null) return <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">No logout</span>
+  if (row.logout_at == null) return <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-brand">No logout</span>
   return <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Checked out</span>
 }
 
@@ -347,19 +345,19 @@ function LateLoginPanel({ rows, onTime, date }: {
   date: string
 }) {
   return (
-    <div className="glass mb-4 rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/50 px-4 py-3">
+    <div className="mb-4 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Late logins</p>
+          <p className="text-xs font-semibold text-slate-700">Late logins</p>
           <p className="mt-0.5 text-xs text-slate-400">{fullDate(date)} · against each person's expected login</p>
         </div>
         <div className="flex items-center gap-4 text-right">
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">On time</p>
+            <p className="text-[11px] font-medium text-slate-400">On time</p>
             <p className="text-lg font-semibold tabular-nums text-emerald-600">{onTime}</p>
           </div>
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Late</p>
+            <p className="text-[11px] font-medium text-slate-400">Late</p>
             <p className={cx('text-lg font-semibold tabular-nums', rows.length > 0 ? 'text-rose-600' : 'text-slate-400')}>
               {rows.length}
             </p>
@@ -390,13 +388,22 @@ function LateLoginPanel({ rows, onTime, date }: {
   )
 }
 
-/** Glass KPI card matching the Dashboard look. */
+/** KPI tile in the Dashboard's style: quiet label, bold figure, one line of context. */
 function MetricCard({ label, value, sub }: { label: string; value: ReactNode; sub?: string; accent?: string }) {
   return (
-    <div className="glass rounded-2xl p-4 shadow-xl shadow-slate-900/5">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-slate-400">{sub}</p>}
+    <div className="rounded-xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm shadow-slate-900/5">
+      <p className="text-[11px] font-medium text-slate-500">{label}</p>
+      <p className="mt-0.5 text-xl font-bold tabular-nums tracking-tight text-slate-900">{value}</p>
+      {sub && <p className="text-[10px] text-slate-400">{sub}</p>}
+    </div>
+  )
+}
+
+/** White card, the Dashboard's panel, for the sections that used the shared glass Card. */
+function Panel({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <div className={cx('rounded-xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/5', className)}>
+      {children}
     </div>
   )
 }
@@ -476,7 +483,7 @@ export default function Attendance() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-//  Daily roster  (logic unchanged — restyled to the glass theme)
+//  Daily roster  (logic unchanged — styled like the Dashboard)
 // ════════════════════════════════════════════════════════════════════════════════
 
 const PER_PAGE = 15
@@ -562,7 +569,7 @@ function RosterView() {
   return (
     <div>
       {/* Status strip */}
-      <div className="glass mb-6 flex flex-wrap items-center gap-2 rounded-2xl px-4 py-3 shadow-xl shadow-slate-900/5">
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-4 py-2.5 shadow-sm shadow-slate-900/5">
         <span className="mr-2 text-xs font-medium text-slate-500">Now online</span>
         {(liveReq.data ?? []).length === 0
           ? <span className="text-xs text-slate-400">Nobody checked in yet today</span>
@@ -583,10 +590,10 @@ function RosterView() {
               title={`Took ${m.duration_min}m at ${fmtAttendanceTime(m.taken_at)}${m.late_min > 0 ? ` — ${gapLabel(m.late_min)} past the grace` : ''}`}
               className={cx(
                 'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium',
-                m.late_min > 0 ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700',
+                m.late_min > 0 ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-brand',
               )}
             >
-              <span className={cx('h-1.5 w-1.5 rounded-full', m.late_min > 0 ? 'bg-rose-500' : 'bg-amber-500')} />
+              <span className={cx('h-1.5 w-1.5 rounded-full', m.late_min > 0 ? 'bg-rose-500' : 'bg-brand')} />
               {m.staff_name || m.username || m.user_id}
               <span className="tabular-nums opacity-70">{gapLabel(m.out_for_min)} / {m.duration_min}m</span>
             </span>
@@ -596,15 +603,15 @@ function RosterView() {
 
       {/* Metric cards */}
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Present today" value={metrics.present} sub={`of ${staffReq.data?.length ?? '?'} staff`} accent="#1D9E75" />
+        <MetricCard label="Present today" value={metrics.present} sub={`of ${staffReq.data?.length ?? '?'} staff`} />
         <MetricCard
           label="Late logins"
           value={<span className={lateLogins.length > 0 ? 'text-rose-600' : undefined}>{lateLogins.length}</span>}
           sub={`${onTimeLogins} on time · ${fullDate(date)}`}
-          accent="#EF4444"
+         
         />
-        <MetricCard label="Still checked in" value={metrics.stillIn} sub="no logout yet" accent="#3B82F6" />
-        <MetricCard label="Avg hours worked" value={metrics.avgHours !== '—' ? `${metrics.avgHours}h` : '—'} sub="checked-out only" accent="#F59E0B" />
+        <MetricCard label="Still checked in" value={metrics.stillIn} sub="no logout yet" />
+        <MetricCard label="Avg hours worked" value={metrics.avgHours !== '—' ? `${metrics.avgHours}h` : '—'} sub="checked-out only" />
         <MetricCard
           label="Off schedule"
           value={
@@ -614,7 +621,7 @@ function RosterView() {
             </span>
           }
           sub={`${metrics.flags.late} late in · ${metrics.flags.early} early out · ${metrics.flags.both} both`}
-          accent="#EF4444"
+         
         />
       </div>
 
@@ -624,10 +631,10 @@ function RosterView() {
       {/* Alert cards */}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {/* Absent */}
-        <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/50">
+        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/5">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Absent</p>
+              <p className="text-xs font-semibold text-slate-700">Absent</p>
               <p className="text-xs text-slate-400 mt-0.5">No record on {date}</p>
             </div>
             <span className="text-2xl font-semibold text-slate-800">{absentMembers.length}</span>
@@ -637,8 +644,8 @@ function RosterView() {
               ? <p className="text-xs text-emerald-600">✓ Full attendance</p>
               : <div className="flex flex-wrap gap-1.5">
                 {absentMembers.map((m: AttendanceStaff) => (
-                  <span key={m.user_id} className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
-                    <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                  <span key={m.user_id} className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
                     {m.staff_name || m.username || m.user_id}
                   </span>
                 ))}
@@ -648,10 +655,10 @@ function RosterView() {
         </div>
 
         {/* Break overages */}
-        <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/50">
+        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/5">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Break overages</p>
+              <p className="text-xs font-semibold text-slate-700">Break overages</p>
               <p className="text-xs text-slate-400 mt-0.5">Exceeded 60-min allowance</p>
             </div>
             <span className="text-2xl font-semibold text-slate-800">
@@ -664,8 +671,8 @@ function RosterView() {
               : <div className="flex flex-col gap-1.5">
                 {(overBreakReq.data?.rows ?? []).map((r, i) => (
                   <div key={i} className="flex items-center justify-between text-xs">
-                    <span className="rounded-full bg-violet-50 px-2.5 py-1 font-medium text-violet-700">{r.staff_name || r.user_id}</span>
-                    <span className="text-violet-500">+{r.over_min}m</span>
+                    <span className="rounded-full bg-rose-50 px-2.5 py-1 font-medium text-rose-700">{r.staff_name || r.user_id}</span>
+                    <span className="text-rose-500">+{r.over_min}m</span>
                   </div>
                 ))}
               </div>
@@ -674,10 +681,10 @@ function RosterView() {
         </div>
 
         {/* Late returns */}
-        <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/50">
+        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/5">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Late returns</p>
+              <p className="text-xs font-semibold text-slate-700">Late returns</p>
               <p className="text-xs text-slate-400 mt-0.5">Back after stated time + 10-min grace</p>
             </div>
             <span className="text-2xl font-semibold text-slate-800">
@@ -711,16 +718,16 @@ function RosterView() {
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <input
           type="date" value={date} onChange={(e) => setDate(e.target.value)}
-          className="glass-input rounded-lg border border-white/70 px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          className="bg-white rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand/20"
         />
         <input
           type="text" placeholder="Search name or username…" value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="glass-input w-52 rounded-lg border border-white/70 px-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          className="bg-white w-52 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/20"
         />
         <button
           onClick={() => { setDate(todayEST()); setSearch('') }}
-          className="glass-input rounded-lg border border-white/70 px-3 py-1.5 text-sm text-slate-600 hover:bg-white/80"
+          className="bg-white rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
         >
           Reset
         </button>
@@ -728,11 +735,11 @@ function RosterView() {
       </div>
 
       {/* Table */}
-      <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden">
+      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/5">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
+          <table className="table-airy w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-white/50 bg-white/40">
+              <tr className="border-b border-slate-100 bg-white/40">
                 {[
                   ['Date', 'work_date'],
                   ['Username', 'username'],
@@ -756,7 +763,7 @@ function RosterView() {
                     key={label as string}
                     onClick={() => key && handleSort(key as string)}
                     className={cx(
-                      'whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500',
+                      'whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold text-slate-700',
                       key ? 'cursor-pointer hover:text-slate-700 select-none' : ''
                     )}
                   >
@@ -808,7 +815,7 @@ function RosterView() {
                         type="button"
                         onClick={() => setBreakRow(r)}
                         title="Each break, when they came back and how late"
-                        className="rounded px-1 text-blue-600 underline decoration-dotted underline-offset-2 hover:bg-blue-50"
+                        className="rounded px-1 text-brand underline decoration-dotted underline-offset-2 hover:bg-slate-100"
                       >
                         {r.break_detail}
                       </button>
@@ -822,7 +829,7 @@ function RosterView() {
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between border-t border-white/50 px-4 py-3 text-sm text-slate-500">
+        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
           <span>
             {filtered.length === 0 ? 'No records'
               : `Showing ${page * PER_PAGE + 1}–${Math.min(page * PER_PAGE + PER_PAGE, filtered.length)} of ${filtered.length}`}
@@ -830,12 +837,12 @@ function RosterView() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage((p) => p - 1)} disabled={page === 0}
-              className="glass-input rounded-lg border border-white/70 px-3 py-1 text-xs disabled:opacity-40 hover:bg-white/80"
+              className="bg-white rounded-lg border border-slate-200 px-3 py-1 text-xs disabled:opacity-40 hover:bg-slate-50"
             >← Prev</button>
             <span className="text-xs">Page {page + 1} / {totalPages || 1}</span>
             <button
               onClick={() => setPage((p) => p + 1)} disabled={page + 1 >= totalPages}
-              className="glass-input rounded-lg border border-white/70 px-3 py-1 text-xs disabled:opacity-40 hover:bg-white/80"
+              className="bg-white rounded-lg border border-slate-200 px-3 py-1 text-xs disabled:opacity-40 hover:bg-slate-50"
             >Next →</button>
           </div>
         </div>
@@ -1062,7 +1069,7 @@ function StaffSummaryView() {
   return (
     <div>
       {/* Month navigator */}
-      <div className="glass mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl px-4 py-2.5 shadow-xl shadow-slate-900/5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-white px-4 py-2.5 shadow-sm shadow-slate-900/5">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setMonth((m) => addMonth(m, -1))}
@@ -1072,7 +1079,7 @@ function StaffSummaryView() {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6" /></svg>
           </button>
           <div className="flex items-center gap-2 text-sm">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brand"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
             <span className="min-w-34 text-center font-semibold text-slate-800">{monthLabel(month)}</span>
           </div>
           <button
@@ -1086,7 +1093,7 @@ function StaffSummaryView() {
           {month !== currentMonth && (
             <button
               onClick={() => setMonth(currentMonth)}
-              className="glass-input ml-1 rounded-lg border border-white/70 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-white/80"
+              className="bg-white ml-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
             >
               This month
             </button>
@@ -1105,40 +1112,40 @@ function StaffSummaryView() {
           label={`On-time logins · ${monthLabel(month)}`}
           value={<span className="text-emerald-600">{team.onTimeLogins}</span>}
           sub={`of ${team.judgedLogins} logins this month`}
-          accent="#10B981"
+         
         />
         <MetricCard
           label={`Late logins · ${monthLabel(month)}`}
           value={<span className={team.lateLogins > 0 ? 'text-rose-600' : undefined}>{team.lateLogins}</span>}
           sub={`of ${team.judgedLogins} logins · 9:00 AM where unset`}
-          accent="#EF4444"
+         
         />
         <MetricCard
           label="Time lost to late starts"
           value={<span className={team.lateMin > 0 ? 'text-rose-600' : undefined}>{fmtHm(team.lateMin)}</span>}
           sub="summed over the month's late days"
-          accent="#BE123C"
+         
         />
         <MetricCard
           label="Staff logging in late"
           value={team.lateMembers}
           sub={`of ${team.active} active this month`}
-          accent="#F97316"
+         
         />
       </div>
 
       {/* Team KPI cards */}
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        <MetricCard label="Active staff" value={team.active} sub={`of ${team.totalStaff} on record`} accent="#3B82F6" />
-        <MetricCard label="Total hours" value={fmtHours(team.totalHours)} sub="completed days" accent="#1D9E75" />
-        <MetricCard label="On-schedule days" value={team.onTimeDays} sub={`of ${team.judgedDays} judged`} accent="#10B981" />
-        <MetricCard label="Late check-ins" value={team.lateDays} sub="past expected login · 9:00 AM if unset" accent="#EF4444" />
-        <MetricCard label="Early logouts" value={team.earlyOutDays} sub="before expected logout" accent="#F97316" />
+        <MetricCard label="Active staff" value={team.active} sub={`of ${team.totalStaff} on record`} />
+        <MetricCard label="Total hours" value={fmtHours(team.totalHours)} sub="completed days" />
+        <MetricCard label="On-schedule days" value={team.onTimeDays} sub={`of ${team.judgedDays} judged`} />
+        <MetricCard label="Late check-ins" value={team.lateDays} sub="past expected login · 9:00 AM if unset" />
+        <MetricCard label="Early logouts" value={team.earlyOutDays} sub="before expected logout" />
         <MetricCard
           label="Late + early"
           value={<span className={team.bothDays > 0 ? 'text-rose-600' : undefined}>{team.bothDays}</span>}
           sub="days that missed both ends"
-          accent="#BE123C"
+         
         />
       </div>
 
@@ -1151,7 +1158,7 @@ function StaffSummaryView() {
 
       {/* Charts */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
+        <Panel>
           <CardHeader title="Top staff by hours" subtitle={`Total worked hours · ${monthLabel(month)}`} />
           <div className="h-72 px-2 py-4">
             {loading ? <ChartLoading /> : topHours.length === 0 ? (
@@ -1163,14 +1170,14 @@ function StaffSummaryView() {
                   <XAxis type="number" tickFormatter={(v) => `${v}h`} tick={{ fontSize: 12, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: '#475569' }} tickLine={false} axisLine={false} width={72} />
                   <Tooltip cursor={{ fill: '#f8fafc' }} content={<BarTooltip unit="h" name="Hours" />} />
-                  <Bar dataKey="hours" name="Hours" radius={[0, 4, 4, 0]} fill="#2563eb" barSize={18} />
+                  <Bar dataKey="hours" name="Hours" radius={[0, 4, 4, 0]} fill={BRAND} barSize={18} />
                 </BarChart>
               </ResponsiveContainer>
             )}
           </div>
-        </Card>
+        </Panel>
 
-        <Card>
+        <Panel>
           <CardHeader title="Break utilization" subtitle={`Total break minutes · ${monthLabel(month)}`} />
           <div className="h-72 px-2 py-4">
             {loading ? <ChartLoading /> : topBreaks.length === 0 ? (
@@ -1182,12 +1189,12 @@ function StaffSummaryView() {
                   <XAxis type="number" tickFormatter={(v) => `${v}m`} tick={{ fontSize: 12, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: '#475569' }} tickLine={false} axisLine={false} width={72} />
                   <Tooltip cursor={{ fill: '#f8fafc' }} content={<BarTooltip unit=" min" name="Break" />} />
-                  <Bar dataKey="breakMin" name="Break minutes" radius={[0, 4, 4, 0]} fill="#7c3aed" barSize={18} />
+                  <Bar dataKey="breakMin" name="Break minutes" radius={[0, 4, 4, 0]} fill="#94a3b8" barSize={18} />
                 </BarChart>
               </ResponsiveContainer>
             )}
           </div>
-        </Card>
+        </Panel>
       </div>
 
       {/* Filters */}
@@ -1195,23 +1202,23 @@ function StaffSummaryView() {
         <input
           type="text" placeholder="Search staff…" value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="glass-input w-52 rounded-lg border border-white/70 px-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          className="bg-white w-52 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/20"
         />
         <span className="ml-auto text-xs text-slate-400">{filtered.length} staff · click a row for details</span>
       </div>
 
       {/* Per-staff table */}
-      <div className="glass rounded-2xl shadow-xl shadow-slate-900/5 overflow-hidden">
+      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/5">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
+          <table className="table-airy w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-white/50 bg-white/40">
+              <tr className="border-b border-slate-100 bg-white/40">
                 {SUMMARY_COLUMNS.map((c) => (
                   <th
                     key={c.label}
                     onClick={() => handleSort(c.key)}
                     className={cx(
-                      'whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500 cursor-pointer select-none hover:text-slate-700',
+                      'whitespace-nowrap px-3 py-2.5 text-xs font-semibold text-slate-700 cursor-pointer select-none hover:text-slate-700',
                       c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left',
                     )}
                   >
@@ -1263,7 +1270,7 @@ function StaffSummaryView() {
                   <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-slate-900">{fmtHours(s.totalHours)}</td>
                   <td className="px-3 py-2.5 text-right text-xs tabular-nums text-slate-700">{fmtHours(s.avgHoursPerDay)}</td>
                   <td className="px-3 py-2.5 text-right text-xs tabular-nums">
-                    <span className={cx(s.totalOverBreakMin > 0 ? 'text-violet-600 font-medium' : 'text-slate-700')}>{fmtHours(s.totalBreakMin / 60)}</span>
+                    <span className={cx(s.totalOverBreakMin > 0 ? 'text-rose-600 font-medium' : 'text-slate-700')}>{fmtHours(s.totalBreakMin / 60)}</span>
                   </td>
                 </tr>
               ))}
@@ -1288,7 +1295,7 @@ function FlagCount({ n, tone }: { n: number; tone: 'on-time' | 'mark' | 'both' }
   if (n === 0) return <span className="text-xs text-slate-300">—</span>
   const cls = tone === 'on-time' ? 'text-emerald-700'
     : tone === 'both' ? 'rounded bg-rose-100 px-1.5 py-0.5 text-rose-800'
-      : 'text-amber-700'
+      : 'text-rose-600'
   return <span className={cx('text-xs font-semibold tabular-nums', cls)}>{n}</span>
 }
 
@@ -1318,16 +1325,16 @@ function LateCount({ days, of, worstMin }: { days: number; of: number; worstMin:
 
 function AttendancePill({ rate }: { rate: number }) {
   const pct = Math.round(rate * 100)
-  const tone = pct >= 80 ? 'bg-emerald-50 text-emerald-700' : pct >= 50 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'
+  const tone = pct >= 80 ? 'bg-emerald-50 text-emerald-700' : pct >= 50 ? 'bg-slate-100 text-brand' : 'bg-red-50 text-red-700'
   return <span className={cx('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium tabular-nums', tone)}>{pct}%</span>
 }
 
 // ─── Individual staff detail ────────────────────────────────────────────────────
 
-function DetailStat({ label, value, accent }: { label: string; value: ReactNode; accent?: string }) {
+function DetailStat({ label, value }: { label: string; value: ReactNode; accent?: string }) {
   return (
-    <div className="rounded-xl bg-white/60 px-3 py-2.5 ring-1 ring-white/60" style={{ borderTop: accent ? `2px solid ${accent}` : undefined }}>
-      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+      <p className="text-[11px] font-medium text-slate-500">{label}</p>
       <p className="mt-0.5 text-lg font-semibold tabular-nums text-slate-900">{value}</p>
     </div>
   )
@@ -1356,7 +1363,7 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
     >
       <div className="glass-strong w-full max-w-3xl rounded-2xl shadow-2xl shadow-slate-900/20" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/50 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div className="flex items-center gap-3">
             <Avatar name={stat.staff_name || stat.username} size={40} />
             <div className="leading-tight">
@@ -1374,48 +1381,48 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
         <div className="px-5 py-4">
           {/* Stat grid */}
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            <DetailStat label="Days present" value={<>{stat.daysPresent}<span className="text-sm text-slate-400">/{operationalDays}</span></>} accent="#3B82F6" />
-            <DetailStat label="Total hours" value={fmtHours(stat.totalHours)} accent="#1D9E75" />
-            <DetailStat label="Avg hrs/day" value={fmtHours(stat.avgHoursPerDay)} accent="#0EA5E9" />
-            <DetailStat label="Net hours" value={fmtHours(stat.netHours)} accent="#10B981" />
-            <DetailStat label="Avg check-in" value={fmtClock(stat.avgCheckIn)} accent="#F59E0B" />
-            <DetailStat label="Avg check-out" value={fmtClock(stat.avgCheckOut)} accent="#6366F1" />
-            <DetailStat label="Break used" value={`${stat.totalBreakMin}m`} accent="#7C3AED" />
+            <DetailStat label="Days present" value={<>{stat.daysPresent}<span className="text-sm text-slate-400">/{operationalDays}</span></>} />
+            <DetailStat label="Total hours" value={fmtHours(stat.totalHours)} />
+            <DetailStat label="Avg hrs/day" value={fmtHours(stat.avgHoursPerDay)} />
+            <DetailStat label="Net hours" value={fmtHours(stat.netHours)} />
+            <DetailStat label="Avg check-in" value={fmtClock(stat.avgCheckIn)} />
+            <DetailStat label="Avg check-out" value={fmtClock(stat.avgCheckOut)} />
+            <DetailStat label="Break used" value={`${stat.totalBreakMin}m`} />
             <DetailStat
               label="On-time logins"
               value={<span className="text-emerald-600">{stat.onTimeLoginDays}<span className="text-sm text-slate-400">/{stat.judgedLogins}</span></span>}
-              accent="#10B981"
+             
             />
             <DetailStat
               label="Late logins"
               value={<span className={stat.lateLoginDays > 0 ? 'text-rose-600' : undefined}>{stat.lateLoginDays}<span className="text-sm text-slate-400">/{stat.judgedLogins}</span></span>}
-              accent="#EF4444"
+             
             />
             <DetailStat
               label="Time lost late"
               value={<span className={stat.totalLateMin > 0 ? 'text-rose-600' : undefined}>{fmtHm(stat.totalLateMin)}</span>}
-              accent="#BE123C"
+             
             />
-            <DetailStat label="Early logouts" value={stat.earlyOutDays} accent="#F97316" />
+            <DetailStat label="Early logouts" value={stat.earlyOutDays} />
             <DetailStat
               label="Late + early"
               value={<span className={stat.bothDays > 0 ? 'text-rose-600' : undefined}>{stat.bothDays}</span>}
-              accent="#BE123C"
+             
             />
           </div>
 
           {/* Secondary line */}
           <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
             <span>Attendance <span className="font-semibold text-slate-700">{Math.round(stat.attendanceRate * 100)}%</span></span>
-            <span>Off schedule <span className={cx('font-semibold', stat.bothDays > 0 ? 'text-rose-600' : stat.flaggedDays > 0 ? 'text-amber-600' : 'text-slate-700')}>{stat.flaggedDays} of {stat.judgedDays} day{stat.judgedDays === 1 ? '' : 's'}</span></span>
+            <span>Off schedule <span className={cx('font-semibold', stat.bothDays > 0 ? 'text-rose-600' : stat.flaggedDays > 0 ? 'text-brand' : 'text-slate-700')}>{stat.flaggedDays} of {stat.judgedDays} day{stat.judgedDays === 1 ? '' : 's'}</span></span>
             <span>Completion <span className="font-semibold text-slate-700">{Math.round(stat.completionRate * 100)}%</span></span>
             <span>Avg break <span className="font-semibold text-slate-700">{stat.avgBreakMin != null ? `${Math.round(stat.avgBreakMin)}m/day` : '—'}</span></span>
-            <span>Over-allowance <span className={cx('font-semibold', stat.overBreakDays > 0 ? 'text-violet-600' : 'text-slate-700')}>{stat.overBreakDays} day{stat.overBreakDays === 1 ? '' : 's'} ({stat.totalOverBreakMin}m)</span></span>
+            <span>Over-allowance <span className={cx('font-semibold', stat.overBreakDays > 0 ? 'text-rose-600' : 'text-slate-700')}>{stat.overBreakDays} day{stat.overBreakDays === 1 ? '' : 's'} ({stat.totalOverBreakMin}m)</span></span>
           </div>
 
           {/* Daily hours chart */}
           <div className="mt-4">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Daily hours</p>
+            <p className="mb-1 text-xs font-semibold text-slate-700">Daily hours</p>
             <div className="h-40">
               {chartData.length === 0 ? (
                 <div className="flex h-full items-center justify-center text-sm text-slate-400">No activity in this window</div>
@@ -1426,7 +1433,7 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
                     <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={16} />
                     <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={32} tickFormatter={(v) => `${v}h`} />
                     <Tooltip cursor={{ fill: '#f8fafc' }} content={<BarTooltip unit="h" name="Hours" />} />
-                    <Bar dataKey="hours" name="hours" radius={[3, 3, 0, 0]} fill="#2563eb" />
+                    <Bar dataKey="hours" name="hours" radius={[3, 3, 0, 0]} fill={BRAND} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -1435,11 +1442,11 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
 
           {/* Day-by-day table */}
           <div className="mt-4 max-h-64 overflow-y-auto rounded-xl ring-1 ring-white/60">
-            <table className="w-full border-collapse text-sm">
+            <table className="table-airy w-full border-collapse text-sm">
               <thead className="sticky top-0">
                 <tr className="bg-white/80 backdrop-blur">
                   {['Date', 'Check-in', 'Check-out', 'Flag', 'Hours', 'Break', 'Status'].map((h, i) => (
-                    <th key={h} className={cx('whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500', i === 0 ? 'text-left' : 'text-right', (h === 'Status' || h === 'Flag') && 'text-center')}>{h}</th>
+                    <th key={h} className={cx('whitespace-nowrap px-3 py-2 text-xs font-semibold text-slate-700', i === 0 ? 'text-left' : 'text-right', (h === 'Status' || h === 'Flag') && 'text-center')}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -1448,7 +1455,7 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
                   <tr><td colSpan={7} className="py-8 text-center text-sm text-slate-400">No days recorded</td></tr>
                 ) : stat.rows.slice().reverse().map((r, i) => {
                   return (
-                    <tr key={i} className="border-t border-white/50 hover:bg-white/40">
+                    <tr key={i} className="border-t border-slate-100 hover:bg-white/40">
                       <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-600">{fullDate(r.work_date)}</td>
                       <td className="whitespace-nowrap px-3 py-2 text-right text-xs">
                         <ScheduleTime at={r.login_at} off={lateMinutes(r)} word="late" expected={r.expected_login} />
@@ -1458,7 +1465,7 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
                       </td>
                       <td className="px-3 py-2 text-center"><PunctualityBadge flag={dayFlag(r)} compact /></td>
                       <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-700">{r.hours != null ? `${r.hours}h` : '—'}</td>
-                      <td className={cx('px-3 py-2 text-right text-xs tabular-nums', r.over_break_min > 0 ? 'text-violet-600 font-medium' : 'text-slate-700')}>{r.break_min}m</td>
+                      <td className={cx('px-3 py-2 text-right text-xs tabular-nums', r.over_break_min > 0 ? 'text-rose-600 font-medium' : 'text-slate-700')}>{r.break_min}m</td>
                       <td className="px-3 py-2 text-center"><DayStatus row={r} /></td>
                     </tr>
                   )
@@ -1556,18 +1563,18 @@ function BreakReportsView() {
   return (
     <div>
       {/* Period controls — weekly / monthly presets + explicit date filtering */}
-      <div className="glass mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-2.5 shadow-xl shadow-slate-900/5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-4 py-2.5 shadow-sm shadow-slate-900/5">
         <div className="flex flex-wrap items-center gap-1.5">
           {REPORT_PRESETS.map((p) => (
             <button
               key={p.label}
               onClick={() => setRange(p.get())}
-              style={activePreset?.label === p.label ? { backgroundColor: '#34eb92', color: '#0f172a' } : undefined}
+              style={activePreset?.label === p.label ? { backgroundColor: BRAND, color: '#fff' } : undefined}
               className={cx(
                 'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
                 activePreset?.label === p.label
                   ? 'shadow'
-                  : 'glass-input border border-white/70 text-slate-600 hover:bg-white/80',
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50',
               )}
             >
               {p.label}
@@ -1580,7 +1587,7 @@ function BreakReportsView() {
               value={range.from}
               max={range.to || maxDate}
               onChange={(e) => { if (e.target.value) setRange((r) => ({ ...r, from: e.target.value })) }}
-              className="glass-input rounded-lg border border-white/70 px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              className="bg-white rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand/20"
             />
           </label>
           <label className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
@@ -1591,7 +1598,7 @@ function BreakReportsView() {
               min={range.from}
               max={maxDate}
               onChange={(e) => { if (e.target.value) setRange((r) => ({ ...r, to: e.target.value })) }}
-              className="glass-input rounded-lg border border-white/70 px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              className="bg-white rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand/20"
             />
           </label>
         </div>
@@ -1606,41 +1613,41 @@ function BreakReportsView() {
           label="On-time logins"
           value={<span className="text-emerald-600">{team.onTimeLogins}</span>}
           sub={`of ${team.onTimeLogins + team.lateLogins} logins in period`}
-          accent="#10B981"
+         
         />
         <MetricCard
           label="Late logins"
           value={<span className={team.lateLogins > 0 ? 'text-rose-600' : undefined}>{team.lateLogins}</span>}
           sub={`of ${team.onTimeLogins + team.lateLogins} logins in period`}
-          accent="#EF4444"
+         
         />
         <MetricCard
           label="Time lost to late starts"
           value={<span className={team.lateMin > 0 ? 'text-rose-600' : undefined}>{fmtHm(team.lateMin)}</span>}
           sub="summed over late days"
-          accent="#BE123C"
+         
         />
-        <MetricCard label="Staff logging in late" value={team.lateMembers} sub={`of ${team.members} active`} accent="#F97316" />
+        <MetricCard label="Staff logging in late" value={team.lateMembers} sub={`of ${team.members} active`} />
       </div>
 
       {/* Team KPI cards */}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MetricCard label="Total worked hours" value={hoursCell(team.totalHours)} sub="all members" accent="#1D9E75" />
-        <MetricCard label="Total break time" value={fmtHm(team.totalBreak)} sub="all members" accent="#0EA5E9" />
-        <MetricCard label="Break-time exceeding" value={fmtHm(team.totalOver)} sub="beyond 60-min/day" accent="#EF4444" />
-        <MetricCard label="Members exceeding" value={team.overMembers} sub={`of ${team.members} active`} accent="#7C3AED" />
+        <MetricCard label="Total worked hours" value={hoursCell(team.totalHours)} sub="all members" />
+        <MetricCard label="Total break time" value={fmtHm(team.totalBreak)} sub="all members" />
+        <MetricCard label="Break-time exceeding" value={fmtHm(team.totalOver)} sub="beyond 60-min/day" />
+        <MetricCard label="Members exceeding" value={team.overMembers} sub={`of ${team.members} active`} />
       </div>
 
       {/* Late logins by month */}
-      <Card className="mb-6">
+      <Panel className="mb-6">
         <CardHeader
           title="Late logins by month"
           subtitle="The same breakdown every PDF and workbook now opens with"
         />
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
+          <table className="table-airy w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-white/50 bg-white/40">
+              <tr className="border-b border-slate-100 bg-white/40">
                 {([
                   { label: 'Month', cls: 'text-left' },
                   { label: 'Operational days', cls: 'text-center' },
@@ -1648,7 +1655,7 @@ function BreakReportsView() {
                   { label: 'Late logins', cls: 'text-center' },
                   { label: 'Time lost', cls: 'text-right' },
                 ] as const).map((c) => (
-                  <th key={c.label} className={cx('px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500', c.cls)}>
+                  <th key={c.label} className={cx('px-3 py-2.5 text-xs font-semibold text-slate-700', c.cls)}>
                     {c.label}
                   </th>
                 ))}
@@ -1675,10 +1682,10 @@ function BreakReportsView() {
             </tbody>
           </table>
         </div>
-      </Card>
+      </Panel>
 
       {/* Team report */}
-      <Card className="mb-6">
+      <Panel className="mb-6">
         <CardHeader
           title="Overall Staff Report"
           subtitle={`Worked hours and break time over the 60-minute allowance · ${periodText}`}
@@ -1690,9 +1697,9 @@ function BreakReportsView() {
           }
         />
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
+          <table className="table-airy w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-white/50 bg-white/40">
+              <tr className="border-b border-slate-100 bg-white/40">
                 {([
                   { label: 'Staff', cls: 'text-left' },
                   { label: 'Days Logged In', cls: 'text-center' },
@@ -1703,7 +1710,7 @@ function BreakReportsView() {
                   { label: 'Break-Time Exceeding Allowance', cls: 'text-right' },
                   { label: 'Worked Hours', cls: 'text-right' },
                 ] as const).map((c) => (
-                  <th key={c.label} className={cx('px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500', c.cls)}>
+                  <th key={c.label} className={cx('px-3 py-2.5 text-xs font-semibold text-slate-700', c.cls)}>
                     {c.label}
                   </th>
                 ))}
@@ -1761,10 +1768,10 @@ function BreakReportsView() {
             )}
           </table>
         </div>
-      </Card>
+      </Panel>
 
       {/* Per-member report */}
-      <Card>
+      <Panel>
         <CardHeader
           title="Per-member report"
           subtitle="Day-by-day worked hours and break detail for one member"
@@ -1777,7 +1784,7 @@ function BreakReportsView() {
             <select
               value={selectedUser}
               onChange={(e) => setSelectedUser(e.target.value)}
-              className="glass-input rounded-lg border border-white/70 px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              className="bg-white rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand/20"
             >
               <option value="">Select a member…</option>
               {stats.map((s) => (
@@ -1809,14 +1816,14 @@ function BreakReportsView() {
                 </span>
               </div>
               <div className="overflow-x-auto rounded-xl ring-1 ring-white/60">
-                <table className="w-full border-collapse text-sm">
+                <table className="table-airy w-full border-collapse text-sm">
                   <thead>
                     <tr className="bg-white/60">
                       {['Date', 'Login', 'Late By', 'Logout', 'Worked Hours', 'Break', 'Exceeding Allowance', 'Status'].map((h, i) => (
                         <th
                           key={h}
                           className={cx(
-                            'whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500',
+                            'whitespace-nowrap px-3 py-2 text-xs font-semibold text-slate-700',
                             i === 0 ? 'text-left' : i === 7 ? 'text-center' : 'text-right',
                           )}
                         >
@@ -1831,7 +1838,7 @@ function BreakReportsView() {
                     ) : selectedStat.rows.slice().reverse().map((r, i) => (
                       // A late day is tinted the whole way across, so it is the DAY that is
                       // findable in the list rather than one cell in the middle of it.
-                      <tr key={i} className={cx('border-t border-white/50', isLateLogin(r) ? 'bg-rose-50/70 hover:bg-rose-50' : 'hover:bg-white/40')}>
+                      <tr key={i} className={cx('border-t border-slate-100', isLateLogin(r) ? 'bg-rose-50/70 hover:bg-rose-50' : 'hover:bg-white/40')}>
                         <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-600">{fullDate(r.work_date)}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right text-xs">
                           <ScheduleTime at={r.login_at} off={lateMinutes(r)} word="late" expected={r.expected_login} />
@@ -1862,7 +1869,7 @@ function BreakReportsView() {
             </div>
           )}
         </div>
-      </Card>
+      </Panel>
     </div>
   )
 }

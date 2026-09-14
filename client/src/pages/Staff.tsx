@@ -1,12 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import DepartmentLists from '../components/DepartmentLists'
 import { DaySelector } from '../components/DaySelector'
 import { PageHeader } from '../components/Layout'
 import { MonthSelector, currentMonth, formatMonth, shiftMonth } from '../components/MonthSelector'
 import StaffAttendanceSheet from '../components/StaffAttendanceSheet'
 import StaffLeavesSheet from '../components/StaffLeavesSheet'
 import StaffSalariesSheet from '../components/StaffSalariesSheet'
+import StaffOverview from '../components/StaffOverview'
 import StaffSheet from '../components/StaffSheet'
 import {
   Badge, Button, Card, CardHeader, DownloadIcon, EmptyState, Input, PageLoader,
@@ -17,6 +18,7 @@ import { matches } from '../lib/queues'
 import {
   buildLeavesPdf, buildSalariesPdf, buildStaffAttendancePdf, buildStaffPdf,
 } from '../lib/sheetPdf'
+import { buildCandidates, fromWire, rankCandidates } from '../lib/incentive'
 import {
   clockLabel, gapLabel, lateBy, loginTallies, monthRange, orgNowLabel, punctualityOf,
   sumLoginTallies, tallyPunctuality, type LoginTally, type PunctualityTally,
@@ -165,6 +167,7 @@ function LateTodayStrip({ late, dateLabel }: {
  * neither, so it gets a search box.
  */
 export default function Staff() {
+  const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>('staff')
   // Leaves and salaries are both written up about the month just finished — a salary paid
   // in September is for August's work — so they open on last month, the way Review does.
@@ -205,12 +208,37 @@ export default function Staff() {
   )
 
   const leaves = useAsync(
-    () => tab === 'leaves' ? api.staffLeaves(range) : Promise.resolve([]),
+    () => tab === 'leaves' || tab === 'staff' ? api.staffLeaves(range) : Promise.resolve([]),
     [tab, range.from, range.to],
   )
   const salaries = useAsync(
     () => tab === 'salaries' ? api.staffSalaries(month) : Promise.resolve([]),
     [tab, month],
+  )
+
+  // The Staff tab's overview previews the month's Top Performer standing (the Review page
+  // owns the full sheet), so it reads the same inputs: the month's attendance and reviews.
+  const wantsTop = tab === 'staff'
+  const topAttendance = useAsync(
+    () => wantsTop ? api.staffAttendance(range) : Promise.resolve(null),
+    [wantsTop, range.from, range.to],
+  )
+  const topPerformance = useAsync(
+    () => wantsTop ? api.reviewEntries('performance', `${month}-01`) : Promise.resolve([]),
+    [wantsTop, month],
+  )
+  const topBehaviour = useAsync(
+    () => wantsTop ? api.reviewEntries('behaviour', `${month}-01`) : Promise.resolve([]),
+    [wantsTop, month],
+  )
+  // The Staff tab's overview reads today's sheet for who is in and who is late.
+  const topSaved = useAsync(
+    () => wantsTop ? api.topPerformer(month).catch(() => null) : Promise.resolve(null),
+    [wantsTop, month],
+  )
+  const todayAttendance = useAsync(
+    () => tab === 'staff' ? api.staffAttendance({ from: orgDay, to: orgDay }) : Promise.resolve(null),
+    [tab, orgDay],
   )
 
   // The roster feeds every tab, so a change anywhere reloads it along with the sheet.
@@ -281,6 +309,13 @@ export default function Staff() {
       .sort((a, b) => b.minutes - a.minutes)
   }, [people, attendanceRows])
 
+  const overviewRanked = useMemo(() => {
+    if (tab !== 'staff' || !topAttendance.data) return null
+    const candidates = buildCandidates(people, topAttendance.data.rows, leaves.data ?? [], topPerformance.data ?? [], topBehaviour.data ?? [])
+    const { settings, ticks } = fromWire(topSaved.data)
+    return rankCandidates(candidates, settings, ticks)
+  }, [tab, people, topAttendance.data, leaves.data, topPerformance.data, topBehaviour.data, topSaved.data])
+
   const query = search.trim()
   const shownStaff = useMemo(() => (
     query === ''
@@ -296,6 +331,7 @@ export default function Staff() {
       || (tab === 'salaries' && salaries.loading)
   const error = staff.error ?? departments.error
       ?? attendance.error ?? monthAttendance.error ?? leaves.error ?? salaries.error
+      ?? topAttendance.error ?? topPerformance.error ?? topBehaviour.error
 
   const monthLabel = formatMonth(month)
   const dateLabel = formatDate(date)
@@ -350,7 +386,19 @@ export default function Staff() {
         <PageLoader label="Loading staff…" />
       ) : tab === 'staff' ? (
         <>
-          <DepartmentLists departments={depts} onChanged={reloadRoster} />
+          <StaffOverview
+            staff={people}
+            departments={depts}
+            today={orgDay}
+            todayRows={todayAttendance.data?.rows ?? []}
+            todayLoading={todayAttendance.loading}
+            ranked={overviewRanked}
+            rankedLoading={topAttendance.loading || topPerformance.loading || topBehaviour.loading || leaves.loading}
+            monthLabel={monthLabel}
+            onOpenTop={() => navigate('/review?tab=top')}
+            onOpenAttendance={() => setTab('attendance')}
+            onDepartmentsChanged={reloadRoster}
+          />
 
           <Card className="mt-6">
             <CardHeader

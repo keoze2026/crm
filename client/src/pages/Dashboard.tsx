@@ -1,19 +1,23 @@
-// Dashboard — performance overview of Leads, revenue and margin.
+// Dashboard — management overview of Leads, revenue, margin and the team's day.
 //
-// Light theme (flat white panels on the app's soft gradient), matching the rest of the app.
-// Layout mirrors the client's reference mock: a full-width Total Profit hero with a large
-// area chart, a row of four KPI cards with sparklines, a row of four volume cards each with
-// an isometric 3D-style icon + bar sparkline, then the trend/donut and ranked-list rows.
-// Report downloads (CSV/PDF) were removed; a lightweight KPI CSV export lives on this page.
-import { useMemo, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
+// Layout mirrors the client's reference mock (a "Brisk"-style CRM dashboard) one block for
+// one block, re-coloured two-tone (white and the navbar's navy, with green/red only for good/bad)
+// and set at a denser size:
+//
+//   toolbar        → quick links · last-updated · CSV export · refresh
+//   KPI row        → four compact cards with a % pill and the absolute change vs the previous period
+//   revenue chart  → metric dropdown, granularity pills, peak marker and a previous-period ghost line
+//   calendar column→ "Team Today": week strip, in/late/on-break/absent counts, hourly clock-in timeline
+//   bottom row     → Lead Mix (tabbed 2×2 tiles), Answer Rate grouped bars, Top Buyers / Campaigns
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import {
   Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
-  Legend,
+  ComposedChart,
+  Line,
+  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -23,9 +27,12 @@ import {
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { DateRangeControl, type Range } from '../components/DateRange'
+import { StaffDashboard } from '../components/StaffDashboard'
 import { cx } from '../components/ui'
 import { useAuth } from '../auth/AuthContext'
+import { isLateLogin, labelOf, loginLateMinutes } from '../lib/attendanceReports'
 import {
+  fileDateRange,
   formatDmy,
   formatPeriod,
   money,
@@ -35,40 +42,43 @@ import {
   rangeDays,
   todayRange,
 } from '../lib/format'
+import { ORG_TZ, gapLabel } from '../lib/staff'
+import { BRAND } from '../lib/theme'
 import { useAsync } from '../lib/useAsync'
+import { useOrgToday } from '../lib/useOrgToday'
+import type { AttendanceDay, Summary, TrendPoint } from '../types'
 
 type Granularity = 'day' | '4day' | 'week'
 
 const GRANULARITIES: { value: Granularity; label: string }[] = [
-  { value: 'day', label: 'Daily' },
-  { value: '4day', label: '4 Days' },
-  { value: 'week', label: 'Weekly' },
+  { value: 'day', label: '1D' },
+  { value: '4day', label: '4D' },
+  { value: 'week', label: '1W' },
 ]
 
-/** One colour = one meaning, across every block. */
+/**
+ * Two-tone palette: white, slate greys and the navbar's navy (the sidebar and dark controls)
+ * in a few strengths. Green and red appear only where
+ * they code a good or bad movement — delta pills, late/absent, negative profit.
+ */
 const C = {
-  revenue: '#2563eb',
-  cost: '#f97316',
-  profit: '#16a34a',
-  hero: '#8b5cf6',
-  marginPct: '#8b5cf6',
-  answerRate: '#0d9488',
-  answered: '#16a34a',
-  missed: '#f43f5e',
+  /** The navbar's navy — the one accent on this page. */
+  primary: BRAND,
+  /** The secondary series (missed bars, the previous-period ghost line): a neutral grey. */
+  soft: '#cbd5e1',
+  navy: BRAND,
   grid: '#eef2f6',
   axis: '#94a3b8',
 }
 
-/**
- * Whether a rising number is good news for this metric. Expenses is a cost, so it
- * is the one metric where falling is good — the arrow follows the raw sign, the colour
- * follows the meaning.
- */
+/** Whether a rising number is good news for this metric (Expenses is the one where it isn't). */
 type Tone = 'up-good' | 'down-good'
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
 
 const signed = (v: number, suffix: string) => `${v > 0 ? '+' : ''}${v.toFixed(1)}${suffix}`
+const signedMoney = (v: number) => `${v < 0 ? '−' : '+'}${money(Math.abs(v))}`
+const signedNum = (v: number) => `${v < 0 ? '−' : '+'}${num(Math.abs(v))}`
 
 /** % change with the same "no baseline → null" rule the API uses. */
 function changePct(prev: number | undefined, curr: number): number | null {
@@ -84,287 +94,92 @@ function comparisonLabel(range: Range): string {
   return `vs prev. ${days} days`
 }
 
-// ─── Line icons (KPI badges, controls) ─────────────────────────────────────────
+const timeLabel = (d: Date) =>
+  d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
 
-const svg = (children: ReactNode, size = 20) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden focusable="false">
+/** Hour of a UTC timestamp in the org's clock, as "9 AM" and as a sortable 0–23 key. */
+function orgHour(iso: string): { key: number; label: string } {
+  const d = new Date(iso)
+  const key = Number(new Intl.DateTimeFormat('en-US', { timeZone: ORG_TZ, hour: '2-digit', hour12: false }).format(d)) % 24
+  const label = new Intl.DateTimeFormat('en-US', { timeZone: ORG_TZ, hour: 'numeric', hour12: true }).format(d)
+  return { key, label }
+}
+
+/** "Jane Doe" → "JD"; a handle or id falls back to its first two characters. */
+function initials(name: string): string {
+  const words = name.replace(/^@/, '').trim().split(/\s+/).filter(Boolean)
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase()
+  return name.replace(/^@/, '').slice(0, 2).toUpperCase()
+}
+
+/** Codes are short and mostly alphanumeric — first three chars, separators stripped. */
+const codeInitials = (code: string) => code.replace(/[\s\-_]+/g, '').slice(0, 3).toUpperCase()
+
+/** Buyers, campaigns and people have no logo — navy initials stand in, as on the staff pages. */
+const TINTS = ['bg-brand text-white']
+function tintFor(seed: string): string {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
+  return TINTS[h % TINTS.length]
+}
+
+/** Client-side CSV download (no API round-trip). */
+function downloadCsv(filename: string, rows: (string | number)[][]) {
+  const esc = (v: string | number) => {
+    const s = String(v)
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const blob = new Blob([rows.map((r) => r.map(esc).join(',')).join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// ─── Icons ────────────────────────────────────────────────────────────────────
+
+const svg = (children: ReactNode, size = 14) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden focusable="false">
     {children}
   </svg>
 )
 
-const IconRefresh = () => svg(<><path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" /></>, 14)
-// Icons for the redesigned Top Traffic Sources card.
-const IconBars = () => svg(<><line x1="6" y1="20" x2="6" y2="14" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="18" y1="20" x2="18" y2="10" /></>, 22)
-const IconGrid = () => svg(<><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></>, 18)
-const IconPie = () => svg(<><path d="M21.2 15.9A10 10 0 1 1 8 2.8" /><path d="M22 12A10 10 0 0 0 12 2v10z" /></>, 20)
-const IconArrowUR = () => svg(<><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></>, 16)
-const IconCal = () => svg(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></>, 15)
-const IconChevD = () => svg(<><polyline points="6 9 12 15 18 9" /></>, 15)
-const IconTrendUp = () => svg(<><polyline points="22 7 13.5 15.5 8.5 10.5 2 17" /><polyline points="16 7 22 7 22 13" /></>, 18)
-const IconTrendDown = () => svg(<><polyline points="22 17 13.5 8.5 8.5 13.5 2 7" /><polyline points="16 17 22 17 22 11" /></>, 18)
-const IconMinus = () => svg(<><line x1="5" y1="12" x2="19" y2="12" /></>, 18)
-const IconCrown = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden focusable="false">
-    <path d="M3 8l4.4 3L12 5l4.6 6L21 8l-1.5 9.2a1 1 0 0 1-1 .8H5.5a1 1 0 0 1-1-.8L3 8z" />
-  </svg>
-)
-// Green handset with grey signal arcs, for the donut's centre button.
-const IconPhoneCall = () => (
-  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" aria-hidden focusable="false">
-    <path d="M14.05 2a9 9 0 0 1 8 7.94" stroke="#cbd5e1" strokeWidth="2" />
-    <path d="M14.05 6A5 5 0 0 1 18 10" stroke="#cbd5e1" strokeWidth="2" />
-    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.8 12.8 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.8 12.8 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" strokeWidth="2" />
-  </svg>
-)
-const IconPhoneFwd = () => svg(<><polyline points="16 3 21 3 21 8" /><line x1="14" y1="10" x2="21" y2="3" /><path d="M20.5 16.9v2.6a2 2 0 0 1-2.2 2A18 18 0 0 1 3.5 6.2 2 2 0 0 1 5.5 4h2.4a2 2 0 0 1 2 1.7c.1.8.3 1.6.6 2.4a2 2 0 0 1-.5 2.1L8.3 11.6a14 14 0 0 0 5.3 5.3l1.4-1.2a2 2 0 0 1 2.1-.5c.8.3 1.6.5 2.4.6a2 2 0 0 1 1.7 2z" /></>, 18)
-
-// ─── Isometric 3D-style icons for the volume cards ─────────────────────────────
-//
-// Hand-built SVGs — an object on a glossy pedestal with gradient shading and a soft ground
-// shadow — standing in for the reference mock's rendered-3D illustrations (true 3D renders
-// can't be produced as code). One factory keeps the pedestal/lighting consistent; each card
-// supplies its subject and a colour ramp.
-
-interface Ramp { light: string; base: string; dark: string; pad: string; padDark: string }
-
-const RAMPS: Record<string, Ramp> = {
-  green: { light: '#bbf7d0', base: '#22c55e', dark: '#15803d', pad: '#86efac', padDark: '#16a34a' },
-  blue: { light: '#bfdbfe', base: '#3b82f6', dark: '#1d4ed8', pad: '#93c5fd', padDark: '#2563eb' },
-  purple: { light: '#ddd6fe', base: '#8b5cf6', dark: '#6d28d9', pad: '#c4b5fd', padDark: '#7c3aed' },
-  orange: { light: '#fed7aa', base: '#f97316', dark: '#c2410c', pad: '#fdba74', padDark: '#ea580c' },
-}
-
-function Iso3D({ id, ramp, size = 64, children }: { id: string; ramp: Ramp; size?: number; children: ReactNode }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden focusable="false">
-      <defs>
-        <linearGradient id={`${id}-obj`} x1="0" y1="0" x2="0.4" y2="1">
-          <stop offset="0%" stopColor={ramp.light} />
-          <stop offset="55%" stopColor={ramp.base} />
-          <stop offset="100%" stopColor={ramp.dark} />
-        </linearGradient>
-        <linearGradient id={`${id}-objSoft`} x1="0" y1="0" x2="0.4" y2="1">
-          <stop offset="0%" stopColor={ramp.light} />
-          <stop offset="100%" stopColor={ramp.base} />
-        </linearGradient>
-        <linearGradient id={`${id}-padTop`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#fff" stopOpacity="0.9" />
-          <stop offset="100%" stopColor={ramp.pad} />
-        </linearGradient>
-      </defs>
-      {/* Ground shadow */}
-      <ellipse cx="32" cy="55" rx="19" ry="4.5" fill="rgba(15,23,42,0.12)" />
-      {/* Pedestal — isometric slab */}
-      <path d="M32 39 L51 46.5 L32 54 L13 46.5 Z" fill={`url(#${id}-padTop)`} />
-      <path d="M13 46.5 L32 54 L32 58 L13 50.5 Z" fill={ramp.padDark} />
-      <path d="M51 46.5 L32 54 L32 58 L51 50.5 Z" fill={ramp.pad} />
-      {/* Subject */}
-      {children}
-    </svg>
-  )
-}
-
-const Phone3D = ({ size }: { size?: number }) => (
-  <Iso3D id="i3-phone" ramp={RAMPS.green} size={size}>
-    {/* Handset — filled receiver, tilted, with a couple of sound arcs. */}
-    <g transform="translate(15 8) scale(1.35)">
-      <path
-        d="M4.8 2.2c-.9-.4-1.9 0-2.3.9L1.4 5.4c-.4.9-.2 2 .5 2.7 3 3 6 6 9 9 .7.7 1.8.9 2.7.5l2.3-1.1c.9-.4 1.3-1.4.9-2.3l-1.1-2.5c-.3-.8-1.2-1.2-2-1L13 11.4c-.5.1-1.1 0-1.5-.4L8.9 8.4c-.4-.4-.5-1-.4-1.5l.8-2.4c.2-.8-.2-1.7-1-2z"
-        fill={`url(#i3-phone-obj)`}
-        stroke="#0f5132"
-        strokeWidth="0.4"
-      />
-      <path d="M14 2.6a5 5 0 0 1 3.4 3.4" stroke={RAMPS.green.dark} strokeWidth="1.1" strokeLinecap="round" fill="none" opacity="0.85" />
-      <path d="M12.6 5a2.6 2.6 0 0 1 1.8 1.8" stroke={RAMPS.green.dark} strokeWidth="1.1" strokeLinecap="round" fill="none" opacity="0.85" />
-    </g>
-  </Iso3D>
-)
-
-const People3D = ({ size }: { size?: number }) => (
-  <Iso3D id="i3-people" ramp={RAMPS.blue} size={size}>
-    {/* Three figures — two lighter behind, one darker in front. */}
-    <g>
-      <circle cx="19" cy="24" r="5" fill={`url(#i3-people-objSoft)`} />
-      <path d="M11 43c0-5 3.6-8 8-8s8 3 8 8z" fill={`url(#i3-people-objSoft)`} />
-      <circle cx="45" cy="24" r="5" fill={`url(#i3-people-objSoft)`} />
-      <path d="M37 43c0-5 3.6-8 8-8s8 3 8 8z" fill={`url(#i3-people-objSoft)`} />
-      <circle cx="32" cy="20" r="6.5" fill={`url(#i3-people-obj)`} stroke="#1e3a8a" strokeWidth="0.4" />
-      <path d="M21 44c0-6.5 4.6-11 11-11s11 4.5 11 11z" fill={`url(#i3-people-obj)`} stroke="#1e3a8a" strokeWidth="0.4" />
-    </g>
-  </Iso3D>
-)
-
-const Megaphone3D = ({ size }: { size?: number }) => (
-  <Iso3D id="i3-mega" ramp={RAMPS.purple} size={size}>
-    {/* Bullhorn pointing up-right, with a handle and sound arcs. */}
-    <g transform="rotate(-18 32 28)">
-      <path d="M14 24 L34 18 L34 38 L14 32 Z" fill={`url(#i3-mega-obj)`} stroke="#4c1d95" strokeWidth="0.4" />
-      <ellipse cx="34" cy="28" rx="3.4" ry="10" fill={RAMPS.purple.light} />
-      <rect x="9" y="24" width="6" height="8" rx="2" fill={`url(#i3-mega-obj)`} />
-      <rect x="20" y="38" width="5" height="9" rx="2.2" fill={RAMPS.purple.dark} />
-      <path d="M40 20a10 10 0 0 1 0 16" stroke={RAMPS.purple.base} strokeWidth="2" strokeLinecap="round" fill="none" />
-      <path d="M44 15a16 16 0 0 1 0 26" stroke={RAMPS.purple.light} strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.8" />
-    </g>
-  </Iso3D>
-)
-
-const Headphones3D = ({ size }: { size?: number }) => (
-  <Iso3D id="i3-head" ramp={RAMPS.orange} size={size}>
-    {/* Over-ear headphones — filled band + two ear cups. */}
-    <g>
-      <path d="M16 38 V30 a16 16 0 0 1 32 0 V38 h-4 V30 a12 12 0 0 0-24 0 V38 Z" fill={`url(#i3-head-obj)`} stroke="#7c2d12" strokeWidth="0.4" />
-      <rect x="12.5" y="34" width="9" height="14" rx="4" fill={`url(#i3-head-obj)`} stroke="#7c2d12" strokeWidth="0.4" />
-      <rect x="42.5" y="34" width="9" height="14" rx="4" fill={`url(#i3-head-obj)`} stroke="#7c2d12" strokeWidth="0.4" />
-      <rect x="14.5" y="36.5" width="4.5" height="9" rx="2.2" fill={RAMPS.orange.light} opacity="0.7" />
-    </g>
-  </Iso3D>
-)
-
-// ─── KPI card illustrations ────────────────────────────────────────────────────
-//
-// Themed SVG graphics for the four colour widgets, floating on a soft white glow so they
-// read on any card colour — the code-drawn equivalent of the reference mock's 3D artwork
-// (rendered-3D images can't be produced as code). Money-in, money-out, growth, and a rate
-// gauge, one per metric.
-
-const AnswerArt = ({ size = 82 }: { size?: number }) => (
-  <svg viewBox="0 0 88 88" width={size} height={size} fill="none" aria-hidden focusable="false">
-    <defs>
-      <radialGradient id="ans-glow" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stopColor="#fff" stopOpacity="0.5" />
-        <stop offset="70%" stopColor="#fff" stopOpacity="0" />
-      </radialGradient>
-    </defs>
-    <circle cx="44" cy="46" r="40" fill="url(#ans-glow)" />
-    {/* Gauge — track, filled arc, needle. */}
-    <path d="M22 62 a24 24 0 0 1 44 0" stroke="#fff" strokeOpacity="0.35" strokeWidth="6" strokeLinecap="round" fill="none" />
-    <path d="M22 62 a24 24 0 0 1 8-17.6" stroke="#fff" strokeWidth="6" strokeLinecap="round" fill="none" />
-    <path d="M55 45 a24 24 0 0 1 11 17" stroke="#fff" strokeWidth="6" strokeLinecap="round" fill="none" />
-    <circle cx="44" cy="62" r="6" fill="#fff" />
-    <path d="M44 62 L57 47" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" />
-    <circle cx="44" cy="62" r="2.5" fill="#0d9488" />
-  </svg>
-)
-
-const RevenueArt = ({ size = 82 }: { size?: number }) => (
-  <svg viewBox="0 0 88 88" width={size} height={size} fill="none" aria-hidden focusable="false">
-    <defs>
-      <radialGradient id="rev-glow" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stopColor="#fff" stopOpacity="0.5" />
-        <stop offset="70%" stopColor="#fff" stopOpacity="0" />
-      </radialGradient>
-      <linearGradient id="rev-note" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor="#6ee7b7" /><stop offset="100%" stopColor="#10b981" />
-      </linearGradient>
-      <linearGradient id="rev-coin" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor="#fde68a" /><stop offset="100%" stopColor="#f59e0b" />
-      </linearGradient>
-    </defs>
-    <circle cx="44" cy="46" r="40" fill="url(#rev-glow)" />
-    {/* Banknotes */}
-    <g transform="rotate(-10 44 52)">
-      <rect x="20" y="46" width="46" height="17" rx="3" fill="#34d399" />
-      <rect x="17" y="42" width="46" height="17" rx="3" fill="url(#rev-note)" stroke="#059669" strokeWidth="1" />
-      <circle cx="40" cy="50.5" r="5.5" fill="#d1fae5" />
-    </g>
-    {/* Coin stack */}
-    <ellipse cx="30" cy="70" rx="11" ry="4.2" fill="#d97706" />
-    <ellipse cx="30" cy="66.6" rx="11" ry="4.2" fill="url(#rev-coin)" stroke="#d97706" strokeWidth="0.8" />
-    {/* Floating coin with $ */}
-    <circle cx="64" cy="34" r="10" fill="url(#rev-coin)" stroke="#d97706" strokeWidth="1" />
-    <path d="M64 29v10M61.6 31h4a1.6 1.6 0 0 1 0 3.2h-2.6a1.6 1.6 0 0 0 0 3.2h4" stroke="#b45309" strokeWidth="1.1" strokeLinecap="round" fill="none" />
-  </svg>
-)
-
-const CostArt = ({ size = 82 }: { size?: number }) => (
-  <svg viewBox="0 0 88 88" width={size} height={size} fill="none" aria-hidden focusable="false">
-    <defs>
-      <radialGradient id="cost-glow" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stopColor="#fff" stopOpacity="0.5" />
-        <stop offset="70%" stopColor="#fff" stopOpacity="0" />
-      </radialGradient>
-      <linearGradient id="cost-coin" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor="#fff7ed" /><stop offset="100%" stopColor="#fdba74" />
-      </linearGradient>
-    </defs>
-    <circle cx="44" cy="46" r="40" fill="url(#cost-glow)" />
-    {/* Bank card */}
-    <g transform="rotate(-12 42 44)">
-      <rect x="18" y="32" width="40" height="26" rx="4" fill="#fff" />
-      <rect x="18" y="38" width="40" height="6" fill="#fb923c" />
-      <rect x="24" y="50" width="16" height="3" rx="1.5" fill="#fdba74" />
-    </g>
-    {/* Coin stack (fees paid out) */}
-    <ellipse cx="62" cy="66" rx="11" ry="4.2" fill="#c2410c" />
-    <ellipse cx="62" cy="62.6" rx="11" ry="4.2" fill="url(#cost-coin)" stroke="#c2410c" strokeWidth="0.8" />
-    <ellipse cx="62" cy="59.2" rx="11" ry="4.2" fill="url(#cost-coin)" stroke="#c2410c" strokeWidth="0.8" />
-  </svg>
-)
-
-const ProfitArt = ({ size = 82 }: { size?: number }) => (
-  <svg viewBox="0 0 88 88" width={size} height={size} fill="none" aria-hidden focusable="false">
-    <defs>
-      <radialGradient id="pro-glow" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stopColor="#fff" stopOpacity="0.5" />
-        <stop offset="70%" stopColor="#fff" stopOpacity="0" />
-      </radialGradient>
-    </defs>
-    <circle cx="44" cy="46" r="40" fill="url(#pro-glow)" />
-    {/* Rising bars */}
-    <rect x="22" y="52" width="11" height="16" rx="2" fill="#fff" fillOpacity="0.85" />
-    <rect x="37" y="44" width="11" height="24" rx="2" fill="#fff" fillOpacity="0.92" />
-    <rect x="52" y="34" width="11" height="34" rx="2" fill="#fff" />
-    {/* Growth arrow */}
-    <path d="M22 46 L38 36 L48 42 L66 26" stroke="#a3e635" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-    <path d="M58 26 h8 v8" stroke="#a3e635" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-  </svg>
-)
+const IconRefresh = () => svg(<><path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" /></>)
+const IconCheck = () => svg(<polyline points="20 6 9 17 4 12" />, 13)
+const IconChevD = () => svg(<polyline points="6 9 12 15 18 9" />, 12)
+const IconDownload = () => svg(<><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M4 21h16" /></>)
+const IconReport = () => svg(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M16 13H8M16 17H8" /></>)
+const IconUsers = () => svg(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></>)
+const IconAlert = () => svg(<><circle cx="12" cy="12" r="10" /><path d="M12 8v5M12 16h.01" /></>, 16)
+const IconArrowR = () => svg(<><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></>, 12)
+const IconCal = () => svg(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></>, 12)
 
 // ─── Small building blocks ────────────────────────────────────────────────────
 
-/** Flat white card on the app's soft gradient backdrop. */
+/** Flat white card, matching the reference's panels — slate hairline, soft shadow. */
 function Panel({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <section className={cx('rounded-2xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/5', className)}>
+    <section className={cx('rounded-xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/5', className)}>
       {children}
     </section>
   )
 }
 
-/** Metric definitions surface as a hover/focus hint rather than eating layout space. */
+/** Metric definitions surface as a hover hint rather than eating layout space. */
 function InfoDot({ text }: { text: string }) {
   return (
     <button
       type="button"
       title={text}
       aria-label={text}
-      className="inline-flex shrink-0 cursor-help text-slate-400 transition-colors hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+      className="inline-flex shrink-0 cursor-help text-slate-300 transition-colors hover:text-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
     >
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
         <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" />
       </svg>
     </button>
-  )
-}
-
-function PanelHeader({ title, subtitle, info, action }: {
-  title: string
-  subtitle?: string
-  info?: string
-  action?: ReactNode
-}) {
-  return (
-    <div className="flex flex-col gap-3 px-5 pb-2 pt-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-      <div className="min-w-0">
-        {/* Titles wrap rather than truncate — the trend title is long. */}
-        <div className="flex items-start gap-1.5">
-          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-          {info && <span className="mt-1"><InfoDot text={info} /></span>}
-        </div>
-        {subtitle && <p className="mt-0.5 text-base text-slate-500">{subtitle}</p>}
-      </div>
-      {action && <div className="shrink-0">{action}</div>}
-    </div>
   )
 }
 
@@ -373,446 +188,60 @@ function Skeleton({ className }: { className?: string }) {
 }
 
 /**
- * Change vs the previous period. The glyph follows the raw sign; the colour follows
- * whether that movement is good for this particular metric.
+ * The reference's rounded delta pill: "▲ 8%" on a green tint, "▼ 4%" on red. The glyph
+ * follows the raw sign; the colour follows whether that movement is good for the metric.
  */
-function DeltaChip({ value, tone, suffix = '%', caption, className, hideWhenNull }: {
-  value?: number | null
-  tone: Tone
-  suffix?: string
-  caption?: string
-  className?: string
-  /** In dense rows, say nothing rather than spending a line on "no prior period". */
-  hideWhenNull?: boolean
-}) {
+function DeltaPill({ value, tone, suffix = '%' }: { value: number | null | undefined; tone: Tone; suffix?: string }) {
   if (value === undefined || value === null) {
-    if (hideWhenNull) return null
-    return <span className={cx('text-sm text-slate-400', className)}>No comparable prior period</span>
+    return <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-400" title="No comparable prior period">n/a</span>
   }
   const good = value === 0 ? null : tone === 'up-good' ? value > 0 : value < 0
   return (
-    <span className={cx('flex items-baseline gap-x-1 whitespace-nowrap', className)}>
-      <span
-        className={cx(
-          'shrink-0 text-[11px] font-semibold',
-          good === null ? 'text-slate-500' : good ? 'text-emerald-600' : 'text-red-500',
-        )}
-      >
-        {value === 0 ? '±' : value > 0 ? '▲' : '▼'} {signed(value, suffix)}
-      </span>
-      {caption && <span className="truncate text-[11px] text-slate-400">{caption}</span>}
+    <span
+      className={cx(
+        'inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
+        good === null ? 'bg-slate-100 text-slate-500' : good ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600',
+      )}
+    >
+      {value === 0 ? '±' : value > 0 ? '▲' : '▼'} {Math.abs(value).toFixed(1)}{suffix}
     </span>
   )
 }
 
-/** Axis-less area sparkline for the KPI tiles, drawn from the same series as the main chart. */
-function Sparkline({ id, data, color, height = 40, dots = false, fillOpacity = 0.28 }: {
-  id: string
-  data: number[]
-  color: string
-  height?: number
-  /** Show a marker at each point (the colour-widget cards use these). */
-  dots?: boolean
-  fillOpacity?: number
+/** The reference's slate tab bar (Status / Sources / Qualification) — white raised active segment. */
+function MiniTabs<T extends string>({ tabs, value, onChange }: {
+  tabs: { id: T; label: string }[]
+  value: T
+  onChange: (id: T) => void
 }) {
-  if (data.length === 0) {
-    return (
-      <div className="flex items-center justify-center" style={{ height }}>
-        <span className="text-[11px] text-slate-300">No trend data in this range</span>
-      </div>
-    )
-  }
-  // A single bucket still deserves a mark: duplicate it so there is a segment to stroke.
-  const values = data.length === 1 ? [data[0], data[0]] : data
-  const points = values.map((v, i) => ({ i, v }))
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const pad = min === max ? Math.abs(max) * 0.5 || 1 : 0
-
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={points} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
-        <defs>
-          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={fillOpacity} />
-            <stop offset="100%" stopColor={color} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <YAxis hide domain={[min - pad, max + pad]} />
-        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.75} fill={`url(#${id})`} dot={dots ? { r: 2.5, fill: color, stroke: 'none' } : false} isAnimationActive={false} />
-      </AreaChart>
-    </ResponsiveContainer>
-  )
-}
-
-/** Tiny activity bars for the volume cards, echoing the reference's mini bar charts. */
-function BarSpark({ data, color, height = 40 }: { data: number[]; color: string; height?: number }) {
-  if (data.length === 0) return <div style={{ height }} aria-hidden />
-  const points = data.map((v, i) => ({ i, v }))
-  return (
-    <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={points} margin={{ top: 2, right: 0, bottom: 0, left: 0 }} barCategoryGap={2}>
-        <YAxis hide domain={[0, 'dataMax']} />
-        <Bar dataKey="v" fill={color} radius={[2, 2, 0, 0]} isAnimationActive={false} />
-      </BarChart>
-    </ResponsiveContainer>
-  )
-}
-
-interface PieSlice { name: string; value: number; color: string }
-
-/**
- * A flat 2D donut ring: two rounded arcs — green "answered" and red "missed" — separated by
- * small gaps, so the ring reflects the answered/missed split (per the mock).
- */
-function DonutRing2D({ answered, missed, size = 172, stroke = 24 }: {
-  answered: number
-  missed: number
-  size?: number
-  stroke?: number
-}) {
-  const total = answered + missed || 1
-  const aFrac = answered / total
-  const mFrac = missed / total
-  const c = size / 2
-  const r = c - stroke / 2 - 2
-  const circ = 2 * Math.PI * r
-  const gap = circ * 0.03
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox={`0 0 ${size} ${size}`}
-      aria-hidden
-      focusable="false"
-      style={{ transform: 'rotate(-90deg)', filter: 'drop-shadow(0 6px 10px rgba(15,23,42,0.10))' }}
-    >
-      <circle
-        cx={c} cy={c} r={r} fill="none" stroke={C.answered} strokeWidth={stroke} strokeLinecap="round"
-        strokeDasharray={`${Math.max(0.1, aFrac * circ - gap)} ${circ}`}
-      />
-      <circle
-        cx={c} cy={c} r={r} fill="none" stroke={C.missed} strokeWidth={stroke} strokeLinecap="round"
-        strokeDasharray={`${Math.max(0.1, mFrac * circ - gap)} ${circ}`}
-        strokeDashoffset={-(aFrac * circ)}
-      />
-    </svg>
-  )
-}
-
-/** The full-width Total Profit hero: big figure on the left, large area chart on the right. */
-function HeroBanner({ value, delta, caption, series, loading }: {
-  value: number | undefined
-  delta: number | null | undefined
-  caption: string
-  series: { period: string; margin: number }[]
-  loading: boolean
-}) {
-  const negative = value !== undefined && value < 0
-  const plottable = series.length >= 2
-  return (
-    <Panel className="bg-linear-to-br from-violet-50/70 to-white">
-      <div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[minmax(0,20rem)_1fr] lg:items-center lg:gap-8">
-        {/* Left — the headline figure */}
-        <div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-base font-medium text-slate-500">Total Profit</span>
-            <InfoDot text="Revenue (billed) minus Lead Expenses and portal expenses for the selected period. Portal expenses are monthly, so only months the date range covers in full are charged — a shorter range carries none. Negative means the Leads and overheads cost more than they billed." />
-          </div>
-          {loading ? (
-            <Skeleton className="mt-2 h-11 w-52" />
-          ) : (
-            <div className={cx('mt-1 text-5xl font-bold tracking-tight', negative ? 'text-red-600' : 'text-slate-900')}>
-              {value !== undefined ? money(value) : '—'}
-            </div>
+    <div className="flex w-fit max-w-full rounded-lg bg-slate-100 p-0.5" role="tablist">
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          role="tab"
+          aria-selected={value === t.id}
+          onClick={() => onChange(t.id)}
+          className={cx(
+            'rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors',
+            value === t.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800',
           )}
-          {!loading && <DeltaChip className="mt-2" value={delta} tone="up-good" caption={caption} />}
-        </div>
-
-        {/* Right — the large area chart */}
-        <div className="relative h-44">
-          <div className="absolute right-0 top-0 z-10 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-sm font-medium text-slate-500">
-            Area Chart
-          </div>
-          {loading ? (
-            <div className="flex h-full items-center justify-center"><Skeleton className="h-32 w-full" /></div>
-          ) : !plottable ? (
-            <div className="flex h-full items-center justify-center">
-              <span className="text-sm text-slate-400">Not enough data to plot a trend for this range.</span>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={series} margin={{ top: 24, right: 8, left: 4, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="hero-area" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={C.hero} stopOpacity={0.35} />
-                    <stop offset="100%" stopColor={C.hero} stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
-                <XAxis dataKey="period" tickFormatter={formatPeriod} tick={{ fontSize: 12, fill: C.axis }} tickLine={false} axisLine={false} minTickGap={24} />
-                <YAxis tickFormatter={moneyCompact} tick={{ fontSize: 12, fill: C.axis }} tickLine={false} axisLine={false} width={48} />
-                <Tooltip content={<SeriesTooltip format={money} />} />
-                <Area type="monotone" dataKey="margin" name="Profit" stroke={C.hero} strokeWidth={2.5} fill="url(#hero-area)" dot={false} activeDot={{ r: 5 }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </div>
-    </Panel>
-  )
-}
-
-function EmptyHint({ message }: { message: string }) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-2 py-10 text-center">
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" className="text-slate-300">
-        <path d="M3 3v18h18" /><path d="m7 15 3.5-3.5 3 3L21 7" />
-      </svg>
-      <p className="max-w-[26ch] text-base text-slate-400">{message}</p>
-    </div>
-  )
-}
-
-function ChartSkeleton() {
-  return (
-    <div className="flex h-full items-end gap-2 px-2 pb-6 pt-4">
-      {[38, 62, 45, 78, 55, 88, 66, 72, 50, 80].map((h, i) => (
-        <div key={i} className="flex-1 animate-pulse rounded-t bg-slate-100" style={{ height: `${h}%` }} />
+        >
+          {t.label}
+        </button>
       ))}
     </div>
   )
 }
 
-// ─── KPI + volume cards ────────────────────────────────────────────────────────
-
-/**
- * A solid colour-filled KPI widget (CoreUI-style): white value + directional delta + label,
- * a "⋮" menu that surfaces the metric definition, and an edge-to-edge chart at the bottom.
- * The delta is white and follows the raw sign only — on a solid colour tile the good/bad
- * green/red coding can't read, so it's intentionally dropped here (the arrow shows direction).
- */
-function StatWidget({ gradient, label, info, value, delta, deltaSuffix = '%', chart, art, loading }: {
-  gradient: string
-  label: string
-  info: string
-  value: string
-  delta: number | null | undefined
-  deltaSuffix?: string
-  chart: ReactNode
-  /** Themed illustration, floated on the right (see the KPI card illustrations above). */
-  art: ReactNode
-  loading: boolean
-}) {
-  const arrow = delta == null ? '' : delta > 0 ? '↑' : delta < 0 ? '↓' : ''
+function EmptyHint({ message, className }: { message: string; className?: string }) {
   return (
-    // title carries the metric definition on hover (the ⋮ menu was dropped to make room for
-    // the illustration, mirroring the reference cards which have no menu).
-    <div title={info} className={cx('relative flex flex-col overflow-hidden rounded-2xl p-4 text-white shadow-lg shadow-slate-900/10', gradient)}>
-      {/* Illustration — right side, vertically centred, above the chart. */}
-      <div className="pointer-events-none absolute right-1 top-[22px] z-0">{art}</div>
-      {/* Text — reserve space on the right so the value never runs under the art. */}
-      <div className="relative z-10 min-w-0 pr-20">
-        {loading ? (
-          <div className="h-7 w-24 animate-pulse rounded bg-white/25" />
-        ) : (
-          <div className="flex flex-wrap items-baseline gap-x-1.5">
-            <span className="text-2xl font-bold tracking-tight">{value}</span>
-            {delta != null && (
-              <span className="text-sm font-medium text-white/85">({signed(delta, deltaSuffix)} {arrow})</span>
-            )}
-          </div>
-        )}
-        <div className="mt-0.5 truncate text-base text-white/85">{label}</div>
-      </div>
-      {/* Chart bleeds to the card edges; the negative margins cancel the p-4. */}
-      <div className="relative z-10 -mx-4 -mb-4 mt-3 h-16">{!loading && chart}</div>
+    <div className={cx('flex h-full flex-col items-center justify-center gap-1.5 py-6 text-center', className)}>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" className="text-slate-300">
+        <path d="M3 3v18h18" /><path d="m7 15 3.5-3.5 3 3L21 7" />
+      </svg>
+      <p className="max-w-[24ch] text-xs text-slate-400">{message}</p>
     </div>
-  )
-}
-
-/** A volume card: label + value + delta on the left, a 3D icon on the right, bars below. */
-function VolumeCard({ icon, label, info, value, delta, tone, caption, bars, barColor, loading }: {
-  icon: ReactNode
-  label: string
-  info: string
-  value: string
-  delta: number | null | undefined
-  tone: Tone
-  caption: string
-  bars: number[]
-  barColor: string
-  loading: boolean
-}) {
-  return (
-    <Panel className="flex flex-col justify-between p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="truncate text-base font-medium text-slate-600">{label}</span>
-            <InfoDot text={info} />
-          </div>
-          {loading ? (
-            <Skeleton className="mt-2 h-7 w-20" />
-          ) : (
-            <div className="mt-1.5 text-3xl font-bold tracking-tight text-slate-900">{value}</div>
-          )}
-          {!loading && <DeltaChip className="mt-1" value={delta} tone={tone} caption={caption} />}
-        </div>
-        <span className="-mt-1 -mr-1 shrink-0">{icon}</span>
-      </div>
-      <div className="-mx-1 mt-3 h-9">
-        {!loading && <BarSpark data={bars} color={barColor} />}
-      </div>
-    </Panel>
-  )
-}
-
-// ─── Ranked lists ─────────────────────────────────────────────────────────────
-
-/**
- * Buyers and campaigns have no logo in the schema — only a short code and an optional
- * name — so identity is carried by initials on a tint derived from the code.
- */
-const TINTS = [
-  'bg-blue-50 text-blue-700',
-  'bg-emerald-50 text-emerald-700',
-  'bg-amber-50 text-amber-700',
-  'bg-violet-50 text-violet-700',
-  'bg-rose-50 text-rose-700',
-  'bg-cyan-50 text-cyan-700',
-  'bg-indigo-50 text-indigo-700',
-  'bg-teal-50 text-teal-700',
-]
-
-function tintFor(seed: string): string {
-  let h = 0
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
-  return TINTS[h % TINTS.length]
-}
-
-/** Codes are short and mostly alphanumeric — first three chars, separators stripped. */
-function initialsFor(code: string): string {
-  return code.replace(/[\s\-_]+/g, '').slice(0, 3).toUpperCase()
-}
-
-interface RankRow {
-  key: string
-  code: string
-  name: string | null
-  value: number
-  delta: number | null
-}
-
-/** Trend chip for the Change column: green up / red down / grey flat, matching the mock. */
-function TrendChip({ delta }: { delta: number | null }) {
-  const dir = delta == null ? 0 : delta > 0 ? 1 : delta < 0 ? -1 : 0
-  const cls = dir > 0 ? 'bg-emerald-50 text-emerald-500' : dir < 0 ? 'bg-red-50 text-red-500' : 'bg-slate-100 text-slate-400'
-  const title = delta == null ? 'No comparable prior period' : `${signed(delta, '%')} vs previous period`
-  return (
-    <span title={title} className={cx('inline-flex h-9 w-9 items-center justify-center rounded-xl', cls)}>
-      {dir > 0 ? <IconTrendUp /> : dir < 0 ? <IconTrendDown /> : <IconMinus />}
-    </span>
-  )
-}
-
-/**
- * A ranked list where each row is its own card: a gradient rank badge (crown on #1) on the
- * left, then avatar, name, value and a trend chip. Rows flex to fill the card height so a
- * short list (e.g. 4 campaigns) leaves no empty space at the bottom.
- */
-function RankPanel({ title, info, rows, loading, emptyMessage, valueHead, to, perm, linkLabel, caption, rankGradients, ribbonLabel, ribbonClass }: {
-  title: string
-  info: string
-  rows: RankRow[]
-  loading: boolean
-  emptyMessage: string
-  valueHead: string
-  to: string
-  /** Permission key for the linked page — the link is hidden from viewers who lack it. */
-  perm: string
-  linkLabel: string
-  caption: string
-  /** Per-rank badge gradients (index 0 = #1). The last entry repeats for lower ranks. */
-  rankGradients: string[]
-  /** Corner ribbon text + colour shown on the #1 row (e.g. "Top Buyer"). */
-  ribbonLabel: string
-  ribbonClass: string
-}) {
-  const { canAccess } = useAuth()
-  return (
-    <Panel className="flex flex-col">
-      <div className="flex items-center justify-between px-5 pb-1 pt-4">
-        <div className="flex items-center gap-1.5">
-          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-          <InfoDot text={info} />
-        </div>
-        {canAccess(perm) && (
-          <Link to={to} className="text-sm font-medium text-blue-600 hover:text-blue-700">
-            {linkLabel}
-          </Link>
-        )}
-      </div>
-      {/* Column headers. */}
-      <div className="flex items-center gap-3 px-5 pb-1.5 pt-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
-        <span className="w-6">#</span>
-        <span className="flex-1 pl-11">Name</span>
-        <span className="w-24 text-right">{valueHead}</span>
-        <span className="w-12 text-right">Change</span>
-      </div>
-      {loading ? (
-        <div className="flex flex-1 flex-col gap-3 px-4 pb-4">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-16 flex-1 rounded-2xl" />
-          ))}
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="flex-1 px-4 pb-4">
-          <EmptyHint message={emptyMessage} />
-        </div>
-      ) : (
-        <ol className="flex flex-1 flex-col gap-3 px-4 pb-4">
-          {rows.map((r, i) => (
-            <li
-              key={r.key}
-              className={cx(
-                'relative flex min-h-[3.5rem] flex-1 items-stretch overflow-hidden rounded-2xl shadow-sm ring-1',
-                i === 0 ? 'ring-violet-200' : 'ring-slate-100',
-              )}
-            >
-              {/* Diagonal corner ribbon on the #1 row — kept high in the corner so it clears
-                  the change chip. */}
-              {i === 0 && (
-                <span className={cx('pointer-events-none absolute -right-[44px] top-[11px] z-10 w-[136px] rotate-45 py-[3px] text-center text-[7.5px] font-bold uppercase leading-none tracking-tight text-white shadow-sm', ribbonClass)}>
-                  {ribbonLabel}
-                </span>
-              )}
-              {/* Rank badge with crown on #1. */}
-              <div className={cx('flex w-12 shrink-0 flex-col items-center justify-center gap-1 bg-linear-to-b text-white', rankGradients[Math.min(i, rankGradients.length - 1)])}>
-                <span className="text-lg font-bold leading-none">{i + 1}</span>
-                {i === 0 && <span className="text-amber-300"><IconCrown /></span>}
-              </div>
-              {/* Content. */}
-              <div className="flex flex-1 items-center gap-3 bg-white px-3">
-                <span
-                  className={cx('inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[10px] font-bold tracking-tight', tintFor(r.code))}
-                  aria-hidden
-                >
-                  {initialsFor(r.code)}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-base font-semibold text-slate-800">{r.code}</span>
-                  {r.name && <span className="block truncate text-sm text-slate-400">{r.name}</span>}
-                </span>
-                <span className="w-24 shrink-0 text-right text-base font-bold tabular-nums text-slate-900">{money(r.value)}</span>
-                <TrendChip delta={r.delta} />
-              </div>
-            </li>
-          ))}
-        </ol>
-      )}
-      <p className="sr-only">{caption}</p>
-    </Panel>
   )
 }
 
@@ -827,16 +256,763 @@ interface TooltipProps {
 function SeriesTooltip({ active, payload, label, format }: TooltipProps & { format: (v: number) => string }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-lg">
-      {label && <div className="mb-1 font-semibold text-slate-700">{formatPeriod(label)}</div>}
-      {payload.map((p) => (
-        <div key={p.dataKey} className="flex items-center gap-2">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ background: p.color }} />
+    <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] shadow-lg">
+      {label && <div className="mb-0.5 font-semibold text-slate-700">{formatPeriod(label)}</div>}
+      {payload.filter((p) => p.value != null).map((p) => (
+        <div key={p.dataKey} className="flex items-center gap-1.5">
+          <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: p.color }} />
           <span className="text-slate-500">{p.name}:</span>
           <span className="font-semibold tabular-nums text-slate-800">{format(p.value)}</span>
         </div>
       ))}
     </div>
+  )
+}
+
+// ─── KPI cards ────────────────────────────────────────────────────────────────
+
+/**
+ * One of the reference's small stat cards: label + % pill on the first line, the figure
+ * with its absolute change beside it, and a per-Lead figure underneath for management.
+ */
+function KpiCard({ label, info, value, delta, deltaSuffix, tone, change, foot, loading }: {
+  label: string
+  info: string
+  value: string
+  delta: number | null | undefined
+  deltaSuffix?: string
+  tone: Tone
+  /** "+$1,240 vs prev. 7 days" — the absolute movement, from the previous period's summary. */
+  change: string | null
+  foot?: string
+  loading: boolean
+}) {
+  return (
+    <Panel className="p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1 text-xs font-medium text-slate-600">
+          {label}
+          <InfoDot text={info} />
+        </span>
+        {!loading && <DeltaPill value={delta} tone={tone} suffix={deltaSuffix} />}
+      </div>
+      {loading ? (
+        <Skeleton className="mt-2 h-6 w-24" />
+      ) : (
+        <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2">
+          <span className="text-lg font-bold tracking-tight text-slate-900">{value}</span>
+          {change && <span className="text-[11px] text-slate-400">{change}</span>}
+        </div>
+      )}
+      {!loading && foot && <div className="mt-0.5 text-[11px] text-slate-400">{foot}</div>}
+    </Panel>
+  )
+}
+
+// ─── Trend chart ──────────────────────────────────────────────────────────────
+
+type MetricId = 'revenue' | 'cost' | 'margin' | 'counted'
+
+interface Metric {
+  id: MetricId
+  label: string
+  color: string
+  format: (v: number) => string
+  axis: (v: number) => string
+  pick: (p: TrendPoint) => number
+  total: (s: Summary) => number
+  delta: (s: Summary) => number | null
+  tone: Tone
+}
+
+const METRICS: Metric[] = [
+  { id: 'revenue', label: 'Revenue', color: C.primary, format: money, axis: moneyCompact, pick: (p) => p.revenue, total: (s) => s.revenue, delta: (s) => s.deltas.revenue, tone: 'up-good' },
+  { id: 'cost', label: 'Expenses', color: C.primary, format: money, axis: moneyCompact, pick: (p) => p.cost, total: (s) => s.cost, delta: (s) => s.deltas.cost, tone: 'down-good' },
+  { id: 'margin', label: 'Profit', color: C.primary, format: money, axis: moneyCompact, pick: (p) => p.margin, total: (s) => s.margin, delta: (s) => s.deltas.margin, tone: 'up-good' },
+  { id: 'counted', label: 'Counted Leads', color: C.primary, format: num, axis: (v) => num(v), pick: (p) => p.counted, total: (s) => s.counted, delta: (s) => s.deltas.counted, tone: 'up-good' },
+]
+/**
+ * The peak marker's label: a small white pill above the dot, anchored away from whichever
+ * chart edge it is near so it never runs off the plot or under the axis.
+ */
+function PeakLabel({ viewBox, text, anchor }: { viewBox?: { x?: number; y?: number }; text: string; anchor: 'start' | 'middle' | 'end' }) {
+  const cx = viewBox?.x ?? 0
+  const cy = viewBox?.y ?? 0
+  const w = text.length * 5.6 + 12
+  const x = anchor === 'start' ? cx - 8 : anchor === 'end' ? cx - w + 8 : cx - w / 2
+  const y = cy - 24
+  return (
+    <g pointerEvents="none">
+      <rect x={x} y={y} width={w} height={16} rx={5} fill="#fff" stroke="#e2e8f0" />
+      <text x={x + w / 2} y={y + 11} textAnchor="middle" fontSize={10} fontWeight={600} fill="#1e293b">{text}</text>
+    </g>
+  )
+}
+
+
+/**
+ * The reference's Revenue card: a metric dropdown where its title sits, the period total
+ * with its % pill, 1D/4D/1W pills, then a smooth line with a soft fill, a dashed marker
+ * on the peak bucket, and the previous period drawn underneath as a grey ghost line.
+ */
+function TrendCard({ metric, onMetric, summary, series, prevSeries, loading, caption }: {
+  metric: Metric
+  onMetric: (id: MetricId) => void
+  summary: Summary | null
+  series: TrendPoint[]
+  prevSeries: TrendPoint[]
+  loading: boolean
+  caption: string
+}) {
+  const data = useMemo(
+    () => series.map((p, i) => ({
+      period: p.period,
+      value: metric.pick(p),
+      // Aligned by position: the previous window is the same length, so bucket i sits at
+      // the same offset into its period. Missing tail buckets simply leave the line short.
+      prev: prevSeries[i] ? metric.pick(prevSeries[i]) : null,
+    })),
+    [series, prevSeries, metric],
+  )
+  const peak = useMemo(() => {
+    if (data.length < 2) return null
+    let at = 0
+    data.forEach((d, i) => { if (d.value > data[at].value) at = i })
+    const frac = at / (data.length - 1)
+    return { ...data[at], anchor: (frac < 0.15 ? 'start' : frac > 0.85 ? 'end' : 'middle') as 'start' | 'middle' | 'end' }
+  }, [data])
+  const single = series.length === 1
+
+  return (
+    <Panel className="flex lg:min-h-0 flex-1 flex-col p-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          {/* Dropdown in the title slot, like the reference's "Revenue ▾". */}
+          <label className="relative inline-flex items-center gap-1 text-xs font-semibold text-slate-700">
+            <select
+              value={metric.id}
+              onChange={(e) => onMetric(e.target.value as MetricId)}
+              aria-label="Chart metric"
+              className="cursor-pointer appearance-none bg-transparent pr-4 text-xs font-semibold text-slate-700 focus:outline-none"
+            >
+              {METRICS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+            <span className="pointer-events-none absolute right-0 text-slate-400"><IconChevD /></span>
+          </label>
+          {loading || !summary ? (
+            <Skeleton className="mt-1 h-6 w-32" />
+          ) : (
+            <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
+              <span className={cx('text-xl font-bold tracking-tight', metric.id === 'margin' && summary.margin < 0 ? 'text-rose-600' : 'text-slate-900')}>
+                {metric.format(metric.total(summary))}
+              </span>
+              <DeltaPill value={metric.delta(summary)} tone={metric.tone} />
+              <span className="text-[11px] text-slate-400">{caption}</span>
+            </div>
+          )}
+        </div>
+        {/* The legend lives in the header, so nothing overlays the plot. */}
+        <div className="flex shrink-0 flex-col items-start gap-1.5 sm:items-end">
+          <div className="flex items-center gap-3 text-[10px] text-slate-500">
+            <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-3.5 rounded" style={{ background: metric.color }} />This period</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-0 w-3.5 border-t-2 border-dashed border-slate-400" />Previous period</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="relative mt-2 h-56 lg:h-auto lg:min-h-0 lg:flex-1">
+        {loading ? (
+          <div className="flex h-full items-end gap-1.5 px-1 pb-5 pt-3">
+            {[38, 62, 45, 78, 55, 88, 66, 72, 50, 80, 60, 70].map((h, i) => (
+              <div key={i} className="flex-1 animate-pulse rounded-t bg-slate-100" style={{ height: `${h}%` }} />
+            ))}
+          </div>
+        ) : data.length === 0 ? (
+          <EmptyHint message="No Leads were recorded in this period. Try a wider date range." />
+        ) : (
+          <>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={data} margin={{ top: 30, right: 16, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={metric.color} stopOpacity={0.18} />
+                    <stop offset="100%" stopColor={metric.color} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
+                <XAxis dataKey="period" tickFormatter={formatPeriod} tick={{ fontSize: 10, fill: C.axis }} tickLine={false} axisLine={false} minTickGap={28} interval="preserveStartEnd" tickMargin={6} />
+                <YAxis tickFormatter={metric.axis} tick={{ fontSize: 10, fill: C.axis }} tickLine={false} axisLine={false} width={48} tickMargin={4} />
+                {metric.id === 'margin' && <ReferenceLine y={0} stroke="#cbd5e1" />}
+                <Tooltip content={<SeriesTooltip format={metric.format} />} cursor={{ stroke: C.soft, strokeDasharray: '3 3' }} />
+                <Line type="monotone" dataKey="prev" name="Previous period" stroke={C.primary} strokeOpacity={0.3} strokeWidth={1.5} strokeDasharray="4 3" dot={false} activeDot={{ r: 3, fill: C.soft, stroke: '#fff' }} isAnimationActive={false} connectNulls={false} />
+                <Area type="monotone" dataKey="value" name={metric.label} stroke={metric.color} strokeWidth={2} fill="url(#trend-fill)" dot={single ? { r: 4, strokeWidth: 2, fill: '#fff' } : false} activeDot={{ r: 4, stroke: '#fff', strokeWidth: 2 }} isAnimationActive={false} />
+                {peak && (
+                  <>
+                    <ReferenceLine x={peak.period} stroke="#cbd5e1" strokeDasharray="3 3" />
+                    <ReferenceDot
+                      x={peak.period}
+                      y={peak.value}
+                      r={4}
+                      fill={metric.color}
+                      stroke="#fff"
+                      strokeWidth={2}
+                      label={<PeakLabel text={`Peak ${metric.format(peak.value)}`} anchor={peak.anchor} />}
+                    />
+                  </>
+                )}
+              </ComposedChart>
+            </ResponsiveContainer>
+            {single && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4">
+                <p className="max-w-xs rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-center text-[11px] leading-relaxed text-slate-500 shadow-sm backdrop-blur-sm">
+                  Only one bucket in this range has records, so there is no trend to plot yet. Widen the date range to compare periods.
+                </p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </Panel>
+  )
+}
+
+// ─── Team Today (the reference's calendar column) ─────────────────────────────
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+/** The Sunday-to-Saturday week around an ISO day, as ISO days. */
+function weekOf(iso: string): string[] {
+  const d = new Date(`${iso}T00:00:00`)
+  const sun = new Date(d)
+  sun.setDate(d.getDate() - d.getDay())
+  return Array.from({ length: 7 }, (_, i) => {
+    const x = new Date(sun)
+    x.setDate(sun.getDate() + i)
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
+  })
+}
+
+function Avatars({ names, max = 4 }: { names: string[]; max?: number }) {
+  const shown = names.slice(0, max)
+  const rest = names.length - shown.length
+  return (
+    <span className="flex items-center">
+      {shown.map((n, i) => (
+        <span
+          key={n + i}
+          title={n}
+          className={cx('inline-flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-bold ring-2 ring-white', tintFor(n), i > 0 && '-ml-1.5')}
+        >
+          {initials(n)}
+        </span>
+      ))}
+      {rest > 0 && <span className="-ml-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[9px] font-semibold text-slate-500 ring-2 ring-white">+{rest}</span>}
+    </span>
+  )
+}
+
+interface HourGroup { key: number; label: string; rows: AttendanceDay[] }
+
+function TeamTodayCard({ day, onDay, today, roster, staff, loading, error }: {
+  day: string
+  onDay: (iso: string) => void
+  today: string
+  roster: AttendanceDay[]
+  staff: { user_id: string; staff_name: string | null; username: string | null }[]
+  loading: boolean
+  error: string | null
+}) {
+  const week = useMemo(() => weekOf(day), [day])
+  const isToday = day === today
+
+  const stats = useMemo(() => {
+    const presentIds = new Set(roster.map((r) => r.user_id))
+    const absent = staff.filter((m) => !presentIds.has(m.user_id))
+    return {
+      present: roster.filter((r) => r.present).length,
+      stillIn: roster.filter((r) => r.still_in).length,
+      onBreak: roster.filter((r) => r.on_break),
+      late: roster.filter(isLateLogin),
+      absent,
+    }
+  }, [roster, staff])
+
+  // Clock-ins grouped by the hour they happened, in the org's clock — one "event" per hour
+  // in the timeline, the way the reference lists meetings against 9 am / 10 am / 11 am.
+  const hours = useMemo<HourGroup[]>(() => {
+    const map = new Map<number, HourGroup>()
+    for (const r of roster) {
+      if (!r.login_at) continue
+      const { key, label } = orgHour(r.login_at)
+      const g = map.get(key) ?? { key, label, rows: [] }
+      g.rows.push(r)
+      map.set(key, g)
+    }
+    return [...map.values()].sort((a, b) => a.key - b.key)
+  }, [roster])
+
+  const dayLabel = new Date(`${day}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+
+  return (
+    <Panel className="flex lg:min-h-0 flex-1 flex-col p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1">
+          <h3 className="text-sm font-semibold text-slate-900">Team Today</h3>
+          <InfoDot text={`Who clocked in on the selected day, by hour, in the org's clock (${ORG_TZ}). Late is judged against each person's expected login on the Staff page, or 9:00 AM where none is set.`} />
+        </div>
+        {/* Reads as the reference's month pill; on a past day it is the way back to today. */}
+        <button
+          type="button"
+          onClick={() => onDay(today)}
+          disabled={isToday}
+          title={isToday ? undefined : 'Back to today'}
+          className={cx(
+            'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors',
+            isToday ? 'border-slate-200 bg-white text-slate-600' : 'border-brand/40 bg-white text-brand hover:bg-slate-50',
+          )}
+        >
+          <IconCal />
+          {isToday ? 'Today' : dayLabel}
+        </button>
+      </div>
+
+      {/* Week strip — the selected day gets the navy disc; future days can't be opened. */}
+      <div className="mt-3 grid grid-cols-7 gap-0.5">
+        {week.map((iso, i) => {
+          const future = iso > today
+          const active = iso === day
+          const n = Number(iso.slice(-2))
+          return (
+            <button
+              key={iso}
+              disabled={future}
+              onClick={() => onDay(iso)}
+              className={cx('flex flex-col items-center gap-1 rounded-lg py-1 text-[10px] transition-colors', future ? 'cursor-not-allowed opacity-40' : 'hover:bg-slate-50')}
+              aria-pressed={active}
+              title={iso}
+            >
+              <span className={cx('font-medium', active ? 'text-slate-900' : 'text-slate-400')}>{WEEKDAYS[i]}</span>
+              <span className={cx(
+                'flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums',
+                active ? 'bg-brand text-white shadow-sm' : iso === today ? 'text-brand' : 'text-slate-700',
+              )}>
+                {n}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Headcount chips. */}
+      {!loading && !error && (
+        <div className="mt-3 grid grid-cols-5 gap-1 text-center">
+          {[
+            { label: 'In', value: stats.present, cls: 'text-slate-900' },
+            { label: 'Still in', value: stats.stillIn, cls: 'text-brand' },
+            { label: 'Break', value: stats.onBreak.length, cls: 'text-brand' },
+            { label: 'Late', value: stats.late.length, cls: stats.late.length ? 'text-rose-600' : 'text-slate-900' },
+            { label: 'Absent', value: stats.absent.length, cls: stats.absent.length ? 'text-rose-600' : 'text-slate-900' },
+          ].map((c) => (
+            <div key={c.label} className="rounded-lg bg-slate-50 px-1 py-1.5">
+              <div className={cx('text-sm font-bold tabular-nums', c.cls)}>{c.value}</div>
+              <div className="text-[9px] font-medium uppercase tracking-wide text-slate-400">{c.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Timeline. Scrolls inside the card so the column matches the chart column's height. */}
+      <div className="mt-3 max-h-80 lg:min-h-0 flex-1 overflow-y-auto pr-0.5 lg:max-h-none">
+        {loading ? (
+          <div className="space-y-2">
+            {[0, 1, 2].map((i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
+          </div>
+        ) : error ? (
+          <EmptyHint message="Attendance data isn't available right now." />
+        ) : roster.length === 0 && stats.absent.length === 0 ? (
+          <EmptyHint message={isToday ? 'Nobody has clocked in yet today.' : 'No clock-ins were recorded on this day.'} />
+        ) : (
+          <ol className="relative space-y-2 border-l border-slate-200 pl-3">
+            {roster.length === 0 && (
+              <li className="relative">
+                <span className="absolute -left-4.25 top-3 h-2 w-2 rounded-full bg-slate-300 ring-2 ring-white" />
+                <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-[11px] text-slate-500">
+                  {isToday ? 'Nobody has clocked in yet today.' : 'No clock-ins were recorded on this day.'}
+                </div>
+              </li>
+            )}
+            {isToday && stats.onBreak.length > 0 && (
+              <li className="relative">
+                <span className="absolute -left-4.25 top-3 h-2 w-2 rounded-full bg-brand ring-2 ring-white" />
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-slate-800">On break now</span>
+                    <span className="rounded-md bg-white px-1.5 py-0.5 text-[10px] font-semibold text-brand">{stats.onBreak.length}</span>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <Avatars names={stats.onBreak.map(labelOf)} />
+                    <span className="truncate text-[11px] text-slate-500">{stats.onBreak.map(labelOf).slice(0, 3).join(', ')}</span>
+                  </div>
+                </div>
+              </li>
+            )}
+            {hours.map((g) => {
+              const late = g.rows.filter(isLateLogin)
+              const worst = late.reduce((m, r) => Math.max(m, loginLateMinutes(r) ?? 0), 0)
+              return (
+                <li key={g.key} className="relative">
+                  <span className={cx('absolute -left-4.25 top-3 h-2 w-2 rounded-full ring-2 ring-white', late.length ? 'bg-rose-500' : 'bg-brand')} />
+                  <div className="flex items-start gap-2">
+                    <span className="w-11 shrink-0 pt-2 text-[10px] font-medium text-slate-400">{g.label}</span>
+                    <div className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-slate-800">{g.rows.length} clocked in</span>
+                        <span className={cx('rounded-md px-1.5 py-0.5 text-[10px] font-semibold', late.length ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700')}>
+                          {late.length ? `${late.length} late · ${gapLabel(worst)}` : 'On time'}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <Avatars names={g.rows.map(labelOf)} />
+                        <span className="truncate text-[11px] text-slate-500">
+                          {g.rows.map(labelOf).slice(0, 2).join(', ')}{g.rows.length > 2 ? ` +${g.rows.length - 2}` : ''}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+            {stats.absent.length > 0 && (
+              <li className="relative">
+                <span className="absolute -left-4.25 top-3 h-2 w-2 rounded-full bg-rose-400 ring-2 ring-white" />
+                <div className="rounded-lg border border-dashed border-slate-200 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-slate-800">{isToday ? 'Not in yet' : 'Absent'}</span>
+                    <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-600">{stats.absent.length}</span>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <Avatars names={stats.absent.map(labelOf)} />
+                    <span className="truncate text-[11px] text-slate-500">
+                      {stats.absent.map(labelOf).slice(0, 2).join(', ')}{stats.absent.length > 2 ? ` +${stats.absent.length - 2}` : ''}
+                    </span>
+                  </div>
+                </div>
+              </li>
+            )}
+          </ol>
+        )}
+      </div>
+
+      <Link to="/attendance" className="mt-3 inline-flex items-center gap-1 self-end text-[11px] font-semibold text-brand hover:underline">
+        Open Attendance <IconArrowR />
+      </Link>
+    </Panel>
+  )
+}
+
+// ─── Lead Mix (the reference's Leads Management card) ─────────────────────────
+
+type MixTab = 'outcome' | 'activity' | 'sources'
+
+function MixTile({ label, value, unit, delta, deltaSuffix, tone }: {
+  label: string
+  value: string
+  unit?: string
+  delta?: number | null
+  deltaSuffix?: string
+  tone: Tone
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1">
+      <span className="min-w-0 flex-1 truncate text-[11px] text-slate-500">{label}</span>
+      <span className="flex shrink-0 items-baseline gap-1">
+        <span className="text-sm font-bold tabular-nums text-slate-900">{value}</span>
+        {unit && <span className="text-[10px] text-slate-400">{unit}</span>}
+      </span>
+      {delta !== undefined && <DeltaPill value={delta} tone={tone} suffix={deltaSuffix} />}
+    </div>
+  )
+}
+
+function LeadMixCard({ summary, prevSummary, sources, loading, sourcesLoading, canAccess }: {
+  summary: Summary | null
+  prevSummary: Summary | null
+  sources: { name: string; cost: number; counted: number }[]
+  loading: boolean
+  sourcesLoading: boolean
+  canAccess: (k: string) => boolean
+}) {
+  const [tab, setTab] = useState<MixTab>('outcome')
+  const s = summary
+  const total = sources.reduce((sum, r) => sum + r.cost, 0)
+  const max = sources.reduce((m, r) => Math.max(m, r.cost), 0)
+  return (
+    <Panel className="flex lg:min-h-0 flex-col overflow-hidden p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1">
+          <h3 className="text-sm font-semibold text-slate-900">Lead Mix</h3>
+          <InfoDot text="Outcome: what happened to the Leads delivered. Activity: how many buyers, campaigns and sheet rows were involved. Sources: campaign spend by traffic source." />
+        </div>
+      </div>
+      <MiniTabs
+        tabs={[{ id: 'outcome', label: 'Outcome' }, { id: 'activity', label: 'Activity' }, { id: 'sources', label: 'Sources' }]}
+        value={tab}
+        onChange={setTab}
+      />
+      <div className="mt-2 lg:min-h-0 flex-1 lg:overflow-y-auto overflow-x-hidden">
+        {loading || !s ? (
+          <div className="grid grid-cols-2 gap-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
+        ) : tab === 'outcome' ? (
+          <div className="grid grid-cols-1 gap-1.5">
+            <MixTile label="Answered" value={num(s.answered)} unit="leads" delta={s.deltas.answered} tone="up-good" />
+            <MixTile label="Missed" value={num(s.missed)} unit="leads" delta={changePct(prevSummary?.missed, s.missed)} tone="down-good" />
+            <MixTile label="Counted (billable)" value={num(s.counted)} unit="leads" delta={s.deltas.counted} tone="up-good" />
+            <MixTile label="Answer rate" value={`${s.answer_rate}%`} delta={s.point_deltas?.answer_rate} deltaSuffix="pp" tone="up-good" />
+          </div>
+        ) : tab === 'activity' ? (
+          <div className="grid grid-cols-1 gap-1.5">
+            <MixTile label="Active buyers" value={num(s.active_buyers)} delta={s.deltas.active_buyers} tone="up-good" />
+            <MixTile label="Active campaigns" value={num(s.active_campaigns)} delta={s.deltas.active_campaigns} tone="up-good" />
+            <MixTile label="Buyer rows" value={num(s.buyer_records)} unit="sheet rows" tone="up-good" />
+            <MixTile label="Campaign rows" value={num(s.campaign_records)} unit="sheet rows" tone="up-good" />
+          </div>
+        ) : sourcesLoading ? (
+          <div className="space-y-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-7 rounded-md" />)}</div>
+        ) : sources.length === 0 ? (
+          <EmptyHint message="No campaign spend was recorded in this period." />
+        ) : (
+          <ul className="space-y-2">
+            {sources.slice(0, 5).map((r) => {
+              const share = total > 0 ? (r.cost / total) * 100 : 0
+              const w = max > 0 ? (r.cost / max) * 100 : 0
+              return (
+                <li key={r.name}>
+                  <div className="flex items-center justify-between gap-2 text-[11px]">
+                    <span className="truncate font-semibold uppercase tracking-wide text-slate-700">{r.name}</span>
+                    <span className="shrink-0 tabular-nums text-slate-500">
+                      <span className="font-semibold text-slate-800">{money(r.cost)}</span> · {share.toFixed(0)}%
+                      {r.counted > 0 && <span className="text-slate-400"> · {money(r.cost / r.counted)}/lead</span>}
+                    </span>
+                  </div>
+                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-full rounded-full bg-brand" style={{ width: `${Math.max(w, w > 0 ? 3 : 0)}%` }} />
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+      {/* Unit economics — what each counted Lead earned, cost and left over. */}
+      {!loading && s && tab !== 'sources' && s.counted > 0 && (
+        <div className="mt-3 grid grid-cols-3 divide-x divide-slate-200 rounded-lg bg-slate-50 py-2 text-center">
+          {[
+            { label: 'Revenue / lead', value: s.revenue / s.counted, cls: 'text-slate-900' },
+            { label: 'Cost / lead', value: s.cost / s.counted, cls: 'text-slate-900' },
+            { label: 'Profit / lead', value: s.margin / s.counted, cls: s.margin < 0 ? 'text-rose-600' : 'text-emerald-600' },
+          ].map((u) => (
+            <div key={u.label} className="px-1">
+              <div className={cx('text-xs font-bold tabular-nums', u.cls)}>{u.value < 0 ? '−' : ''}${Math.abs(u.value).toFixed(2)}</div>
+              <div className="text-[9px] font-medium uppercase tracking-wide text-slate-400">{u.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {tab === 'sources' && canAccess('vendors') && (
+        <Link to="/vendors" className="mt-3 inline-flex items-center gap-1 self-end text-[11px] font-semibold text-brand hover:underline">
+          Traffic sources <IconArrowR />
+        </Link>
+      )}
+    </Panel>
+  )
+}
+
+// ─── Answer Rate (the reference's Retention Rate card) ────────────────────────
+
+function AnswerRateCard({ summary, series, loading, caption }: {
+  summary: Summary | null
+  series: TrendPoint[]
+  loading: boolean
+  caption: string
+}) {
+  // A month of daily buckets makes hair-thin bars, so long series are folded into ~8
+  // consecutive groups (labelled by their first bucket) — the reference's bar count.
+  const data = useMemo(() => {
+    const size = Math.max(1, Math.ceil(series.length / 8))
+    const out: { period: string; answered: number; missed: number }[] = []
+    for (let i = 0; i < series.length; i += size) {
+      const chunk = series.slice(i, i + size)
+      out.push({
+        period: chunk[0].period,
+        answered: chunk.reduce((s, p) => s + p.answered, 0),
+        missed: chunk.reduce((s, p) => s + p.missed, 0),
+      })
+    }
+    return out
+  }, [series])
+  const total = (summary?.answered ?? 0) + (summary?.missed ?? 0)
+  return (
+    <Panel className="flex lg:min-h-0 flex-col overflow-hidden p-3">
+      <div className="flex items-center gap-1">
+        <h3 className="text-sm font-semibold text-slate-900">Answer Rate</h3>
+        <InfoDot text="Answered Leads as a share of answered + missed, buyer side. The bars show answered against missed per bucket of the selected range." />
+      </div>
+      {loading || !summary ? (
+        <Skeleton className="mt-1.5 h-6 w-28" />
+      ) : (
+        <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
+          <span className="text-xl font-bold tracking-tight text-slate-900">{summary.answer_rate}%</span>
+          <DeltaPill value={summary.point_deltas?.answer_rate} tone="up-good" suffix="pp" />
+          <span className="text-[11px] text-slate-400">{caption}</span>
+        </div>
+      )}
+      <div className="mt-1.5 flex items-center gap-3 text-[10px] text-slate-500">
+        <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: C.primary }} />Answered</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: C.soft }} />Missed</span>
+        {!loading && summary && <span className="ml-auto tabular-nums text-slate-400">{num(total)} delivered</span>}
+      </div>
+      <div className="mt-2 h-36 lg:h-auto lg:min-h-0 lg:flex-1">
+        {loading ? (
+          <div className="flex h-full items-end gap-1.5 px-1 pb-4">
+            {[38, 62, 45, 78, 55, 88, 66].map((h, i) => <div key={i} className="flex-1 animate-pulse rounded-t bg-slate-100" style={{ height: `${h}%` }} />)}
+          </div>
+        ) : data.length === 0 ? (
+          <EmptyHint message="No answered or missed Leads in this period." />
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barGap={2} barCategoryGap="30%">
+              <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
+              <XAxis dataKey="period" tickFormatter={formatPeriod} tick={{ fontSize: 10, fill: C.axis }} tickLine={false} axisLine={false} minTickGap={16} />
+              <YAxis hide />
+              <Tooltip content={<SeriesTooltip format={num} />} cursor={{ fill: '#f1f5f9' }} />
+              <Bar dataKey="answered" name="Answered" fill={C.primary} radius={[3, 3, 0, 0]} maxBarSize={18} isAnimationActive={false} />
+              <Bar dataKey="missed" name="Missed" fill={C.soft} radius={[3, 3, 0, 0]} maxBarSize={18} isAnimationActive={false} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </Panel>
+  )
+}
+
+// ─── Top Buyers / Campaigns (the reference's Top Customer Locations card) ─────
+
+interface RankRow {
+  key: string
+  code: string
+  name: string | null
+  value: number
+  share: number
+  delta: number | null
+}
+
+function TopCard({ buyers, campaigns, loading, canAccess }: {
+  buyers: RankRow[]
+  campaigns: RankRow[]
+  loading: boolean
+  canAccess: (k: string) => boolean
+}) {
+  const [tab, setTab] = useState<'buyers' | 'campaigns'>('buyers')
+  const rows = tab === 'buyers' ? buyers : campaigns
+  const perm = tab === 'buyers' ? 'buyers' : 'campaigns'
+  return (
+    <Panel className="flex lg:min-h-0 flex-col overflow-hidden p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1">
+          <h3 className="text-sm font-semibold text-slate-900">Top {tab === 'buyers' ? 'Buyers' : 'Campaigns'}</h3>
+          <InfoDot text={tab === 'buyers'
+            ? 'Top 5 buyers by revenue, with each one\'s share of the period\'s revenue. The arrow compares the buyer against itself in the previous period.'
+            : 'Top 5 campaigns by spend, with each one\'s share of the period\'s Expenses. The arrow compares the campaign against itself in the previous period.'} />
+        </div>
+        <MiniTabs tabs={[{ id: 'buyers', label: 'Buyers' }, { id: 'campaigns', label: 'Campaigns' }]} value={tab} onChange={setTab} />
+      </div>
+      <div className="mt-2 lg:min-h-0 flex-1 lg:overflow-y-auto">
+        {loading ? (
+          <div className="space-y-2">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-8 rounded-lg" />)}</div>
+        ) : rows.length === 0 ? (
+          <EmptyHint message={`No ${tab === 'buyers' ? 'buyer' : 'campaign'} activity in this period.`} />
+        ) : (
+          <ol className="space-y-1">
+            {rows.map((r, i) => (
+              <li key={r.key} className="flex items-center gap-2 rounded-lg px-1 py-0.5 hover:bg-slate-50">
+                <span className="w-3 text-[11px] font-semibold tabular-nums text-slate-400">{i + 1}.</span>
+                <span className={cx('inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[8px] font-bold', tintFor(r.code))} aria-hidden>
+                  {codeInitials(r.code)}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-xs">
+                  <span className="font-semibold text-slate-800">{r.code}</span>
+                  {r.name && <span className="text-[10px] text-slate-400"> · {r.name}</span>}
+                </span>
+                <span className="shrink-0 text-xs font-bold tabular-nums text-slate-900">{money(r.value)}</span>
+                <span className="w-8 shrink-0 text-right text-[10px] tabular-nums text-slate-400">{r.share.toFixed(0)}%</span>
+                <span
+                  title={r.delta == null ? 'No comparable prior period' : `${signed(r.delta, '%')} vs previous period`}
+                  className={cx('w-4 shrink-0 text-center text-[11px] font-bold', r.delta == null || r.delta === 0 ? 'text-slate-300' : r.delta > 0 ? 'text-emerald-500' : 'text-rose-500')}
+                >
+                  {r.delta == null || r.delta === 0 ? '–' : r.delta > 0 ? '↑' : '↓'}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+      {canAccess(perm) && (
+        <Link to={`/${perm}`} className="mt-3 inline-flex items-center gap-1 self-end text-[11px] font-semibold text-brand hover:underline">
+          View all <IconArrowR />
+        </Link>
+      )}
+    </Panel>
+  )
+}
+
+// ─── Lead quality fallback (right column when Attendance isn't accessible) ────
+
+function LeadQualityCard({ summary, loading }: { summary: Summary | null; loading: boolean }) {
+  const answered = summary?.answered ?? 0
+  const missed = summary?.missed ?? 0
+  const total = answered + missed
+  const size = 140
+  const stroke = 16
+  const r = size / 2 - stroke / 2 - 2
+  const circ = 2 * Math.PI * r
+  const aFrac = total ? answered / total : 0
+  return (
+    <Panel className="flex lg:min-h-0 flex-1 flex-col p-3">
+      <div className="flex items-center gap-1">
+        <h3 className="text-sm font-semibold text-slate-900">Lead Quality</h3>
+        <InfoDot text="Share of Leads delivered to buyers that were picked up versus not, across the whole period." />
+      </div>
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 py-4">
+        {loading ? (
+          <Skeleton className="h-36 w-36 rounded-full" />
+        ) : total === 0 ? (
+          <EmptyHint message="No answered or missed Leads were recorded in this period." />
+        ) : (
+          <>
+            <div className="relative" style={{ width: size, height: size }}>
+              <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }} aria-hidden>
+                <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={C.soft} strokeWidth={stroke} />
+                <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={C.primary} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${Math.max(0.1, aFrac * circ)} ${circ}`} />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-xl font-bold tabular-nums text-slate-900">{summary?.answer_rate}%</span>
+                <span className="text-[10px] text-slate-400">answered</span>
+              </div>
+            </div>
+            <dl className="grid w-full grid-cols-2 gap-2 text-center">
+              <div className="rounded-lg bg-slate-100 px-2 py-1.5">
+                <dd className="text-sm font-bold tabular-nums text-brand">{num(answered)}</dd>
+                <dt className="text-[10px] text-slate-500">Answered</dt>
+              </div>
+              <div className="rounded-lg bg-slate-100 px-2 py-1.5">
+                <dd className="text-sm font-bold tabular-nums text-brand">{num(missed)}</dd>
+                <dt className="text-[10px] text-slate-500">Missed</dt>
+              </div>
+            </dl>
+          </>
+        )}
+      </div>
+    </Panel>
   )
 }
 
@@ -848,551 +1024,321 @@ export default function Dashboard() {
 
 function DashboardPage() {
   const { canAccess } = useAuth()
-  // Open on today, like every other date filter in the CRM. Previously this defaulted to a
-  // 90-day window and then re-anchored itself to the newest record on load; both are gone —
-  // the dashboard now shows the current day until the user widens the range themselves.
+  // Open on today, like every other date filter in the CRM; a wider window is an explicit
+  // choice, never the default.
   const [range, setRange] = useState<Range>(todayRange)
   const [granularity, setGranularity] = useState<Granularity>('day')
+  const [metricId, setMetricId] = useState<MetricId>('revenue')
+  // Which page of the frame is showing. The staff view slides in over the overview and
+  // slides back out; only one is mounted, so each keeps its own natural height/scroll.
+  const [view, setView] = useState<'overview' | 'staff'>('overview')
+  const showStaff = useCallback(() => setView('staff'), [])
+  const showOverview = useCallback(() => setView('overview'), [])
 
   const prev = useMemo(() => previousPeriod(range.from, range.to), [range.from, range.to])
   const caption = comparisonLabel(range)
+  const metric = METRICS.find((m) => m.id === metricId) ?? METRICS[0]
 
   const summary = useAsync(() => api.summary(range), [range.from, range.to])
+  // The previous window's own summary gives the absolute movement the cards print beside
+  // the figure ("+$1,240"), which the % deltas alone can't.
+  const prevSummary = useAsync(() => api.summary(prev), [prev.from, prev.to])
   const trends = useAsync(() => api.trends({ ...range, granularity }), [range.from, range.to, granularity])
-  // Buyers capped at 5 so the ranked cards don't grow taller than the donut card they share
-  // a row with (keeps the row visually even).
+  const prevTrends = useAsync(() => api.trends({ ...prev, granularity }), [prev.from, prev.to, granularity])
   const topBuyers = useAsync(() => api.topBuyers({ ...range, limit: 5 }), [range.from, range.to])
   const topCampaigns = useAsync(() => api.topCampaigns({ ...range, limit: 5 }), [range.from, range.to])
-  const topSources = useAsync(() => api.topSources({ ...range, limit: 50 }), [range.from, range.to])
-  // Ranked lists show a per-row change, which the ranking endpoints don't provide — so the
-  // same ranking is pulled for the previous window and matched by id. A wider limit is used
+  const topSources = useAsync(() => api.topSources({ ...range, limit: 20 }), [range.from, range.to])
+  // Per-row change needs the previous window's ranking, matched by id; a wider limit
   // because today's top 5 may have sat well down the table last period.
   const prevBuyers = useAsync(() => api.topBuyers({ ...prev, limit: 50 }), [prev.from, prev.to])
   const prevCampaigns = useAsync(() => api.topCampaigns({ ...prev, limit: 50 }), [prev.from, prev.to])
 
-  const s = summary.data
-  const series = useMemo(() => trends.data ?? [], [trends.data])
-  /** One bucket cannot form a line — the chart renders markers plus an explanation. */
-  const single = series.length === 1
+  // Team Today reads the attendance roster in the org's clock. Hooks can't be conditional,
+  // so a viewer without the Attendance page gets a resolved null and the fallback card.
+  const canAttendance = canAccess('attendance')
+  const today = useOrgToday()
+  const [teamDay, setTeamDay] = useState(today)
+  const roster = useAsync(() => (canAttendance ? api.attendanceRoster(teamDay) : Promise.resolve(null)), [teamDay, canAttendance])
+  const staff = useAsync(() => (canAttendance ? api.attendanceStaff() : Promise.resolve(null)), [canAttendance])
 
-  // KPI sparklines are derived from the trend series — the two rate metrics aren't
-  // returned per bucket, so they're recomputed here from their components. The volume
-  // cards' bars reuse the closest available per-bucket series (Active Buyers / Campaigns
-  // have no per-bucket count, so counted / spend stand in as a volume proxy).
-  const sparks = useMemo(
-    () => ({
-      revenue: series.map((p) => p.revenue),
-      cost: series.map((p) => p.cost),
-      profit: series.map((p) => p.margin),
-      counted: series.map((p) => p.counted),
-      answered: series.map((p) => p.answered),
-      marginPct: series.map((p) => (p.revenue > 0 ? (p.margin / p.revenue) * 100 : 0)),
-      answerRate: series.map((p) => (p.answered + p.missed > 0 ? (p.answered / (p.answered + p.missed)) * 100 : 0)),
-    }),
-    [series],
-  )
+  // "Last updated" is the moment the headline figures last changed — derived from the
+  // summary result itself rather than written into state from an effect.
+  const updatedAt = useMemo(() => (summary.data ? new Date() : null), [summary.data])
+
+  const s = summary.data
+  const ps = prevSummary.data
+  const series = useMemo(() => trends.data ?? [], [trends.data])
+  const prevSeries = useMemo(() => prevTrends.data ?? [], [prevTrends.data])
 
   const buyerRows: RankRow[] = useMemo(() => {
     const before = new Map((prevBuyers.data ?? []).map((b) => [b.id, b.revenue]))
+    const total = s?.revenue ?? 0
     return (topBuyers.data ?? []).map((b) => ({
       key: String(b.id),
       code: b.code,
       name: b.name,
       value: b.revenue,
+      share: total > 0 ? (b.revenue / total) * 100 : 0,
       delta: changePct(before.get(b.id), b.revenue),
     }))
-  }, [topBuyers.data, prevBuyers.data])
+  }, [topBuyers.data, prevBuyers.data, s?.revenue])
 
   const campaignRows: RankRow[] = useMemo(() => {
     const before = new Map((prevCampaigns.data ?? []).map((c) => [c.id, c.cost]))
+    const total = s?.cost ?? 0
     return (topCampaigns.data ?? []).map((c) => ({
       key: String(c.id),
       code: c.code,
       name: c.name,
       value: c.cost,
+      share: total > 0 ? (c.cost / total) * 100 : 0,
       delta: changePct(before.get(c.id), c.cost),
     }))
-  }, [topCampaigns.data, prevCampaigns.data])
+  }, [topCampaigns.data, prevCampaigns.data, s?.cost])
 
-  // Spend is heavily top-weighted, so the tail is folded into a single "Others" row.
-  const sources = useMemo(() => {
-    const all = topSources.data ?? []
-    const total = all.reduce((sum, r) => sum + r.cost, 0)
-    const head = all.slice(0, 5)
-    const tail = all.slice(5)
-    const rows = head.map((r) => ({ name: r.source, cost: r.cost, counted: r.counted }))
-    if (tail.length) {
-      rows.push({
-        name: `Others (${tail.length})`,
-        cost: tail.reduce((sum, r) => sum + r.cost, 0),
-        counted: tail.reduce((sum, r) => sum + r.counted, 0),
-      })
-    }
-    const totalCounted = rows.reduce((sum, r) => sum + r.counted, 0)
-    const maxCost = rows.reduce((m, r) => Math.max(m, r.cost), 0)
-    const avgCpc = totalCounted > 0 ? total / totalCounted : 0
-    return { rows, total, totalCounted, maxCost, avgCpc }
-  }, [topSources.data])
+  const sources = useMemo(
+    () => (topSources.data ?? []).map((r) => ({ name: r.source, cost: r.cost, counted: r.counted })),
+    [topSources.data],
+  )
 
-  const answered = s?.answered ?? 0
-  const missed = s?.missed ?? 0
-  const callMix: PieSlice[] = [
-    { name: 'Answered', value: answered, color: C.answered },
-    { name: 'Missed', value: missed, color: C.missed },
-  ]
-  const callTotal = answered + missed
+  const rosterRows = useMemo(() => roster.data?.rows ?? [], [roster.data])
 
   const blocks = [summary, trends, topBuyers, topCampaigns, topSources]
   const failed = blocks.filter((b) => b.error)
-  const retryAll = () => failed.forEach((b) => b.reload())
+  const refreshAll = () => [summary, prevSummary, trends, prevTrends, topBuyers, topCampaigns, topSources, prevBuyers, prevCampaigns, roster, staff].forEach((b) => b.reload())
+  const refreshing = blocks.some((b) => b.refreshing)
 
-  const heroSeries = useMemo(() => series.map((p) => ({ period: p.period, margin: p.margin })), [series])
+  const exportCsv = () => {
+    if (!s) return
+    const row = (label: string, curr: number, before: number | undefined, delta: number | null | undefined, fmt = (v: number) => String(v)) =>
+      [label, fmt(curr), before === undefined ? '' : fmt(before), delta == null ? '' : `${delta}%`]
+    const rows: (string | number)[][] = [
+      ['Platform-CRM dashboard', `${range.from} to ${range.to}`, `previous: ${prev.from} to ${prev.to}`, ''],
+      ['Metric', 'This period', 'Previous period', 'Change'],
+      row('Revenue (billed)', s.revenue, ps?.revenue, s.deltas.revenue, (v) => v.toFixed(2)),
+      row('Expenses (Lead cost)', s.cost, ps?.cost, s.deltas.cost, (v) => v.toFixed(2)),
+      row('Portal expenses', s.portal_expenses ?? 0, ps?.portal_expenses ?? 0, null, (v) => v.toFixed(2)),
+      row('Profit', s.margin, ps?.margin, s.deltas.margin, (v) => v.toFixed(2)),
+      ['Profit margin %', s.margin_pct, ps?.margin_pct ?? '', s.point_deltas?.margin_pct == null ? '' : `${s.point_deltas.margin_pct}pp`],
+      row('Counted Leads', s.counted, ps?.counted, s.deltas.counted),
+      row('Answered', s.answered, ps?.answered, s.deltas.answered),
+      row('Missed', s.missed, ps?.missed, null),
+      ['Answer rate %', s.answer_rate, ps?.answer_rate ?? '', s.point_deltas?.answer_rate == null ? '' : `${s.point_deltas.answer_rate}pp`],
+      row('Active buyers', s.active_buyers, ps?.active_buyers, s.deltas.active_buyers),
+      row('Active campaigns', s.active_campaigns, ps?.active_campaigns, s.deltas.active_campaigns),
+      [],
+      ['Period', 'Revenue', 'Expenses', 'Profit', 'Counted', 'Answered', 'Missed'],
+      ...series.map((p) => [p.period, p.revenue.toFixed(2), p.cost.toFixed(2), p.margin.toFixed(2), p.counted, p.answered, p.missed]),
+    ]
+    downloadCsv(`dashboard_${fileDateRange(range.from, range.to)}.csv`, rows)
+  }
+
+  const perLead = (v: number) => (s && s.counted > 0 ? `${money(v / s.counted)} / lead` : undefined)
+
+  const railBtn = 'inline-flex w-full items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors'
 
   return (
-    // Plus Jakarta Sans, scoped to this page (inherited by children, incl. the shared
-    // PageHeader and the Recharts SVG text). Other pages keep the app-wide Poppins.
-    <div style={{ fontFamily: "'Plus Jakarta Sans', 'Poppins', ui-sans-serif, system-ui, sans-serif" }}>
-      {/* Light sky-blue backdrop for this page only, so the white panels stand out. Portalled
-          to <body> so it covers the whole viewport (incl. wide-screen gutters) and escapes the
-          layout's transformed animation wrapper; z-index:-1 keeps it behind the content. It
-          unmounts on navigation, so the other pages keep the app-wide gradient. */}
-      {createPortal(
-        <div
-          aria-hidden
-          className="fixed inset-0"
-          style={{
-            zIndex: -1,
-            background:
-              'radial-gradient(60rem 40rem at 50% -8%, #cfe8fb, transparent 60%), linear-gradient(180deg, #e2f2fd 0%, #eef7fe 100%)',
-          }}
-        />,
-        document.body,
-      )}
-
-      {/* Custom header (not the shared PageHeader) so the dashboard can carry its own
-          larger title, roomier title↔subtitle spacing, and a wider gap to the panel below. */}
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Dashboard</h1>
-          <p className="mt-2.5 text-base text-slate-500">Performance overview of Leads, revenue and margin</p>
+    // Plus Jakarta Sans, scoped to this page (inherited by children, incl. the Recharts SVG
+    // text). Other pages keep the app-wide Poppins.
+    //
+    // One screen on desktop: the page takes the viewport height (the layout pads 1.5rem top
+    // and bottom) and every band flexes to fit — KPI row and attention strip at their natural
+    // height, the trend chart and the bottom row sharing what is left. Filters and actions
+    // sit in a right rail that never moves; Team Today fills the rail beneath them and
+    // scrolls inside itself. Below the desktop breakpoint the page scrolls as normal.
+    <div
+      className="flex flex-col text-slate-900 lg:h-[calc(100vh-3rem)] lg:overflow-hidden"
+      style={{ fontFamily: "'Plus Jakarta Sans', 'Poppins', ui-sans-serif, system-ui, sans-serif" }}
+    >
+      {view === 'staff' ? (
+        <div key="staff" className="animate-page-in-right flex min-h-0 flex-1 flex-col">
+          <StaffDashboard onBack={showOverview} />
         </div>
-        {/* Dark date box on the light header, per the client's request. */}
-        <DateRangeControl value={range} onChange={setRange} tone="dark" />
+      ) : (
+      <div key="overview" className="animate-page-in-left flex min-h-0 flex-1 flex-col">
+      {/* Title row. */}
+      <div className="mb-3 flex shrink-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <h1 className="text-lg font-bold tracking-tight text-slate-900 sm:text-xl">Dashboard</h1>
+        <p className="text-xs text-slate-500">
+          Leads, revenue, margin and the team · {formatDmy(range.from)}{range.from !== range.to && ` – ${formatDmy(range.to)}`}
+        </p>
+        <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600">
+          <IconCheck />
+          {refreshing ? 'Refreshing…' : updatedAt ? `Last updated ${timeLabel(updatedAt)}` : 'Loading…'}
+        </span>
       </div>
 
-      {/* Total Profit hero — full-width banner with a large area chart. */}
-      <HeroBanner
-        value={s?.margin}
-        delta={s?.deltas.margin}
-        caption={caption}
-        series={heroSeries}
-        loading={summary.loading}
-      />
-
-      {/* KPI widgets — solid colour tiles with an embedded chart (CoreUI style). White
-          charts read on the colour; Answer Rate uses bars, the rest lines-with-markers /
-          an area, echoing the reference's mix. 2×2 until wide, four across at 1440+. */}
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 wide:grid-cols-4">
-        <StatWidget
-          gradient="bg-linear-to-br from-blue-500 to-blue-600"
-          label="Revenue (billed)"
-          info="Total billed to buyers for Leads delivered in the selected period."
-          value={s ? money(s.revenue) : '—'}
-          delta={s?.deltas.revenue}
-          chart={<Sparkline id="w-revenue" data={sparks.revenue} color="#fff" height={64} dots fillOpacity={0.22} />}
-          art={<RevenueArt />}
-          loading={summary.loading}
-        />
-        <StatWidget
-          gradient="bg-linear-to-br from-orange-400 to-orange-500"
-          label="Expenses"
-          info="Total paid to campaigns and traffic sources in the selected period. This is a cost — falling Expenses is good news."
-          value={s ? money(s.cost) : '—'}
-          delta={s?.deltas.cost}
-          chart={<Sparkline id="w-cost" data={sparks.cost} color="#fff" height={64} dots fillOpacity={0.22} />}
-          art={<CostArt />}
-          loading={summary.loading}
-        />
-        <StatWidget
-          gradient="bg-linear-to-br from-violet-500 to-purple-600"
-          label="Profit Margin"
-          info="Profit as a share of revenue. Shown as a percentage-point change against the previous period."
-          value={s ? `${s.margin_pct}%` : '—'}
-          delta={s?.point_deltas?.margin_pct} deltaSuffix="pp"
-          chart={<Sparkline id="w-margin" data={sparks.marginPct} color="#fff" height={64} fillOpacity={0.3} />}
-          art={<ProfitArt />}
-          loading={summary.loading}
-        />
-        <StatWidget
-          gradient="bg-linear-to-br from-teal-500 to-teal-600"
-          label="Answer Rate"
-          info="Answered Leads as a share of answered + missed, buyer side. Shown as a percentage-point change against the previous period."
-          value={s ? `${s.answer_rate}%` : '—'}
-          delta={s?.point_deltas?.answer_rate} deltaSuffix="pp"
-          chart={<BarSpark data={sparks.answerRate} color="rgba(255,255,255,0.85)" height={64} />}
-          art={<AnswerArt />}
-          loading={summary.loading}
-        />
-      </div>
-
-      {/* Volume cards — isometric 3D-style icon + bar sparkline. */}
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 wide:grid-cols-4">
-        <VolumeCard
-          icon={<Phone3D />}
-          label="Counted Leads"
-          info="Billable Leads in the selected period. Not the same as answered Leads."
-          value={s ? num(s.counted) : '—'}
-          delta={s?.deltas.counted} tone="up-good" caption={caption}
-          bars={sparks.counted} barColor={C.answered} loading={summary.loading}
-        />
-        <VolumeCard
-          icon={<People3D />}
-          label="Active Buyers"
-          info="Distinct buyers with recorded activity in the selected period."
-          value={s ? num(s.active_buyers) : '—'}
-          delta={s?.deltas.active_buyers} tone="up-good" caption={caption}
-          bars={sparks.counted} barColor={C.revenue} loading={summary.loading}
-        />
-        <VolumeCard
-          icon={<Megaphone3D />}
-          label="Active Campaigns"
-          info="Distinct campaigns with recorded activity in the selected period."
-          value={s ? num(s.active_campaigns) : '—'}
-          delta={s?.deltas.active_campaigns} tone="up-good" caption={caption}
-          bars={sparks.cost} barColor={C.marginPct} loading={summary.loading}
-        />
-        <VolumeCard
-          icon={<Headphones3D />}
-          label="Answered Leads"
-          info="Leads the buyer actually picked up, in the selected period."
-          value={s ? num(s.answered) : '—'}
-          delta={s?.deltas.answered} tone="up-good" caption={caption}
-          bars={sparks.answered} barColor={C.cost} loading={summary.loading}
-        />
-      </div>
-
-      {/* Below xl the trend chart takes a full row rather than squeezing the ranked lists. */}
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
-        {/* Money over time — full-width row of its own. */}
-        <Panel className="lg:col-span-2 xl:col-span-3">
-          <PanelHeader
-            title="Revenue, Expenses & Profit Over Time"
-            subtitle="Income trend across the selected period"
-            info="Profit is Revenue minus Expenses and crosses zero, so this chart can run below the baseline."
-            action={
-              <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-0.5" role="group" aria-label="Time bucket">
-                {GRANULARITIES.map((g) => (
-                  <button
-                    key={g.value}
-                    onClick={() => setGranularity(g.value)}
-                    aria-pressed={granularity === g.value}
-                    className={cx(
-                      'rounded-lg px-2.5 py-1 text-sm font-medium transition-colors',
-                      granularity === g.value
-                        ? 'bg-violet-600 text-white shadow-sm'
-                        : 'text-slate-600 hover:bg-white hover:text-slate-900',
-                    )}
-                  >
-                    {g.label}
-                  </button>
-                ))}
-              </div>
-            }
-          />
-          <div className="relative h-80 px-2 pb-4 pt-2">
-            {trends.loading ? (
-              <ChartSkeleton />
-            ) : series.length === 0 ? (
-              <EmptyHint message="No Leads were recorded in this period. Try a wider date range." />
-            ) : (
-              <>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={series} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="area-rev" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={C.revenue} stopOpacity={0.4} />
-                        <stop offset="100%" stopColor={C.revenue} stopOpacity={0.02} />
-                      </linearGradient>
-                      <linearGradient id="area-cost" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={C.cost} stopOpacity={0.38} />
-                        <stop offset="100%" stopColor={C.cost} stopOpacity={0.02} />
-                      </linearGradient>
-                      <linearGradient id="area-profit" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={C.profit} stopOpacity={0.36} />
-                        <stop offset="100%" stopColor={C.profit} stopOpacity={0.02} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
-                    <XAxis dataKey="period" tickFormatter={formatPeriod} tick={{ fontSize: 13, fill: C.axis }} tickLine={false} axisLine={false} minTickGap={24} />
-                    <YAxis tickFormatter={moneyCompact} tick={{ fontSize: 13, fill: C.axis }} tickLine={false} axisLine={false} width={60} />
-                    {/* Zero baseline matters: profit legitimately runs negative. */}
-                    <ReferenceLine y={0} stroke="#cbd5e1" strokeWidth={1} />
-                    <Tooltip content={<SeriesTooltip format={money} />} />
-                    <Legend wrapperStyle={{ fontSize: 13, paddingTop: 8 }} iconType="plainline" />
-                    {/* Smooth gradient areas. A single bucket shows a marker so it stays visible. */}
-                    <Area type="monotone" dataKey="revenue" name="Revenue (billed)" stroke={C.revenue} strokeWidth={2.5} fill="url(#area-rev)" dot={single ? { r: 4, strokeWidth: 2, fill: '#fff' } : false} activeDot={{ r: 5 }} isAnimationActive={false} />
-                    <Area type="monotone" dataKey="cost" name="Expenses" stroke={C.cost} strokeWidth={2.5} fill="url(#area-cost)" dot={single ? { r: 4, strokeWidth: 2, fill: '#fff' } : false} activeDot={{ r: 5 }} isAnimationActive={false} />
-                    <Area type="monotone" dataKey="margin" name="Profit" stroke={C.profit} strokeWidth={2.5} fill="url(#area-profit)" dot={single ? { r: 4, strokeWidth: 2, fill: '#fff' } : false} activeDot={{ r: 5 }} isAnimationActive={false} />
-                  </AreaChart>
-                </ResponsiveContainer>
-
-                {single && (
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6">
-                    <p className="max-w-xs rounded-xl border border-slate-200 bg-white/90 px-4 py-2.5 text-center text-sm leading-relaxed text-slate-500 shadow-sm backdrop-blur-sm">
-                      Only one {granularity === 'day' ? 'day' : granularity === '4day' ? '4-day block' : 'week'} in
-                      this range has records, so there is no trend to plot yet. Widen the date range to compare periods.
-                    </p>
-                  </div>
-                )}
-              </>
-            )}
+      <div className="flex lg:min-h-0 flex-1 flex-col gap-3 lg:flex-row">
+        {/* Main column. */}
+        <div className="flex lg:min-h-0 min-w-0 flex-1 flex-col gap-3">
+          <div className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">
+            <KpiCard
+              label="Revenue"
+              info="Total billed to buyers for Leads delivered in the selected period."
+              value={s ? money(s.revenue) : '—'}
+              delta={s?.deltas.revenue} tone="up-good"
+              change={s && ps ? `${signedMoney(s.revenue - ps.revenue)} ${caption}` : null}
+              foot={s ? perLead(s.revenue) : undefined}
+              loading={summary.loading}
+            />
+            <KpiCard
+              label="Expenses"
+              info="Lead cost paid to campaigns and traffic sources, plus portal expenses for months the range covers in full. Falling Expenses is good news."
+              value={s ? money(s.cost + (s.portal_expenses ?? 0)) : '—'}
+              delta={s?.deltas.cost} tone="down-good"
+              change={s && ps ? `${signedMoney(s.cost - ps.cost)} ${caption}` : null}
+              foot={s ? (s.portal_expenses ? `incl. ${money(s.portal_expenses)} portal` : perLead(s.cost)) : undefined}
+              loading={summary.loading}
+            />
+            <KpiCard
+              label="Profit"
+              info="Revenue minus Lead cost and portal expenses. Negative means the Leads and overheads cost more than they billed."
+              value={s ? money(s.margin) : '—'}
+              delta={s?.deltas.margin} tone="up-good"
+              change={s && ps ? `${signedMoney(s.margin - ps.margin)} ${caption}` : null}
+              foot={s ? `${s.margin_pct}% margin${s.point_deltas?.margin_pct != null ? ` (${signed(s.point_deltas.margin_pct, 'pp')})` : ''}` : undefined}
+              loading={summary.loading}
+            />
+            <KpiCard
+              label="Counted Leads"
+              info="Billable Leads in the selected period. Not the same as answered Leads."
+              value={s ? num(s.counted) : '—'}
+              delta={s?.deltas.counted} tone="up-good"
+              change={s && ps ? `${signedNum(s.counted - ps.counted)} ${caption}` : null}
+              foot={s ? `${num(s.answered)} answered · ${num(s.missed)} missed` : undefined}
+              loading={summary.loading}
+            />
           </div>
-        </Panel>
 
-        {/* Ranked buyers */}
-        <RankPanel
-          title="Top Buyers"
-          info="Top 5 buyers by revenue. The change compares each buyer against the same buyer in the previous period."
-          rows={buyerRows}
-          loading={topBuyers.loading}
-          emptyMessage="No buyer activity in this period."
-          valueHead="Revenue"
-          to="/buyers"
-          perm="buyers"
-          linkLabel="View all"
-          caption={`Change shown ${caption}`}
-          rankGradients={['from-violet-500 to-purple-600', 'from-blue-500 to-blue-600', 'from-blue-400 to-blue-500', 'from-sky-400 to-blue-400', 'from-sky-300 to-sky-400']}
-          ribbonLabel="Top Buyer"
-          ribbonClass="bg-linear-to-r from-violet-500 to-purple-600"
-        />
-
-        {/* Ranked campaigns */}
-        <RankPanel
-          title="Top Campaigns"
-          info="Top 5 campaigns by Expenses. The change compares each campaign against the same campaign in the previous period."
-          rows={campaignRows}
-          loading={topCampaigns.loading}
-          emptyMessage="No campaign activity in this period."
-          valueHead="Spend"
-          to="/campaigns"
-          perm="campaigns"
-          linkLabel="View all"
-          caption={`Change shown ${caption}`}
-          rankGradients={['from-amber-400 to-amber-500', 'from-slate-400 to-slate-500', 'from-orange-400 to-orange-500', 'from-slate-300 to-slate-400']}
-          ribbonLabel="Top Campaign"
-          ribbonClass="bg-linear-to-r from-amber-400 to-amber-500"
-        />
-
-        {/* Lead quality mix — Answered vs Missed, beside Top Campaigns. Its content sets the
-            height the three cards in this row share. */}
-        <Panel className="flex flex-col">
-          <PanelHeader
-            title="Answered vs Missed Leads"
-            subtitle="Share of delivered Leads, buyer side"
-            info="Share of Leads delivered to buyers that were picked up versus not picked up, across the whole period."
+          <TrendCard
+            metric={metric}
+            onMetric={setMetricId}
+            summary={s}
+            series={series}
+            prevSeries={prevSeries}
+            loading={trends.loading}
+            caption={caption}
           />
-          {/* flex-1 + flex-col so the Total-delivered box is pinned to the bottom and the
-              card has no empty space beneath it. */}
-          <div className="flex flex-1 flex-col px-5 pb-5 pt-2">
-            {summary.loading ? (
-              <div className="flex w-full items-center gap-5 py-6">
-                <Skeleton className="h-32 w-32 rounded-full" />
-                <div className="flex-1 space-y-3">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-4 w-24" />
-                </div>
-              </div>
-            ) : callTotal === 0 ? (
-              <div className="w-full">
-                <EmptyHint message="No answered or missed Leads were recorded in this period." />
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-1 items-center gap-2">
-                  {/* 2D donut ring reflecting the answered/missed split, with a raised white
-                      call-button in the middle. */}
-                  <div className="relative shrink-0" style={{ width: 172, height: 172 }}>
-                    <DonutRing2D answered={answered} missed={missed} size={172} />
-                    <span className="absolute left-1/2 top-1/2 flex h-[74px] w-[74px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-emerald-500 shadow-[0_8px_20px_rgba(15,23,42,0.18)]">
-                      <IconPhoneCall />
-                    </span>
-                  </div>
-                  <dl className="min-w-0 flex-1 space-y-2.5">
-                    {callMix.map((slice, i) => (
-                      <div key={slice.name} className={cx(i > 0 && 'border-t border-slate-100 pt-2.5')}>
-                        <dt className="flex items-center gap-2 text-base text-slate-500">
-                          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: slice.color }} />
-                          {slice.name}
-                        </dt>
-                        <dd className="mt-0.5 text-2xl font-bold tabular-nums text-slate-900">{num(slice.value)}</dd>
-                        <dd className="text-sm font-medium" style={{ color: slice.color }}>
-                          {((slice.value / callTotal) * 100).toFixed(1)}% of Leads
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                </div>
-                {/* Total delivered — its own rounded box at the bottom of the card. */}
-                <div className="mt-4 flex items-center gap-3 rounded-2xl bg-violet-50 px-4 py-3">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-violet-600 shadow-sm">
-                    <IconPhoneFwd />
-                  </span>
-                  <span className="text-base font-medium leading-tight text-slate-500">Total<br />delivered</span>
-                  <span className="ml-auto text-2xl font-bold tabular-nums text-slate-900">{num(callTotal)}</span>
-                </div>
-              </>
-            )}
-          </div>
-        </Panel>
 
-        {/* Traffic sources — full-width row of its own, below the ranked/donut row. */}
-        <Panel className="overflow-hidden lg:col-span-2 xl:col-span-3">
-          {/* Header: icon + title, and a read-only period pill reflecting the global range. */}
-          <div className="flex flex-col gap-4 px-6 pt-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3.5">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
-                <IconBars />
-              </span>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <h3 className="text-lg font-semibold text-slate-900">Top Traffic Sources</h3>
-                  <InfoDot text="Share of Expenses by traffic source. Sources beyond the top five are grouped into Others. The period follows the date range at the top of the page." />
-                </div>
-                <p className="text-sm text-slate-500">Campaign spend by source</p>
+          {/* Bottom row — three cells sharing the remaining height. */}
+          <div className="grid lg:min-h-0 flex-[1.1] grid-cols-1 gap-3 md:grid-cols-3 md:[grid-template-rows:minmax(0,1fr)]">
+            <LeadMixCard summary={s} prevSummary={ps} sources={sources} loading={summary.loading} sourcesLoading={topSources.loading} canAccess={canAccess} />
+            <AnswerRateCard summary={s} series={series} loading={trends.loading || summary.loading} caption={caption} />
+            <TopCard buyers={buyerRows} campaigns={campaignRows} loading={topBuyers.loading || topCampaigns.loading} canAccess={canAccess} />
+          </div>
+
+          {/* One banner for any block that failed — the rest of the page stays usable. */}
+          {failed.length > 0 && (
+            <div className="flex shrink-0 flex-col gap-2 rounded-xl border border-red-200 bg-red-50/70 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-2">
+                <span className="mt-0.5 shrink-0 text-red-500"><IconAlert /></span>
+                <p className="text-xs text-red-700">
+                  {failed[0].error}
+                  {failed.length > 1 && ` (and ${failed.length - 1} other section${failed.length > 2 ? 's' : ''})`}
+                  . Is the PHP API running on port 8000?
+                </p>
               </div>
+              <button
+                onClick={refreshAll}
+                className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 sm:self-auto"
+              >
+                <IconRefresh /> Retry
+              </button>
             </div>
-            <span className="inline-flex items-center gap-2 self-start rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-600 shadow-sm">
-              <span className="text-slate-400"><IconCal /></span>
-              {formatDmy(range.from)} – {formatDmy(range.to)}
-              <span className="text-slate-400"><IconChevD /></span>
-            </span>
-          </div>
+          )}
+        </div>
 
-          {topSources.loading ? (
-            <div className="grid gap-5 px-6 pb-6 pt-5 lg:grid-cols-2">
-              {[0, 1].map((c) => (
-                <div key={c} className="space-y-5 rounded-2xl border border-slate-200/80 p-4">
-                  {[0, 1, 2].map((i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <Skeleton className="h-11 w-11 rounded-xl" />
-                      <Skeleton className="h-4 flex-1" />
-                      <Skeleton className="h-8 w-20" />
-                    </div>
+        {/* Right rail — every filter and action, fixed; Team Today fills the rest. */}
+        <aside className="contents lg:flex lg:min-h-0 lg:w-64 lg:shrink-0 lg:flex-col lg:gap-3">
+          <Panel className="order-first shrink-0 p-3 lg:order-none">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Filters</div>
+            <div className="space-y-2.5">
+              <div>
+                <div className="mb-1 text-[11px] font-medium text-slate-500">Period</div>
+                {/* Dark date box, per the client's request; stretched to the rail's width. */}
+                <div className="[&_button]:w-full [&_button]:justify-between [&_button]:whitespace-nowrap [&_button]:px-2.5 [&_button]:text-xs">
+                  <DateRangeControl value={range} onChange={setRange} tone="dark" />
+                </div>
+              </div>
+              <div>
+                <div className="mb-1 text-[11px] font-medium text-slate-500">Time bucket</div>
+                <div className="grid grid-cols-3 rounded-lg border border-slate-200 bg-slate-50 p-0.5" role="group" aria-label="Time bucket">
+                  {GRANULARITIES.map((g) => (
+                    <button
+                      key={g.value}
+                      onClick={() => setGranularity(g.value)}
+                      aria-pressed={granularity === g.value}
+                      title={{ day: 'Daily', '4day': 'Every 4 days', week: 'Weekly' }[g.value]}
+                      className={cx(
+                        'rounded-md py-1 text-[11px] font-semibold transition-colors',
+                        granularity === g.value ? 'bg-brand text-white shadow-sm' : 'text-slate-500 hover:text-slate-900',
+                      )}
+                    >
+                      {g.label}
+                    </button>
                   ))}
                 </div>
-              ))}
-            </div>
-          ) : sources.rows.length === 0 ? (
-            <div className="px-6 pb-6 pt-2">
-              <EmptyHint message="No campaign spend was recorded in this period." />
-            </div>
-          ) : (
-            <>
-              {/* Two bordered columns of source rows. */}
-              <div className="grid gap-5 px-6 pt-5 lg:grid-cols-2">
-                {[
-                  sources.rows.slice(0, Math.ceil(sources.rows.length / 2)),
-                  sources.rows.slice(Math.ceil(sources.rows.length / 2)),
-                ].map((col, ci) =>
-                  col.length === 0 ? null : (
-                    <div key={ci} className="divide-y divide-slate-100 rounded-2xl border border-slate-200/80">
-                      {col.map((row) => {
-                        const share = sources.total > 0 ? (row.cost / sources.total) * 100 : 0
-                        const barW = sources.maxCost > 0 ? (row.cost / sources.maxCost) * 100 : 0
-                        const isOthers = row.name.startsWith('Others')
-                        const badge = row.name.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || '?'
-                        return (
-                          <div key={row.name} className="flex items-center gap-4 px-4 py-4">
-                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-sm font-bold text-violet-600 ring-1 ring-inset ring-violet-100">
-                              {isOthers ? <IconGrid /> : badge}
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate font-bold uppercase tracking-wide text-slate-800">{row.name}</div>
-                              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                                <div
-                                  className="h-full rounded-full bg-linear-to-r from-violet-500 to-fuchsia-500"
-                                  style={{ width: `${Math.max(barW, barW > 0 ? 4 : 0)}%` }}
-                                />
-                              </div>
-                            </div>
-                            <div className="shrink-0 text-right">
-                              <div className="text-xs text-slate-400">
-                                {row.counted > 0 ? `${money(row.cost / row.counted)} / Lead` : '—'}
-                              </div>
-                              <div className="text-lg font-bold tabular-nums text-slate-900">{money(row.cost)}</div>
-                              <div className="mt-1 inline-flex rounded-lg bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-700">
-                                {share.toFixed(1)}%
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ),
-                )}
               </div>
-
-              {/* Summary footer bar. */}
-              <div className="mt-6 flex flex-col items-stretch gap-4 border-t border-slate-200/70 bg-violet-50/50 px-6 py-4 lg:flex-row lg:items-center">
-                <div className="flex flex-1 items-center gap-3">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-violet-600 shadow-sm">
-                    <IconPie />
-                  </span>
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-slate-700">Total Spend</div>
-                    <div className="text-xs text-slate-400">Across all sources</div>
-                  </div>
-                  <div className="ml-auto text-2xl font-bold tabular-nums text-slate-900 lg:ml-6">{money(sources.total)}</div>
-                </div>
-                <div className="hidden w-px self-stretch bg-slate-200 lg:block" />
-                <div className="flex flex-col px-1">
-                  <div className="text-lg font-bold tabular-nums text-slate-900">${sources.avgCpc.toFixed(1)} <span className="text-sm font-medium text-slate-400">/ Lead</span></div>
-                  <div className="text-xs text-slate-400">Average CPC</div>
-                </div>
-                <div className="hidden w-px self-stretch bg-slate-200 lg:block" />
-                <div className="flex flex-col px-1">
-                  <div className="text-lg font-bold text-violet-600">100%</div>
-                  <div className="text-xs text-slate-400">Total Share</div>
-                </div>
-                {canAccess('campaigns') && (
-                  <Link
-                    to="/campaigns"
-                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-violet-200 bg-white px-4 py-2.5 text-sm font-semibold text-violet-700 shadow-sm transition-colors hover:bg-violet-50 lg:ml-2"
+              <div>
+                <div className="mb-1 text-[11px] font-medium text-slate-500">Chart metric</div>
+                <label className="relative block">
+                  <select
+                    value={metric.id}
+                    onChange={(e) => setMetricId(e.target.value as MetricId)}
+                    aria-label="Chart metric"
+                    className="w-full cursor-pointer appearance-none rounded-lg border border-slate-200 bg-white py-1.5 pl-2.5 pr-7 text-xs font-medium text-slate-800 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
                   >
-                    <IconArrowUR />
-                    View Full Report
+                    {METRICS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                  </select>
+                  <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"><IconChevD /></span>
+                </label>
+              </div>
+              <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-2.5">
+                <button
+                  onClick={refreshAll}
+                  className={cx(railBtn, 'border-white/10 bg-linear-to-b from-brand to-brand-dark text-slate-100 shadow-md shadow-slate-900/20 hover:from-brand-dark hover:to-brand-dark')}
+                >
+                  <span className={cx(refreshing && 'animate-spin')}><IconRefresh /></span> Refresh
+                </button>
+                <button onClick={exportCsv} disabled={!s} className={cx(railBtn, 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50')}>
+                  <IconDownload /> CSV
+                </button>
+                {canAccess('complete-report') && (
+                  <Link to="/complete-report" className={cx(railBtn, 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50')}>
+                    <IconReport /> Report
                   </Link>
                 )}
+                {/* Opens the staff overlay in place — the manager stays on the dashboard. */}
+                {canAccess('staff') && (
+                  <button onClick={showStaff} className={cx(railBtn, 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50')}>
+                    <IconUsers /> Staff
+                  </button>
+                )}
               </div>
-            </>
+            </div>
+          </Panel>
+
+          <div className="order-last flex lg:min-h-0 flex-1 flex-col lg:order-none">
+          {canAttendance ? (
+            <TeamTodayCard
+              day={teamDay}
+              onDay={setTeamDay}
+              today={today}
+              roster={rosterRows}
+              staff={staff.data ?? []}
+              loading={roster.loading}
+              error={roster.error}
+            />
+          ) : (
+            <LeadQualityCard summary={s} loading={summary.loading} />
           )}
-        </Panel>
+          </div>
+        </aside>
       </div>
 
-      {/* One banner for any block that failed — the rest of the page stays usable. */}
-      {failed.length > 0 && (
-        <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 shrink-0 text-red-500">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" /><path d="M12 8v5M12 16h.01" />
-              </svg>
-            </span>
-            <p className="text-base text-red-700">
-              {failed[0].error}
-              {failed.length > 1 && ` (and ${failed.length - 1} other section${failed.length > 2 ? 's' : ''})`}
-              . Is the PHP API running on port 8000?
-            </p>
-          </div>
-          <button
-            onClick={retryAll}
-            className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-red-200 bg-white px-3 py-1.5 text-base font-medium text-red-600 transition-colors hover:bg-red-50 sm:self-auto"
-          >
-            <IconRefresh />
-            Retry
-          </button>
-        </div>
+      </div>
       )}
     </div>
   )
 }
+

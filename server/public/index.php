@@ -19,6 +19,7 @@ use App\Controllers\QueueController;
 use App\Controllers\RecordController;
 use App\Controllers\ReviewController;
 use App\Controllers\StaffController;
+use App\Controllers\TopPerformerController;
 use App\Controllers\UserController;
 use App\Controllers\VendorController;
 use App\Database;
@@ -148,6 +149,12 @@ $router->get('/review-entries',             fn () => $reviews->entries());
 $router->post('/review-entries',            fn () => $reviews->storeEntry());
 $router->put('/review-entries/{id}',        fn ($p) => $reviews->updateEntry($p));
 $router->delete('/review-entries/{id}',     fn ($p) => $reviews->destroyEntry($p));
+
+// Top Performer — the Review page's fourth tab: the month's switches and the manager's
+// confirmations, shared so every browser sees the same ticks.
+$topPerformer = new TopPerformerController();
+$router->get('/top-performer', fn () => $topPerformer->show());
+$router->put('/top-performer', fn () => $topPerformer->save());
 
 // Vendors (traffic-source payment sheets)
 $vendors = new VendorController();

@@ -114,7 +114,7 @@ export function MonthSelector({ value, onChange }: { value: string; onChange: (v
                   className={cx(
                     'rounded-lg py-2 text-sm font-medium transition-colors',
                     active
-                      ? 'bg-linear-to-b from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-600/25'
+                      ? 'bg-brand text-white shadow-lg shadow-slate-900/25'
                       : 'text-slate-700 hover:bg-white/60',
                   )}
                 >

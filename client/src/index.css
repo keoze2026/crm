@@ -13,6 +13,13 @@
    * arbitrary media variants ahead of the named ones, so `xl:` would override it.
    */
   --breakpoint-wide: 90rem;
+  /*
+   * The brand blue the Dashboard, Staff Management, Review and Attendance pages accent
+   * with (buttons, chart lines, avatars, selected days). One value to change if the
+   * client's swatch is read differently; -dark is its pressed/hover shade.
+   */
+  --color-brand: #1f4e8c;
+  --color-brand-dark: #173d70;
 }
 
 html,
@@ -162,4 +169,37 @@ table td :where(input, select, textarea) {
 .filters label > span {
   margin-bottom: 0.1rem;
   font-size: 0.7rem;
+}
+
+/* ── Page slide (Dashboard ⇄ Staff view) ──────────────────────────────────────
+   The two views of the Dashboard frame swap like pages: the new one slides in from the
+   side it lives on. Only the entering view is mounted, so this is a mount animation. */
+@keyframes pageInRight {
+  from { opacity: 0; transform: translateX(6%); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes pageInLeft {
+  from { opacity: 0; transform: translateX(-6%); }
+  to   { opacity: 1; transform: none; }
+}
+.animate-page-in-right { animation: pageInRight 0.32s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-page-in-left  { animation: pageInLeft  0.32s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-page-in-right, .animate-page-in-left { animation: none; }
+}
+
+/*
+ * Reading tables (Attendance): roomier than the data-entry sheets. The global rule above
+ * gives every table the Excel-like density the sheets want; these are read, not keyed
+ * into, so rows get air and a comfortable line-height. Same specificity trick — outside
+ * any @layer, so it wins over the per-cell utilities without !important.
+ */
+table.table-airy td,
+table.table-airy th {
+  padding-block: 0.6rem;
+  padding-inline: 0.875rem;
+  line-height: 1.45;
+}
+table.table-airy th {
+  padding-block: 0.7rem;
 }

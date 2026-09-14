@@ -102,12 +102,12 @@ function Calendar({ year, month, selecting, from, to, hover, onDayClick, onDayHo
             <button key={idx} onClick={() => onDayClick(iso)} onMouseEnter={() => onDayHover(iso)}
               className={cx(
                 'flex h-9 w-full items-center justify-center text-sm transition-colors',
-                inRange  && 'bg-blue-50 text-blue-700',
-                isFrom   && 'rounded-l-full bg-blue-600 text-white hover:bg-blue-700',
-                isTo     && 'rounded-r-full bg-blue-600 text-white hover:bg-blue-700',
+                inRange  && 'bg-slate-100 text-brand',
+                isFrom   && 'rounded-l-full bg-brand text-white hover:bg-brand-dark',
+                isTo     && 'rounded-r-full bg-brand text-white hover:bg-brand-dark',
                 isFrom && isTo && 'rounded-full',
                 !isFrom && !isTo && !inRange && 'rounded-full text-slate-700 hover:bg-slate-100',
-                isToday && !isFrom && !isTo && 'font-bold text-blue-600',
+                isToday && !isFrom && !isTo && 'font-bold text-brand underline underline-offset-2',
               )}>
               {day}
             </button>
@@ -257,7 +257,7 @@ export function DateRangeControl({ value, onChange, tone = 'light' }: {
                   <button key={p.label} onClick={() => handlePreset(r)}
                     className={cx(
                       'w-full px-3 py-2 text-left text-sm transition-colors',
-                      active ? 'bg-blue-600 text-white' : 'text-slate-700 hover:bg-slate-50',
+                      active ? 'bg-brand text-white' : 'text-slate-700 hover:bg-slate-50',
                     )}>
                     {p.label}
                   </button>
@@ -281,14 +281,14 @@ export function DateRangeControl({ value, onChange, tone = 'light' }: {
           {selecting === 'from'
             ? 'Click a day to start. Click the same day twice for a single day.'
             : draft.from
-              ? <>Click end date — or <button className="text-blue-500 hover:underline" onClick={() => { onChange({ from: draft.from, to: draft.from }); setOpen(false); setPresetOpen(false); setSelecting('from') }}>use {draft.from} only</button></>
+              ? <>Click end date — or <button className="font-medium text-brand underline" onClick={() => { onChange({ from: draft.from, to: draft.from }); setOpen(false); setPresetOpen(false); setSelecting('from') }}>use {draft.from} only</button></>
               : 'Click a day to start.'}
         </p>
 
         {/* Footer */}
         <div className="mt-3 flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
           <Button variant="secondary" onClick={handleCancel}>Cancel</Button>
-          <Button onClick={handleApply} disabled={!draft.from}>Apply</Button>
+          <Button variant="dark" onClick={handleApply} disabled={!draft.from}>Apply</Button>
         </div>
       </div>
     </div>
@@ -303,7 +303,7 @@ export function DateRangeControl({ value, onChange, tone = 'light' }: {
           'flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors',
           tone === 'dark'
             // Solid navy, matching the sidebar gradient so the two dark surfaces agree.
-            ? 'border-white/10 bg-linear-to-b from-[#1b2540] to-[#0d1424] text-slate-100 shadow-md shadow-slate-900/20 hover:from-[#22304f] hover:to-[#131b31]'
+            ? 'border-white/10 bg-linear-to-b from-brand to-brand-dark text-slate-100 shadow-md shadow-slate-900/20 hover:from-brand-dark hover:to-brand-dark'
             : 'glass-input border-white/70 text-slate-700 hover:bg-white/70',
         )}
       >

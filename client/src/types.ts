@@ -751,3 +751,17 @@ export interface VendorLedger {
   /** opening_advance + prior_net — the "Initial Advance" the period opens with. */
   initial_advance: number
 }
+// ─── Top Performer (the Review page's incentive tab) ───────────────────────────
+
+/**
+ * The month's shared state behind the Top Performer tab: which of the optional criteria
+ * (8–12) are in play, the performance % that meets Goal Achievement, and the criteria each
+ * person has been confirmed for by a manager (staff id → criterion ids). The data-driven
+ * criteria are judged from reviews/attendance/leaves and are not stored.
+ */
+export interface TopPerformerState {
+  /** First of the month judged, YYYY-MM-DD. */
+  month: string
+  settings: { additional: string[]; min_performance: number }
+  ticks: Record<string, string[]>
+}

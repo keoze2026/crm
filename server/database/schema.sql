@@ -289,3 +289,26 @@ CREATE TABLE IF NOT EXISTS review_entries (
 
 CREATE INDEX IF NOT EXISTS idx_review_entries_kind       ON review_entries (kind, month);
 CREATE INDEX IF NOT EXISTS idx_review_entries_department ON review_entries (department_id);
+
+-- ─── Top Performer (Review page) ─────────────────────────────────────────────────────────
+-- The month's switches and the manager's confirmations for the incentive tab; the
+-- data-driven criteria are judged from reviews/attendance/leaves and never stored.
+-- See migrations/029_top_performer.sql.
+
+CREATE TABLE IF NOT EXISTS top_performer_months (
+    month           DATE        PRIMARY KEY,
+    additional      JSONB       NOT NULL DEFAULT '["goals"]'::jsonb,
+    min_performance INTEGER     NOT NULL DEFAULT 80 CHECK (min_performance BETWEEN 0 AND 100),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS top_performer_ticks (
+    month        DATE        NOT NULL,
+    staff_id     BIGINT      NOT NULL REFERENCES staff (id) ON DELETE CASCADE,
+    criterion    TEXT        NOT NULL,
+    confirmed_by BIGINT,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (month, staff_id, criterion)
+);
+
+CREATE INDEX IF NOT EXISTS idx_top_performer_ticks_month ON top_performer_ticks (month);

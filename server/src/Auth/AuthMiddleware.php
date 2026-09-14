@@ -52,6 +52,7 @@ final class AuthMiddleware
         'queue-codes'        => ['queues'],
         'review-departments' => ['reviews'],
         'review-entries'     => ['reviews'],
+        'top-performer'      => ['reviews'],
         'staff'              => ['staff', 'queues', 'reviews'],
         'departments'        => ['staff'],
         'staff-attendance'   => ['staff'],

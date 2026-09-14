@@ -46,6 +46,7 @@ final class Audit
         'staff-salaries'     => 'staff-salary',
         'review-departments' => 'review-department',
         'review-entries'     => 'review-entry',
+        'top-performer'      => 'top-performer',
     ];
 
     /** @var array{method:string,path:string,body:array<string,mixed>}|null */

@@ -40,6 +40,7 @@ import type {
   ReviewDepartment,
   ReviewEntry,
   ReviewKind,
+  TopPerformerState,
   Vendor,
   VendorLedger,
   VendorPayment,
@@ -393,6 +394,13 @@ export const api = {
     request<ReviewEntry>(`/review-entries/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteReviewEntry: (id: number) =>
     request<{ deleted: boolean }>(`/review-entries/${id}`, { method: 'DELETE' }),
+
+  // Top Performer — the Review page's incentive tab. One state per month; saving sends the
+  // whole month (settings + every tick), so every browser reads the same thing back.
+  topPerformer: (month: string) =>
+    request<TopPerformerState>(`/top-performer${qs({ month })}`),
+  saveTopPerformer: (month: string, state: Pick<TopPerformerState, 'settings' | 'ticks'>) =>
+    request<TopPerformerState>(`/top-performer${qs({ month })}`, { method: 'PUT', body: JSON.stringify(state) }),
 
   // Vendors (traffic-source payment sheets)
   vendors: () =>

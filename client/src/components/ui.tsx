@@ -96,7 +96,7 @@ export function Button({
   children,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'dark'
   size?: 'sm' | 'md'
 }) {
   const variants = {
@@ -105,6 +105,8 @@ export function Button({
     secondary: 'glass-input border border-white/70 text-slate-700 hover:bg-white/80',
     ghost: 'text-slate-600 hover:bg-white/60',
     danger: 'border border-red-200 bg-white/70 text-red-600 hover:bg-red-50',
+    /** The brand blue — for the two-tone surfaces (calendar, dashboard rail). */
+    dark: 'bg-linear-to-b from-brand to-brand-dark text-white shadow-lg shadow-brand/25 hover:from-brand-dark hover:to-brand-dark disabled:from-slate-400 disabled:to-slate-400 disabled:shadow-none',
   }
   const sizes = { sm: 'px-2.5 py-1.5 text-xs', md: 'px-4 py-2 text-sm' }
   return (

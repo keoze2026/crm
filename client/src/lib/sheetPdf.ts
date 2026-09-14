@@ -8,6 +8,7 @@ import {
   clockLabel, earlyBy, emptyLoginTally, gapLabel, hoursLabel, lateBy, netHours, punctualityOf,
   shortDay, staffStatus, sumLoginTallies, tallyPunctuality, type LoginTally,
 } from './staff'
+import { activeCriteria, type IncentiveSettings, type RankedRow } from './incentive'
 
 /**
  * PDF exports for the Queues, Review and Staff Management sheets — the tables as filled
@@ -572,6 +573,73 @@ export function buildSalariesPdf(
       0: { halign: 'center', cellWidth: 60, fillColor: BAND, fontStyle: 'bold' },
       1: { fontStyle: 'bold' },
       2: { halign: 'center', cellWidth: 130 },
+    },
+    margin: { left: M, right: M },
+  })
+  return doc
+}
+
+/**
+ * Top Performer of the Month: the ranked incentive table as the tab shows it — one column
+ * per criterion in play (numbered as on the client's list), the score, and the incentive
+ * mark. Standard PDF fonts have no tick glyph, so verdicts print as YES / no / ?, with the
+ * same green / red / grey the screen uses.
+ */
+export function buildTopPerformerPdf(rows: RankedRow[], settings: IncentiveSettings, monthLabel: string): jsPDF {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
+  const active = activeCriteria(settings)
+  const winners = rows.filter((r) => r.allMet)
+  const y = drawHeader(
+    doc,
+    'TOP PERFORMER OF THE MONTH',
+    `${monthLabel} · ${active.length} criteria in play · ${winners.length ? `${winners.length} eligible: ${winners.map((w) => w.candidate.member.name).join(', ')}` : 'nobody meets every criterion yet'}`,
+  )
+
+  // Criteria key under the title, so the numbered columns can be read.
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(...MUTED)
+  const key = active.map((c) => `${c.n}. ${c.label}${c.source === 'manual' ? '' : ' *'}`).join('   ')
+  const lines = doc.splitTextToSize(`${key}   (* checked from the month's Review, Complete Attendance and Leaves sheets)`, doc.internal.pageSize.getWidth() - M * 2) as string[]
+  doc.text(lines, M, y)
+  const startY = y + lines.length * 10 + 6
+
+  const first = 3 // index of the first criterion column
+  autoTable(doc, {
+    startY,
+    theme: 'grid',
+    head: [['#', 'NAME', 'DEPARTMENTS', ...active.map((c) => String(c.n)), 'SCORE', 'INCENTIVE']],
+    body: rows.map((r) => [
+      String(r.rank),
+      r.candidate.member.name,
+      r.candidate.member.departments.map((d) => d.name).join(', '),
+      ...active.map((c) => { const v = r.verdicts[c.id]; return v.unknown ? '?' : v.met ? 'YES' : 'no' }),
+      `${r.met} / ${r.total}`,
+      r.allMet ? 'ELIGIBLE' : `${r.total - r.met} to go`,
+    ]),
+    styles: { ...baseStyles, fontSize: 8, cellPadding: 4 },
+    headStyles: navyHead,
+    bodyStyles: { fillColor: CYAN },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 28, fillColor: BAND, fontStyle: 'bold' },
+      1: { cellWidth: 120, fontStyle: 'bold' },
+      2: { cellWidth: 130 },
+      ...Object.fromEntries(active.map((_, i) => [first + i, { halign: 'center', cellWidth: 34 }])),
+      [first + active.length]: { halign: 'center', cellWidth: 48, fontStyle: 'bold' },
+      [first + active.length + 1]: { halign: 'center', cellWidth: 64, fontStyle: 'bold' },
+    },
+    didParseCell: (data) => {
+      if (data.section !== 'body') return
+      const col = data.column.index
+      const text = String(data.cell.raw)
+      if (col >= first && col < first + active.length) {
+        if (text === 'YES') { data.cell.styles.textColor = GREEN; data.cell.styles.fontStyle = 'bold' }
+        else if (text === 'no') { data.cell.styles.textColor = RED; data.cell.styles.fillColor = ROSE }
+        else data.cell.styles.textColor = MUTED
+      }
+      if (col === first + active.length + 1 && text === 'ELIGIBLE') {
+        data.cell.styles.textColor = GREEN
+      }
     },
     margin: { left: M, right: M },
   })
