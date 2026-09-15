@@ -56,8 +56,8 @@ const IconCross = () => (
 const IconAward = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="8" r="6" /><path d="M15.5 13 17 22l-5-3-5 3 1.5-9" /></svg>
 )
-const IconCrown = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M3 8l4.4 3L12 5l4.6 6L21 8l-1.5 9.2a1 1 0 0 1-1 .8H5.5a1 1 0 0 1-1-.8L3 8z" /></svg>
+const IconCrown = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M3 8l4.4 3L12 5l4.6 6L21 8l-1.5 9.2a1 1 0 0 1-1 .8H5.5a1 1 0 0 1-1-.8L3 8z" /></svg>
 )
 
 // ─── Pieces ───────────────────────────────────────────────────────────────────
@@ -260,6 +260,88 @@ function Guide() {
         ))}
       </ol>
     </section>
+  )
+}
+
+// ─── Headline ─────────────────────────────────────────────────────────────────
+//
+// The month's answer in one glance, beside the card title where the header otherwise sat
+// empty under the month picker. The Top Performers list is everyone scoring 80% or more
+// of the criteria in play; the headline names the highest scorer on it — or everyone who
+// ties for that score — with the percentage, and the scorecard is the share of the roster
+// that made the list. Names and percentages only; the evidence is the ranking below.
+
+/** The score that puts someone on the Top Performers list. */
+export const TOP_PERFORMER_PCT = 80
+
+/** A person's score as a whole percentage of the criteria in play. */
+export const scorePct = (r: RankedRow) => Math.round((r.met / Math.max(1, r.total)) * 100)
+
+/** A small ring that fills clockwise to the share given, drawn in the tone passed. */
+function ShareRing({ pct, tone }: { pct: number; tone: string }) {
+  const r = 15
+  const c = 2 * Math.PI * r
+  return (
+    <svg width="44" height="44" viewBox="0 0 40 40" className="shrink-0 -rotate-90" aria-hidden>
+      <circle cx="20" cy="20" r={r} fill="none" stroke="currentColor" strokeWidth="4" className="text-slate-200/80" />
+      <circle
+        cx="20" cy="20" r={r} fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round"
+        strokeDasharray={`${(pct / 100) * c} ${c}`}
+        className={cx('transition-[stroke-dasharray] duration-500', tone)}
+      />
+    </svg>
+  )
+}
+
+export function TopPerformerHeadline({ rows, monthLabel }: { rows: RankedRow[]; monthLabel: string }) {
+  const listed = rows.filter((r) => scorePct(r) >= TOP_PERFORMER_PCT)
+  const best = listed.length ? Math.max(...listed.map(scorePct)) : 0
+  const leaders = listed.filter((r) => scorePct(r) === best)
+  const any = leaders.length > 0
+  const share = rows.length ? Math.round((listed.length / rows.length) * 100) : 0
+  return (
+    <div
+      className={cx(
+        'flex flex-col overflow-hidden rounded-xl border sm:flex-row sm:items-stretch',
+        any ? 'border-emerald-200 bg-gradient-to-r from-emerald-50 to-white shadow-sm shadow-emerald-100' : 'border-slate-200 bg-white',
+      )}
+      aria-label={`Top performer, ${monthLabel}`}
+    >
+      {/* Who */}
+      <div className="flex min-w-0 flex-1 items-start gap-3 px-4 py-3">
+        <span className={cx('mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full', any ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-400')}>
+          <IconCrown size={15} />
+        </span>
+        <div className="min-w-0">
+          <div className={cx('text-[10px] font-bold uppercase tracking-wider', any ? 'text-emerald-700' : 'text-slate-400')}>
+            Top performer{leaders.length > 1 ? 's · tied' : ''} · {monthLabel}
+          </div>
+          {any ? (
+            <ul className="mt-1.5 flex flex-wrap gap-1.5">
+              {leaders.map((w) => (
+                <li key={w.candidate.member.id} className="inline-flex items-center gap-1.5 rounded-full bg-white py-0.5 pl-0.5 pr-1 text-xs font-semibold text-slate-800 shadow-sm ring-1 ring-emerald-200">
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-bold text-white">{initials(w.candidate.member.name)}</span>
+                  {w.candidate.member.name}
+                  <span className="rounded-full bg-emerald-50 px-1.5 py-px text-[10px] font-bold tabular-nums text-emerald-700">{best}%</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-1 text-sm font-medium text-slate-500">No one at {TOP_PERFORMER_PCT}% yet</p>
+          )}
+        </div>
+      </div>
+      {/* How many made the list */}
+      <div className="flex shrink-0 items-center gap-3 border-t border-slate-100 px-4 py-3 sm:border-l sm:border-t-0">
+        <ShareRing pct={share} tone={any ? 'text-emerald-500' : 'text-slate-300'} />
+        <div className="leading-tight">
+          <div className={cx('text-xl font-bold tabular-nums', any ? 'text-emerald-700' : 'text-slate-900')}>{share}%</div>
+          <div className="text-[11px] text-slate-500">
+            <span className="font-semibold text-slate-700 tabular-nums">{listed.length}</span> of {rows.length} staff scored {TOP_PERFORMER_PCT}%+
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -512,7 +594,7 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
                 {shown.map((r) => {
                   const m = r.candidate.member
                   const first = r.rank === 1
-                  const pct = Math.round((r.met / Math.max(1, r.total)) * 100)
+                  const pct = scorePct(r)
                   return (
                     <li key={m.id} className={cx('grid items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50/80', cols, r.allMet && 'bg-emerald-50/40')}>
                       {/* Rank */}

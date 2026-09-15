@@ -5,7 +5,7 @@ import DepartmentSheet from '../components/DepartmentSheet'
 import { PageHeader } from '../components/Layout'
 import { MonthSelector, currentMonth, formatMonth, shiftMonth } from '../components/MonthSelector'
 import ReviewSheet from '../components/ReviewSheet'
-import TopPerformerSheet from '../components/TopPerformerSheet'
+import TopPerformerSheet, { TopPerformerHeadline } from '../components/TopPerformerSheet'
 import { Button, Card, CardHeader, DownloadIcon, PageLoader, SegmentedTabs } from '../components/ui'
 import type { IncentiveSettings, RankedRow } from '../lib/incentive'
 import { buildBehaviourPdf, buildDepartmentsPdf, buildPerformancePdf, buildTopPerformerPdf } from '../lib/sheetPdf'
@@ -100,6 +100,8 @@ export default function Review() {
           <CardHeader
             title={`Top Performer — ${label}`}
             subtitle="Who earns the month's incentive: the criteria, the evidence, and the ranking"
+            // The month's winners and their share of the roster, in the header's empty half.
+            action={topExport && <TopPerformerHeadline rows={topExport.rows} monthLabel={label} />}
           />
           <div className="p-4">
             <TopPerformerSheet
