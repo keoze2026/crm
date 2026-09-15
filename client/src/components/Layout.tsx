@@ -91,11 +91,12 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <>
-      <div className="px-6 py-5">
+      <div className="shrink-0 px-6 py-5 short:py-3">
         <BrandMark light />
       </div>
 
-      <nav className="flex-1 space-y-1 px-3 py-2">
+      {/* min-h-0 lets the list shrink below its content and scroll instead of pushing the footer off screen. */}
+      <nav className="sidebar-nav min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-2 short:space-y-0.5 short:py-1">
         {items.map((item, i) => (
           <NavLink
             key={item.to}
@@ -105,7 +106,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             style={{ animationDelay: `${i * 35}ms` }}
             className={({ isActive }) =>
               cx(
-                'nav-item animate-fade-in-up flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium backdrop-blur-sm',
+                'nav-item animate-fade-in-up flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium backdrop-blur-sm short:py-1.5',
                 isActive
                   ? 'bg-white/5 text-white ring-1 ring-white/25'
                   : 'text-slate-300 hover:translate-x-0.5 hover:bg-white/10 hover:text-white',
@@ -118,7 +119,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         ))}
       </nav>
 
-      <div className="border-t border-white/10 px-4 py-4">
+      <div className="shrink-0 border-t border-white/10 px-4 py-4 short:py-3">
         {authEnabled && user ? (
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center text-sm font-bold text-white">
