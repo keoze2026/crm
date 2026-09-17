@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react'
 import { api } from '../api/client'
-import { LEAVE_MARKERS } from '../lib/staff'
+import { LEAVE_MARKERS, returnVerdict, type ReturnVerdict } from '../lib/staff'
 import type { StaffLeave, StaffMember } from '../types'
 import {
-  addBtnCls, addRowCls, cellCls, fieldCls, headCls, removeBtnCls, rowCls, tableCls, theadCls,
+  addBtnCls, addRowCls, cellCls, dateFieldCls, fieldCls, headCls, removeBtnCls, rowCls, tableCls, theadCls,
 } from './sheet'
 import { PlusIcon, TrashIcon } from './sheetIcons'
 import { EmptyState, cx } from './ui'
@@ -11,12 +11,18 @@ import { EmptyState, cx } from './ui'
 /**
  * The leaves sheet, column for column as the client keeps it:
  *
- *   DATE · NAME · DEPARTMENT · SICK LEAVES · BREAK LEAVES · HALF DAY · LATE LOGIN · AOB
+ *   DATE · NAME · DEPARTMENT · SICK LEAVES · BREAK LEAVES · HALF DAY · LATE LOGIN
+ *   · EXPECTED RETURN · ACTUAL RETURN · AOB
  *
  * NAME is the shared staff roster and DEPARTMENT is narrowed to that person's departments,
- * so a row can never be filed under a department the person isn't in. Everything after it
- * is free text — the sheet holds statuses ("Approved") and short reasons, not counts — with
- * the common wordings offered as suggestions.
+ * so a row can never be filed under a department the person isn't in. The marker columns
+ * are free text — the sheet holds statuses ("Approved") and short reasons, not counts —
+ * with the common wordings offered as suggestions.
+ *
+ * The two RETURN columns are optional dates. When both are set the ACTUAL cell is tinted
+ * by how the return went (`returnVerdict()`): rose for someone back late, sky for early,
+ * green for on the day. An expected date that has passed with no actual return yet is
+ * amber — "not back". Most rows have neither, and are left alone.
  */
 
 const MARKERS_ID = 'leave-markers'
@@ -38,17 +44,19 @@ export default function StaffLeavesSheet({
       </datalist>
 
       <div className="overflow-x-auto">
-        <table className={cx(tableCls, "min-w-4xl")}>
+        <table className={cx(tableCls, "min-w-5xl")}>
           <colgroup>
-            <col style={{ width: '10%' }} />
-            <col style={{ width: '16%' }} />
-            <col style={{ width: '15%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '10%' }} />
-            <col style={{ width: '10%' }} />
+            <col style={{ width: '9%' }} />
             <col style={{ width: '13%' }} />
-            <col style={{ width: '4%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '3%' }} />
           </colgroup>
           <thead>
             <tr className={theadCls}>
@@ -59,6 +67,8 @@ export default function StaffLeavesSheet({
               <th className={headCls}>Break Leaves</th>
               <th className={headCls}>Half Day</th>
               <th className={headCls}>Late Login</th>
+              <th className={headCls}>Expected Return</th>
+              <th className={headCls}>Actual Return</th>
               <th className={headCls}>AOB</th>
               <th className={headCls} aria-label="actions" />
             </tr>
@@ -91,6 +101,9 @@ interface Draft {
   half_day: string
   late_login: string
   aob: string
+  /** "" while unset; sent as null. */
+  expected_return: string
+  actual_return: string
 }
 
 const draftOf = (l: StaffLeave): Draft => ({
@@ -102,10 +115,27 @@ const draftOf = (l: StaffLeave): Draft => ({
   half_day: l.half_day,
   late_login: l.late_login,
   aob: l.aob,
+  expected_return: l.expected_return ?? '',
+  actual_return: l.actual_return ?? '',
 })
 
-/** The marker cells, in sheet order — kept as data so both rows render the same set. */
+/** The free-text marker cells — kept as data so the save check covers the same set. */
 const MARKER_FIELDS = ['sick_leave', 'break_leave', 'half_day', 'late_login', 'aob'] as const
+type MarkerField = (typeof MARKER_FIELDS)[number]
+
+/** What the API is sent for a draft — one place, so add and edit can't send different shapes. */
+const payloadOf = (d: Draft & { staff_id: number }) => ({
+  staff_id: d.staff_id,
+  department_id: d.department_id === '' ? null : d.department_id,
+  leave_date: d.leave_date,
+  sick_leave: d.sick_leave.trim(),
+  break_leave: d.break_leave.trim(),
+  half_day: d.half_day.trim(),
+  late_login: d.late_login.trim(),
+  aob: d.aob.trim(),
+  expected_return: d.expected_return || null,
+  actual_return: d.actual_return || null,
+})
 
 /** The cells shared by both rows, so the add row can't drift from the saved one. */
 function Cells({
@@ -114,11 +144,16 @@ function Cells({
   draft: Draft
   onDraft: (d: Draft) => void
   staff: StaffMember[]
-  /** Dropdowns save at once rather than waiting for the row to lose focus. */
+  /** Dropdowns and dates save at once rather than waiting for the row to lose focus. */
   onPick?: (over: Partial<Draft>) => void
 }) {
   const person = staff.find((s) => s.id === draft.staff_id) ?? null
   const departments = person?.departments ?? []
+  const verdict = returnVerdict(draft.expected_return || null, draft.actual_return || null)
+  // "Not back" belongs under the date they were due; every other verdict under the day
+  // they came back.
+  const expectedVerdict = verdict?.id === 'overdue' ? verdict : null
+  const actualVerdict = verdict && verdict.id !== 'overdue' ? verdict : null
 
   const setPerson = (id: number | '') => {
     // Moving the row to someone else drops a department they aren't in, defaulting to
@@ -129,6 +164,25 @@ function Cells({
     onDraft({ ...draft, staff_id: id, department_id: departmentId })
     onPick?.({ staff_id: id, department_id: departmentId })
   }
+
+  // A return date may be cleared (a Half Day row has nothing to return from), so an empty
+  // value is a real change here, unlike the leave date.
+  const setReturn = (field: 'expected_return' | 'actual_return', value: string) => {
+    onDraft({ ...draft, [field]: value })
+    onPick?.({ [field]: value })
+  }
+
+  const markerCell = (field: MarkerField) => (
+    <td className={cellCls}>
+      <input
+        value={draft[field]}
+        list={MARKERS_ID}
+        placeholder="—"
+        onChange={(e) => onDraft({ ...draft, [field]: e.target.value })}
+        className={fieldCls}
+      />
+    </td>
+  )
 
   return (
     <>
@@ -141,7 +195,7 @@ function Cells({
             onDraft({ ...draft, leave_date: e.target.value })
             onPick?.({ leave_date: e.target.value })
           }}
-          className={fieldCls}
+          className={dateFieldCls}
         />
       </td>
       <td className={cellCls}>
@@ -170,18 +224,43 @@ function Cells({
           {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
       </td>
-      {MARKER_FIELDS.map((field) => (
-        <td key={field} className={cellCls}>
-          <input
-            value={draft[field]}
-            list={MARKERS_ID}
-            placeholder="—"
-            onChange={(e) => onDraft({ ...draft, [field]: e.target.value })}
-            className={fieldCls}
-          />
-        </td>
-      ))}
+      {markerCell('sick_leave')}
+      {markerCell('break_leave')}
+      {markerCell('half_day')}
+      {markerCell('late_login')}
+      <td className={cx(cellCls, expectedVerdict?.cell)}>
+        <input
+          type="date"
+          value={draft.expected_return}
+          min={draft.leave_date || undefined}
+          onChange={(e) => setReturn('expected_return', e.target.value)}
+          className={dateFieldCls}
+          title="The day they were due back"
+        />
+        {expectedVerdict && <Badge verdict={expectedVerdict} />}
+      </td>
+      <td className={cx(cellCls, actualVerdict?.cell)}>
+        <input
+          type="date"
+          value={draft.actual_return}
+          min={draft.leave_date || undefined}
+          onChange={(e) => setReturn('actual_return', e.target.value)}
+          className={cx(dateFieldCls, actualVerdict?.id === 'late' && 'border-rose-400 font-semibold text-rose-800')}
+          title="The day they actually came back"
+        />
+        {actualVerdict && <Badge verdict={actualVerdict} />}
+      </td>
+      {markerCell('aob')}
     </>
+  )
+}
+
+/** The verdict under a return cell — "3 days late", "2 days overdue". */
+function Badge({ verdict }: { verdict: ReturnVerdict }) {
+  return (
+    <span className={cx('mt-0.5 inline-block rounded border px-1 text-[10px] font-bold leading-4', verdict.cls)}>
+      {verdict.label}
+    </span>
   )
 }
 
@@ -200,19 +279,12 @@ function Row({
       || next.staff_id !== leave.staff_id
       || (next.department_id === '' ? null : next.department_id) !== leave.department_id
       || next.leave_date !== leave.leave_date
+      || (next.expected_return || null) !== leave.expected_return
+      || (next.actual_return || null) !== leave.actual_return
     if (saving.current || !changed || next.staff_id === '') return
     saving.current = true
     try {
-      await api.updateStaffLeave(leave.id, {
-        staff_id: next.staff_id,
-        department_id: next.department_id === '' ? null : next.department_id,
-        leave_date: next.leave_date,
-        sick_leave: next.sick_leave.trim(),
-        break_leave: next.break_leave.trim(),
-        half_day: next.half_day.trim(),
-        late_login: next.late_login.trim(),
-        aob: next.aob.trim(),
-      })
+      await api.updateStaffLeave(leave.id, payloadOf({ ...next, staff_id: next.staff_id }))
       onChanged()
     } catch (err) { alert((err as Error).message) } finally { saving.current = false }
   }
@@ -259,6 +331,7 @@ function AddRow({
   const blank = (): Draft => ({
     staff_id: '', department_id: '', leave_date: `${month}-01`,
     sick_leave: '', break_leave: '', half_day: '', late_login: '', aob: '',
+    expected_return: '', actual_return: '',
   })
   const [draft, setDraft] = useState<Draft>(blank)
   const [seen, setSeen] = useState(month)
@@ -270,16 +343,7 @@ function AddRow({
     if (saving.current || draft.staff_id === '') return
     saving.current = true
     try {
-      await api.createStaffLeave({
-        staff_id: draft.staff_id,
-        department_id: draft.department_id === '' ? null : draft.department_id,
-        leave_date: draft.leave_date,
-        sick_leave: draft.sick_leave.trim(),
-        break_leave: draft.break_leave.trim(),
-        half_day: draft.half_day.trim(),
-        late_login: draft.late_login.trim(),
-        aob: draft.aob.trim(),
-      })
+      await api.createStaffLeave(payloadOf({ ...draft, staff_id: draft.staff_id }))
       setDraft(blank())
       onChanged()
     } catch (err) { alert((err as Error).message) } finally { saving.current = false }
@@ -304,4 +368,3 @@ function AddRow({
     </tr>
   )
 }
-

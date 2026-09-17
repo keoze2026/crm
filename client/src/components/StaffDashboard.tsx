@@ -20,6 +20,7 @@ import {
   monthRange,
   netHours,
   orgToday,
+  returnVerdict,
   staffStatus,
 } from '../lib/staff'
 import { asPercent } from '../lib/review'
@@ -32,6 +33,17 @@ import type {
   StaffMember,
   StaffSalary,
 } from '../types'
+
+/** One leave row as a tooltip line: its markers, and how the return went if it had one. */
+const leaveNote = (l: StaffLeave): string => {
+  const back = returnVerdict(l.expected_return, l.actual_return)
+  const parts = [
+    l.sick_leave && `sick ${l.sick_leave}`, l.half_day && `half day ${l.half_day}`,
+    l.break_leave && `break ${l.break_leave}`, l.late_login && `late ${l.late_login}`, l.aob,
+    back && (back.id === 'overdue' ? `not back, ${back.label}` : `returned ${back.label.toLowerCase()}`),
+  ]
+  return `${l.leave_date}: ${parts.filter(Boolean).join(', ')}`
+}
 
 /** The flat late threshold for someone with no expected login on the Staff page. */
 const DEFAULT_LOGIN = '09:00'
@@ -392,7 +404,7 @@ export function StaffDashboard({ onBack }: { onBack: () => void }) {
                       </span>
                     )}
                     <span className="ml-auto tabular-nums text-slate-400">
-                      <span title={r.leaves.map((l) => `${l.leave_date}: ${[l.sick_leave && `sick ${l.sick_leave}`, l.half_day && `half day ${l.half_day}`, l.break_leave && `break ${l.break_leave}`, l.late_login && `late ${l.late_login}`, l.aob].filter(Boolean).join(', ')}`).join('\n') || 'No leaves this month'}>
+                      <span title={r.leaves.map(leaveNote).join('\n') || 'No leaves this month'}>
                         {r.leaves.length} leave{r.leaves.length === 1 ? '' : 's'}
                       </span>
                       {canQueues && <> · {r.queues} queue{r.queues === 1 ? '' : 's'}</>}

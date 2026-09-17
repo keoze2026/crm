@@ -467,8 +467,10 @@ final class StaffController
 
         $stmt = Database::connection()->prepare(
             'INSERT INTO staff_leaves
-                (staff_id, department_id, leave_date, sick_leave, break_leave, half_day, late_login, aob, sort_order)
+                (staff_id, department_id, leave_date, sick_leave, break_leave, half_day, late_login, aob,
+                 expected_return, actual_return, sort_order)
              VALUES (:staff, :department, :date, :sick, :break, :half, :late, :aob,
+                     :expected, :actual,
                      (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM staff_leaves))
              RETURNING id'
         );
@@ -481,6 +483,9 @@ final class StaffController
             ':half'       => $this->text($body['half_day'] ?? ''),
             ':late'       => $this->text($body['late_login'] ?? ''),
             ':aob'        => $this->text($body['aob'] ?? ''),
+            // Both optional — a blank or malformed date simply stays unset.
+            ':expected'   => $this->normaliseDay($body['expected_return'] ?? null),
+            ':actual'     => $this->normaliseDay($body['actual_return'] ?? null),
         ]);
         Http::json($this->leaveById((int) $stmt->fetchColumn()), 201);
     }
@@ -501,6 +506,8 @@ final class StaffController
                 half_day      = COALESCE(:half, half_day),
                 late_login    = COALESCE(:late, late_login),
                 aob           = COALESCE(:aob, aob),
+                expected_return = CASE WHEN :expected_set THEN :expected ELSE expected_return END,
+                actual_return   = CASE WHEN :actual_set   THEN :actual   ELSE actual_return   END,
                 updated_at    = now()
              WHERE id = :id RETURNING id'
         );
@@ -515,6 +522,11 @@ final class StaffController
             ':half'           => isset($body['half_day']) ? $this->text($body['half_day']) : null,
             ':late'           => isset($body['late_login']) ? $this->text($body['late_login']) : null,
             ':aob'            => isset($body['aob']) ? $this->text($body['aob']) : null,
+            // Sent as null to clear — unlike the markers, a return date is emptied on purpose.
+            ':expected_set'   => \array_key_exists('expected_return', $body) ? 1 : 0,
+            ':expected'       => $this->normaliseDay($body['expected_return'] ?? null),
+            ':actual_set'     => \array_key_exists('actual_return', $body) ? 1 : 0,
+            ':actual'         => $this->normaliseDay($body['actual_return'] ?? null),
         ]);
         $id = $stmt->fetchColumn();
         if ($id === false || $id === null) {
@@ -621,7 +633,8 @@ final class StaffController
     private const LEAVE_SELECT =
         'SELECT l.id, l.staff_id, s.name AS staff_name, l.department_id, d.name AS department_name,
                 l.leave_date::text AS leave_date, l.sick_leave, l.break_leave, l.half_day,
-                l.late_login, l.aob, l.sort_order, l.created_at, l.updated_at
+                l.late_login, l.aob, l.expected_return::text AS expected_return,
+                l.actual_return::text AS actual_return, l.sort_order, l.created_at, l.updated_at
            FROM staff_leaves l
            JOIN staff s ON s.id = l.staff_id
       LEFT JOIN departments d ON d.id = l.department_id';

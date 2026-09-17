@@ -6,7 +6,7 @@ import type {
 } from '../types'
 import {
   clockLabel, earlyBy, emptyLoginTally, gapLabel, hoursLabel, lateBy, netHours, punctualityOf,
-  shortDay, staffStatus, sumLoginTallies, tallyPunctuality, type LoginTally,
+  returnVerdict, shortDay, staffStatus, sumLoginTallies, tallyPunctuality, type LoginTally,
 } from './staff'
 import { activeCriteria, type IncentiveSettings, type RankedRow } from './incentive'
 
@@ -500,29 +500,58 @@ export function buildLeavesPdf(leaves: StaffLeave[], monthLabel: string): jsPDF 
   autoTable(doc, {
     startY: y,
     theme: 'grid',
-    head: [['DATE', 'NAME', 'DEPARTMENT', 'SICK LEAVES', 'BREAK LEAVES', 'HALF DAY', 'LATE LOGIN', 'AOB']],
-    body: leaves.map((l) => [
-      shortDay(l.leave_date),
-      l.staff_name,
-      l.department_name ?? '',
-      l.sick_leave,
-      l.break_leave,
-      l.half_day,
-      l.late_login,
-      l.aob,
-    ]),
+    head: [['DATE', 'NAME', 'DEPARTMENT', 'SICK LEAVES', 'BREAK LEAVES', 'HALF DAY', 'LATE LOGIN', 'EXPECTED RETURN', 'ACTUAL RETURN', 'AOB']],
+    body: leaves.map((l) => {
+      // The verdict prints under the date it belongs to, the way the sheet shows it.
+      const v = returnVerdict(l.expected_return, l.actual_return)
+      const expected = [l.expected_return ? shortDay(l.expected_return) : '', v?.id === 'overdue' ? v.label : ''].filter(Boolean).join('\n')
+      const actual = [l.actual_return ? shortDay(l.actual_return) : '', v && v.id !== 'overdue' ? v.label : ''].filter(Boolean).join('\n')
+      return [
+        shortDay(l.leave_date),
+        l.staff_name,
+        l.department_name ?? '',
+        l.sick_leave,
+        l.break_leave,
+        l.half_day,
+        l.late_login,
+        expected,
+        actual,
+        l.aob,
+      ]
+    }),
     styles: baseStyles,
     headStyles: navyHead,
     bodyStyles: { fillColor: CYAN },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 60, fillColor: BAND, fontStyle: 'bold' },
-      1: { cellWidth: 110, fontStyle: 'bold' },
-      2: { cellWidth: 110 },
-      3: { halign: 'center', cellWidth: 78 },
-      4: { halign: 'center', cellWidth: 84 },
-      5: { halign: 'center', cellWidth: 68 },
-      6: { halign: 'center', cellWidth: 72 },
-      7: { halign: 'left' },
+      0: { halign: 'center', cellWidth: 54, fillColor: BAND, fontStyle: 'bold' },
+      1: { cellWidth: 96, fontStyle: 'bold' },
+      2: { cellWidth: 90 },
+      3: { halign: 'center', cellWidth: 62 },
+      4: { halign: 'center', cellWidth: 66 },
+      5: { halign: 'center', cellWidth: 56 },
+      6: { halign: 'center', cellWidth: 60 },
+      7: { halign: 'center', cellWidth: 70 },
+      8: { halign: 'center', cellWidth: 70 },
+      9: { halign: 'left' },
+    },
+    didParseCell: (data) => {
+      if (data.section !== 'body') return
+      const l = leaves[data.row.index]
+      if (!l) return
+      const v = returnVerdict(l.expected_return, l.actual_return)
+      if (!v) return
+      // A late return is the thing this sheet is scanned for, so it is red on its own
+      // tint on paper too; "not back yet" is amber under the date they were due.
+      if (data.column.index === 8 && v.id === 'late') {
+        data.cell.styles.textColor = RED
+        data.cell.styles.fontStyle = 'bold'
+        data.cell.styles.fillColor = ROSE
+      } else if (data.column.index === 8 && v.id === 'on-time') {
+        data.cell.styles.textColor = GREEN
+      } else if (data.column.index === 7 && v.id === 'overdue') {
+        data.cell.styles.textColor = [146, 64, 14]
+        data.cell.styles.fillColor = [254, 243, 199]
+      }
     },
     margin: { left: M, right: M },
   })

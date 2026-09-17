@@ -22,6 +22,84 @@ export const staffStatus = (id: StaffStatus) =>
 /** Suggestions for the leave columns; the cells stay free text, so anything else fits. */
 export const LEAVE_MARKERS = ['Approved', 'Not Approved', 'Pending', 'Unpaid']
 
+// ─── Return from leave ────────────────────────────────────────────────────────
+
+/**
+ * How a leave's return went, as one verdict for the sheet to colour.
+ *
+ *   late     came back after the day they were due — the one the sheet is scanned for
+ *   early    came back before it
+ *   on-time  came back on the day
+ *   overdue  due back on a day that has passed, and no return recorded yet
+ *
+ * Null when there is nothing to judge: no expected date at all (most rows — a Half Day
+ * or a Late Login has nothing to return from), or a due date still in the future with
+ * the person not yet back. "Has passed" is judged against the org's day, like everything
+ * else dated on these sheets. Like the punctuality marks, the verdict is computed from the
+ * dates ON DISPLAY, so it moves while the row is still being typed.
+ */
+export type ReturnVerdictId = 'late' | 'early' | 'on-time' | 'overdue'
+
+export interface ReturnVerdict {
+  id: ReturnVerdictId
+  /** Whole days off the expected date; 0 for on time, and how far overdue for `overdue`. */
+  days: number
+  /** The badge's wording, e.g. "3 days late". */
+  label: string
+  /** Badge colours — the same palette the rest of the staff sheets use. */
+  cls: string
+  /** The tint behind the cell that carries the badge. */
+  cell: string
+}
+
+export function returnVerdict(
+  expected: string | null, actual: string | null, todayIso: string = orgToday(),
+): ReturnVerdict | null {
+  if (!expected) return null
+  const due = dayNumber(expected)
+  if (due === null) return null
+
+  if (!actual) {
+    const now = dayNumber(todayIso)
+    if (now === null || now <= due) return null
+    const days = now - due
+    return {
+      id: 'overdue', days,
+      label: `${plural(days, 'day')} overdue`,
+      cls: 'border-amber-300 bg-amber-50 text-amber-800',
+      cell: 'bg-amber-100/70',
+    }
+  }
+  const back = dayNumber(actual)
+  if (back === null) return null
+  const diff = back - due
+  if (diff > 0) {
+    return {
+      id: 'late', days: diff, label: `${plural(diff, 'day')} late`,
+      cls: 'border-rose-300 bg-rose-100 text-rose-800', cell: 'bg-rose-100/80',
+    }
+  }
+  if (diff < 0) {
+    return {
+      id: 'early', days: -diff, label: `${plural(-diff, 'day')} early`,
+      cls: 'border-sky-300 bg-sky-50 text-sky-800', cell: 'bg-sky-50/80',
+    }
+  }
+  return {
+    id: 'on-time', days: 0, label: 'On time',
+    cls: 'border-emerald-300 bg-emerald-50 text-emerald-800', cell: 'bg-emerald-50/80',
+  }
+}
+
+/** "YYYY-MM-DD" as a whole number of days, so two dates subtract to a day count. */
+function dayNumber(iso: string): number | null {
+  const [y, m, d] = iso.split('-').map(Number)
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null
+  return Math.round(Date.UTC(y, m - 1, d) / 86_400_000)
+}
+
+const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`
+
 /**
  * What an attendance day can say.
  *

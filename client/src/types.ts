@@ -589,6 +589,10 @@ export interface StaffLeave {
   half_day: string
   late_login: string
   aob: string
+  /** "YYYY-MM-DD" the person was due back; null for a row with nothing to return from. */
+  expected_return: string | null
+  /** "YYYY-MM-DD" they actually came back; null until recorded. */
+  actual_return: string | null
   sort_order: number
   created_at: string
   updated_at: string
