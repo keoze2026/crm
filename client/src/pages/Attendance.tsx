@@ -14,7 +14,7 @@ import type {
   AttendanceBreakRecord, AttendanceDay, AttendanceOnBreak,
   StaffAttendanceRow, StaffMember,
 } from '../types'
-import StaffAttendanceSheet, { StatusTag } from '../components/StaffAttendanceSheet'
+import StaffAttendanceSheet from '../components/StaffAttendanceSheet'
 import { buildStaffAttendancePdf } from '../lib/sheetPdf'
 import { PageHeader } from '../components/Layout'
 import { Button, CardHeader, Modal, PageLoader, SegmentedTabs, Spinner, cx } from '../components/ui'
@@ -23,8 +23,8 @@ import type { Range } from '../components/DateRange'
 import { fileDateRange } from '../lib/format'
 import {
   ORG_TZ, clockLabel, earlyBy, gapLabel, impliedStatus, lateBy, loginTallies, monthRange,
-  netHours, orgToday, punctuality, sumLoginTallies, tallyPunctuality,
-  type LoginTally, type Punctuality,
+  netHours, orgToday, punctuality, tallyPunctuality,
+  type Punctuality,
 } from '../lib/staff'
 import PunctualityBadge from '../components/PunctualityBadge'
 import { PerformerBadge, PerformerScope } from '../lib/performers'
@@ -508,7 +508,6 @@ function RosterView() {
   const rosterReq = useAsync(() => api.attendanceRoster(date), [date])
   const liveReq = useAsync(() => api.attendanceLive(), [])
   const onBreakReq = useAsync(() => api.attendanceOnBreak(), [])
-  const overBreakReq = useAsync(() => api.attendanceExceptions('over_break', date, date), [date])
   const lateReturnReq = useAsync(() => api.attendanceExceptions('late_return', date, date), [date])
 
   const people = useMemo(() => staffReq.data ?? [], [staffReq.data])
@@ -537,11 +536,6 @@ function RosterView() {
 
   const monthRows = useMemo(() => monthReq.data?.rows ?? [], [monthReq.data])
   const monthTallies = useMemo(() => loginTallies(people, monthRows), [people, monthRows])
-  const monthTotals = useMemo(() => sumLoginTallies(monthTallies.values()), [monthTallies])
-  const monthLateStaff = useMemo(
-    () => [...monthTallies.values()].filter((t) => t.late > 0).length,
-    [monthTallies],
-  )
 
   const days: DayView[] = useMemo(() => {
     const byStaff = new Map(sheetRows.map((r) => [r.staff_id, r]))
@@ -590,25 +584,24 @@ function RosterView() {
   }, [days])
 
   /**
-   * Everyone who logged in late on the day being shown, worst first, and everyone with no
-   * day at all. Both are read off the same rows the sheet renders, so neither panel can
-   * name somebody the table disagrees about.
+   * Everyone who logged in late on the day being shown, worst first — read off the same
+   * rows the sheet renders, so the panel can never name somebody the table shows on time.
    */
   const lateLogins = useMemo(
     () => days.filter((d) => (d.lateMin ?? 0) > 0).sort((a, b) => (b.lateMin ?? 0) - (a.lateMin ?? 0)),
     [days],
   )
   const onTimeLogins = useMemo(() => days.filter((d) => d.login && (d.lateMin ?? 0) === 0).length, [days])
-  const absent = useMemo(() => days.filter((d) => !AT_WORK.includes(d.status)), [days])
+  const lateReturns = useMemo(() => lateReturnReq.data?.rows ?? [], [lateReturnReq.data])
 
   const loading = staffReq.loading || sheetReq.loading || rosterReq.loading
   const error = staffReq.error ?? sheetReq.error ?? rosterReq.error
-  const blocks = [staffReq, sheetReq, monthReq, rosterReq, liveReq, onBreakReq, overBreakReq, lateReturnReq]
+  const blocks = [staffReq, sheetReq, monthReq, rosterReq, liveReq, onBreakReq, lateReturnReq]
   const refreshing = blocks.some((b) => b.refreshing)
   const refresh = () => blocks.forEach((b) => b.reload())
   // An edit changes the day, the month's late count beside it, and the bot-side figures
   // the cards read — so all three are re-read rather than just the row that was typed in.
-  const onChanged = () => { sheetReq.reload(); monthReq.reload(); rosterReq.reload(); overBreakReq.reload() }
+  const onChanged = () => { sheetReq.reload(); monthReq.reload(); rosterReq.reload() }
 
   const dateLabel = fullDate(date)
   const monthName = monthLabel(month)
@@ -656,7 +649,7 @@ function RosterView() {
       </div>
 
       {/* Metric cards */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <MetricCard label="At work" value={metrics.present} sub={`of ${people.length} staff`} />
         <MetricCard
           label="Late logins"
@@ -675,100 +668,18 @@ function RosterView() {
           }
           sub={`${metrics.flags.late} late in · ${metrics.flags.early} early out · ${metrics.flags.both} both`}
         />
+        <MetricCard
+          label="Late returns"
+          value={<span className={lateReturns.length > 0 ? 'text-rose-600' : undefined}>{lateReturns.length}</span>}
+          sub={lateReturns.length === 0
+            ? 'everyone back on time'
+            : lateReturns.slice(0, 2).map((r) => `${(r.staff_name || r.user_id).split(' ')[0]} ${r.out_till_eod ? 'out till EOD' : `+${gapLabel(r.late_min ?? 0)}`}`).join(' · ')
+              + (lateReturns.length > 2 ? ` · +${lateReturns.length - 2} more` : '')}
+        />
       </div>
 
       {/* Who was late today — named, worst first, before anything has to be scrolled to. */}
       <LateLoginPanel rows={lateLogins} onTime={onTimeLogins} date={date} />
-
-      {/* The month's late logins, the figure the sheet's own column counts up. */}
-      <MonthLoginScore label={monthName} tally={monthTotals} lateStaff={monthLateStaff} roster={people.length} />
-
-      {/* Alert cards */}
-      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {/* Not at work */}
-        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/5">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-            <div>
-              <p className="text-xs font-semibold text-slate-700">Not at work</p>
-              <p className="text-xs text-slate-400 mt-0.5">Absent, on leave or a holiday · {date}</p>
-            </div>
-            <span className="text-2xl font-semibold text-slate-800">{absent.length}</span>
-          </div>
-          <div className="px-4 py-3 min-h-12">
-            {absent.length === 0
-              ? <p className="text-xs text-emerald-600">✓ Full attendance</p>
-              : <div className="flex flex-wrap gap-1.5">
-                {absent.map((d) => (
-                  <span key={d.person.id} className="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
-                    {d.person.name}
-                    <PerformerBadge staffId={d.person.id} compact />
-                    <StatusTag status={d.status} implied={!d.statusSet} />
-                  </span>
-                ))}
-              </div>
-            }
-          </div>
-        </div>
-
-        {/* Break overages */}
-        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/5">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-            <div>
-              <p className="text-xs font-semibold text-slate-700">Break overages</p>
-              <p className="text-xs text-slate-400 mt-0.5">Exceeded {allowance}-min allowance</p>
-            </div>
-            <span className="text-2xl font-semibold text-slate-800">
-              {overBreakReq.data?.rows?.length ?? 0}
-            </span>
-          </div>
-          <div className="px-4 py-3 min-h-12">
-            {(overBreakReq.data?.rows?.length ?? 0) === 0
-              ? <p className="text-xs text-emerald-600">✓ No overages</p>
-              : <div className="flex flex-col gap-1.5">
-                {(overBreakReq.data?.rows ?? []).map((r, i) => (
-                  <div key={i} className="flex items-center justify-between text-xs">
-                    <span className="rounded-full bg-rose-50 px-2.5 py-1 font-medium text-rose-700">{r.staff_name || r.user_id}</span>
-                    <span className="text-rose-500">+{r.over_min}m</span>
-                  </div>
-                ))}
-              </div>
-            }
-          </div>
-        </div>
-
-        {/* Late returns */}
-        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/5">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-            <div>
-              <p className="text-xs font-semibold text-slate-700">Late returns</p>
-              <p className="text-xs text-slate-400 mt-0.5">Back after stated time + 10-min grace</p>
-            </div>
-            <span className="text-2xl font-semibold text-slate-800">
-              {lateReturnReq.data?.rows?.length ?? 0}
-            </span>
-          </div>
-          <div className="px-4 py-3 min-h-12">
-            {(lateReturnReq.data?.rows?.length ?? 0) === 0
-              ? <p className="text-xs text-emerald-600">✓ Everyone back on time</p>
-              : <div className="flex flex-col gap-1.5">
-                {(lateReturnReq.data?.rows ?? []).map((r, i) => (
-                  <div key={i} className="flex items-center justify-between text-xs">
-                    <span className="rounded-full bg-rose-50 px-2.5 py-1 font-medium text-rose-700">{r.staff_name || r.user_id}</span>
-                    <span
-                      className="tabular-nums text-rose-500"
-                      title={`Took ${r.duration_min}m at ${fmtAttendanceTime(r.taken_at ?? null)}`}
-                    >
-                      {r.out_till_eod ? 'Out till EOD'
-                        : r.returned_at ? `+${gapLabel(r.late_min ?? 0)}`
-                        : `still out · +${gapLabel(r.late_min ?? 0)}`}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            }
-          </div>
-        </div>
-      </div>
 
       {/* Filters */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -838,46 +749,6 @@ function RosterView() {
       {breakRow && <BreakDetailModal row={breakRow} onClose={() => setBreakRow(null)} />}
     </div>
     </PerformerScope>
-  )
-}
-
-/**
- * The month's late logins across the roster — the column the sheet carries per person,
- * totalled. It is the one figure on this tab that is not about the day on screen.
- */
-function MonthLoginScore({ label, tally, lateStaff, roster }: {
-  label: string
-  tally: LoginTally
-  lateStaff: number
-  roster: number
-}) {
-  const clean = tally.late === 0
-  return (
-    <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm shadow-slate-900/5">
-      <div>
-        <p className="text-xs font-semibold text-slate-700">Late logins · {label}</p>
-        <p className="mt-0.5 text-xs text-slate-400">The whole month so far, against each person's expected login</p>
-      </div>
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-        <Figure label="Late" value={tally.late} tone={clean ? 'text-slate-400' : 'text-rose-600'} of={tally.judged} />
-        <Figure label="On time" value={tally.onTime} tone="text-emerald-600" of={tally.judged} />
-        <Figure label="Staff affected" value={lateStaff} tone={lateStaff ? 'text-rose-600' : 'text-slate-400'} of={roster} />
-        <Figure label="Time lost" value={gapLabel(tally.lateMin)} tone={clean ? 'text-slate-400' : 'text-rose-600'} />
-        <Figure label="Worst" value={tally.worstLateMin ? gapLabel(tally.worstLateMin) : '—'} tone="text-slate-600" />
-      </div>
-    </div>
-  )
-}
-
-function Figure({ label, value, tone, of }: { label: string; value: ReactNode; tone: string; of?: number }) {
-  return (
-    <div className="leading-tight">
-      <p className="text-[11px] font-medium text-slate-400">{label}</p>
-      <p className={cx('text-lg font-semibold tabular-nums', tone)}>
-        {value}
-        {of !== undefined && <span className="text-xs text-slate-400">/{of}</span>}
-      </p>
-    </div>
   )
 }
 

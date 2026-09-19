@@ -513,7 +513,10 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
     (!q || r.candidate.member.name.toLowerCase().includes(q) || r.candidate.member.departments.some((d) => d.name.toLowerCase().includes(q))),
   )
   const avgScore = rows.length ? Math.round((rows.reduce((s, r) => s + r.met / Math.max(1, r.total), 0) / rows.length) * 100) : 0
-  const reviewed = rows.filter((r) => r.candidate.performance || r.candidate.behaviour).length
+  // Only reviewed people are ranked (buildCandidates), so the roster figure to show is the
+  // other side: who is not on the list yet because nobody has picked a rating for them.
+  const onRoster = staff.filter((m) => m.status !== 'inactive').length
+  const awaitingReview = Math.max(0, onRoster - rows.length)
 
   const toggleAdditional = (id: CriterionId) =>
     setSettings((s) => ({ ...s, additional: s.additional.includes(id) ? s.additional.filter((x) => x !== id) : [...s.additional, id] }))
@@ -557,7 +560,7 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
           { label: 'Eligible for incentive', value: String(winners.length), of: rows.length, tone: winners.length ? 'text-emerald-600' : 'text-slate-900' },
           { label: 'Pass every automatic check', value: String(passData.length), of: rows.length, tone: 'text-brand' },
           { label: 'Average score', value: `${avgScore}%`, of: null, tone: 'text-slate-900' },
-          { label: 'Have a review this month', value: String(reviewed), of: rows.length, tone: 'text-slate-900' },
+          { label: 'Reviewed this month', value: String(rows.length), of: onRoster, tone: awaitingReview ? 'text-amber-600' : 'text-slate-900' },
         ].map((t) => (
           <div key={t.label} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
             <div className="text-[11px] font-medium text-slate-500">{t.label}</div>
@@ -679,7 +682,9 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
             {/* Rows */}
             {shown.length === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-slate-400">
-                {rows.length === 0 ? 'Nobody on the roster is active.' : q ? `Nothing matches "${query}".` : 'Nobody passes every automatic check yet.'}
+                {rows.length === 0
+                  ? `Nobody has a review for ${monthLabel} yet — pick a Performance or Behaviour rating on the Review page and the name appears here.`
+                  : q ? `Nothing matches "${query}".` : 'Nobody passes every automatic check yet.'}
               </div>
             ) : (
               <ol className="divide-y divide-slate-100">
@@ -737,7 +742,9 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
         </div>
 
         <p className="border-t border-slate-100 px-4 py-2.5 text-[11px] text-slate-500">
-          Green = met, red = not met, grey "?" = nothing recorded for that month yet (no review, or no attendance). Hover any pill to see exactly what it was read from.
+          Only people with a Performance or Behaviour rating picked for {monthLabel} are ranked
+          {awaitingReview > 0 && <> — <span className="font-semibold text-amber-700">{awaitingReview} on the roster {awaitingReview === 1 ? 'is' : 'are'} not listed yet</span> because no rating has been chosen for them</>}.
+          Green = met, red = not met, grey "?" = nothing recorded for that month yet. Hover any pill to see exactly what it was read from.
           Your confirmations and the switches above are saved for {monthLabel} and shared with every manager.
         </p>
       </div>

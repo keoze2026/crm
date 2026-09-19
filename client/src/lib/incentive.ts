@@ -109,12 +109,25 @@ export interface AttendanceDayLite {
 }
 
 /**
+ * A review counts as DONE when an analysis has actually been picked — a performance rating
+ * or a behaviour rating — not when the person's name merely appears on a review sheet. A
+ * row somebody added and never filled in is not a review.
+ */
+export const isReviewed = (performance: ReviewEntry | null, behaviour: ReviewEntry | null): boolean =>
+  (performance?.rating.trim() ?? '') !== '' || (behaviour?.rating.trim() ?? '') !== ''
+
+/**
  * Build every person's evidence from the month's sheets.
  *
- * The roster is judged AS OF THE MONTH: somebody marked Inactive today is left out unless
- * the month holds something for them — an attendance day, a leave row or a review — in
- * which case they were on the team that month and rank with everyone else. Active and
- * on-leave staff always rank.
+ * Only people whose review for the month is done (see isReviewed) are candidates at all.
+ * Attendance and leaves are evidence about a reviewed person — they are not what puts
+ * somebody on the list, so a perfect month of logins with no review yet ranks nobody, and
+ * neither badge can land on them. The name appears in the ranking the moment a rating is
+ * picked for them on the Review page.
+ *
+ * Within that, the roster is judged AS OF THE MONTH: somebody marked Inactive today is
+ * still listed if the month holds a review for them — they were on the team that month and
+ * rank with everyone else.
  */
 export function buildCandidates(
   staff: StaffMember[],
@@ -131,11 +144,8 @@ export function buildCandidates(
   const find = (entries: ReviewEntry[], m: StaffMember) =>
     entries.find((e) => e.staff_id === m.id) ?? entries.find((e) => e.person_name.trim().toLowerCase() === m.name.trim().toLowerCase()) ?? null
 
-  const inMonth = (m: StaffMember) =>
-    (days.get(m.id)?.length ?? 0) > 0 || (leaveRows.get(m.id)?.length ?? 0) > 0 || find(performance, m) !== null || find(behaviour, m) !== null
-
   return staff
-    .filter((m) => m.status !== 'inactive' || inMonth(m))
+    .filter((m) => isReviewed(find(performance, m), find(behaviour, m)))
     .map((m) => {
       const own = days.get(m.id) ?? []
       const present = own.filter((d) => d.login_at)
@@ -288,13 +298,16 @@ export const INCENTIVE_USD = 200
 /** The score that puts someone on the Top Performers list. */
 export const TOP_PERFORMER_PCT = 80
 
+/** The lowest performer must have scored more than this — zero is "not marked", not "last". */
+export const LOW_PERFORMER_MIN_PCT = 1
+
 /** A person's score as a whole percentage of the criteria in play. */
 export const scorePct = (r: RankedRow) => Math.round((r.met / Math.max(1, r.total)) * 100)
 
 export interface PerformerPicks {
   /** Everyone tied at the best score, provided it reaches TOP_PERFORMER_PCT. */
   top: RankedRow[]
-  /** Everyone tied at the worst score — empty unless there is a real spread (see below). */
+  /** Everyone tied at the worst score above 1% — empty unless there is a real spread (see below). */
   low: RankedRow[]
   /** Everyone at or above TOP_PERFORMER_PCT, the Top Performers list itself. */
   listed: RankedRow[]
@@ -306,21 +319,24 @@ export interface PerformerPicks {
  * The month's ends.
  *
  * Top is the highest scorer (or the people tied with them) once they clear the 80% bar —
- * the same rule the headline has always used. Bottom is the lowest scorer, but only when
- * naming one says something: there must be at least two people, somebody must have scored
- * better, and the score must itself be under the bar. A month where everyone scored the
- * same — including a month with no reviews at all, where everyone scores zero — names
- * nobody, rather than pinning a red badge on whoever happens to sort last.
+ * the same rule the headline has always used. Bottom is the lowest scorer AMONG THE PEOPLE
+ * WHO SCORED MORE THAN 1% — somebody at zero has not been scored so much as not yet
+ * marked, so they are neither the lowest nor in the way of naming who is. It is only named
+ * when naming it says something: at least two people to compare, somebody who scored
+ * better, and a score under the bar. A month where everyone scored the same names nobody,
+ * rather than pinning a red badge on whoever happens to sort last. Only reviewed people are
+ * in `rows` to begin with (see buildCandidates).
  */
 export function pickPerformers(rows: RankedRow[]): PerformerPicks {
   const listed = rows.filter((r) => scorePct(r) >= TOP_PERFORMER_PCT)
   const topPct = listed.length ? Math.max(...listed.map(scorePct)) : 0
-  const lowPct = rows.length ? Math.min(...rows.map(scorePct)) : 0
+  const scored = rows.filter((r) => scorePct(r) > LOW_PERFORMER_MIN_PCT)
+  const lowPct = scored.length ? Math.min(...scored.map(scorePct)) : 0
   const best = rows.length ? Math.max(...rows.map(scorePct)) : 0
-  const spread = rows.length > 1 && lowPct < best && lowPct < TOP_PERFORMER_PCT
+  const spread = scored.length > 1 && lowPct < best && lowPct < TOP_PERFORMER_PCT
   return {
     top: listed.filter((r) => scorePct(r) === topPct),
-    low: spread ? rows.filter((r) => scorePct(r) === lowPct) : [],
+    low: spread ? scored.filter((r) => scorePct(r) === lowPct) : [],
     listed,
     topPct,
     lowPct,
