@@ -629,7 +629,7 @@ export function buildTopPerformerPdf(rows: RankedRow[], settings: IncentiveSetti
   doc.setFontSize(8)
   doc.setTextColor(...MUTED)
   const key = active.map((c) => `${c.n}. ${c.label}${c.source === 'manual' ? '' : ' *'}`).join('   ')
-  const lines = doc.splitTextToSize(`${key}   (* checked from the month's Review, Complete Attendance and Leaves sheets)`, doc.internal.pageSize.getWidth() - M * 2) as string[]
+  const lines = doc.splitTextToSize(`${key}   (* checked from the month's Review, Attendance and Leaves sheets)`, doc.internal.pageSize.getWidth() - M * 2) as string[]
   doc.text(lines, M, y)
   const startY = y + lines.length * 10 + 6
 

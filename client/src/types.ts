@@ -250,6 +250,20 @@ export interface AttendanceDay {
   present: boolean
   still_in: boolean
   completed: boolean
+  /**
+   * The day in the attendance sheet's own words — 'present', 'absent', 'half day', 'leave',
+   * 'holiday', 'still in'. A status keyed in by hand IS the day: it decides `present` too,
+   * so a day the bot never recorded still counts as a half day once one is set.
+   */
+  status: string
+  /** True when that status was set by hand rather than read off the clock times. */
+  status_set: boolean
+  /** True when any part of this day was keyed in over the bot's record. */
+  edited: boolean
+  /** False for a day that exists only as a hand-keyed row — the bot has no record of it. */
+  bot_seen: boolean
+  /** The roster id behind the bot account, when the two are linked. */
+  staff_id: number | null
   hours: number | null
   net_hours: number | null
   break_min: number

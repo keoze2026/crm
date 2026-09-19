@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { MonthSelector, currentMonth, formatMonth, shiftMonth } from './MonthSelector'
+import { PerformerBadge, PerformerScope } from '../lib/performers'
 import { cx } from './ui'
 import { useAsync } from '../lib/useAsync'
 import {
@@ -265,6 +266,9 @@ export function StaffDashboard({ onBack }: { onBack: () => void }) {
   ]
 
   return (
+    // Badges follow the REVIEW month on the cards — the top performer is the outcome of a
+    // review cycle, so it is one month behind the picker, like the ratings beside it.
+    <PerformerScope month={reviewMonth}>
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Fixed header: back, title, month. */}
       <div className="mb-3 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2">
@@ -355,6 +359,7 @@ export function StaffDashboard({ onBack }: { onBack: () => void }) {
                     <div className="min-w-0 flex-1 leading-tight">
                       <div className="flex items-center gap-1.5">
                         <span className="truncate text-sm font-semibold text-slate-900">{r.member.name}</span>
+                        <PerformerBadge staffId={r.member.id} compact />
                         <span className={cx('inline-block h-1.5 w-1.5 shrink-0 rounded-full', st.dot)} title={st.label} />
                       </div>
                       <div className="truncate text-[10px] text-slate-400">
@@ -423,5 +428,6 @@ export function StaffDashboard({ onBack }: { onBack: () => void }) {
         )}
       </div>
     </div>
+    </PerformerScope>
   )
 }

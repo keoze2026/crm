@@ -8,12 +8,11 @@
 //   KPI row        → four compact cards with a % pill and the absolute change vs the previous period
 //   revenue chart  → metric dropdown, granularity pills, peak marker and a previous-period ghost line
 //   calendar column→ "Team Today": week strip, in/late/on-break/absent counts, hourly clock-in timeline
-//   bottom row     → Lead Mix (tabbed 2×2 tiles), Answer Rate grouped bars, Top Buyers / Campaigns
+//   bottom row     → Lead Mix (tabbed 2×2 tiles) beside one wide spend card: the highest and
+//                    lowest buyers by revenue, or campaigns by spend, at both ends at once
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import {
   Area,
-  Bar,
-  BarChart,
   CartesianGrid,
   ComposedChart,
   Line,
@@ -49,6 +48,9 @@ import { useOrgToday } from '../lib/useOrgToday'
 import type { AttendanceDay, Summary, TrendPoint } from '../types'
 
 type Granularity = 'day' | '4day' | 'week'
+
+/** How deep the buyer/campaign rankings are fetched — the API's own ceiling. */
+const RANK_LIMIT = 50
 
 const GRANULARITIES: { value: Granularity; label: string }[] = [
   { value: 'day', label: '1D' },
@@ -154,6 +156,10 @@ const IconReport = () => svg(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h1
 const IconUsers = () => svg(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></>)
 const IconAlert = () => svg(<><circle cx="12" cy="12" r="10" /><path d="M12 8v5M12 16h.01" /></>, 16)
 const IconArrowR = () => svg(<><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></>, 12)
+const IconCrown = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden focusable="false"><path d="M3 8l4.4 3L12 5l4.6 6L21 8l-1.5 9.2a1 1 0 0 1-1 .8H5.5a1 1 0 0 1-1-.8L3 8z" /></svg>
+)
+const IconTrendDown = () => svg(<><path d="m22 17-8.5-8.5-5 5L2 7" /><path d="M16 17h6v-6" /></>, 11)
 const IconCal = () => svg(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></>, 12)
 
 // ─── Small building blocks ────────────────────────────────────────────────────
@@ -827,75 +833,13 @@ function LeadMixCard({ summary, prevSummary, sources, loading, sourcesLoading, c
   )
 }
 
-// ─── Answer Rate (the reference's Retention Rate card) ────────────────────────
-
-function AnswerRateCard({ summary, series, loading, caption }: {
-  summary: Summary | null
-  series: TrendPoint[]
-  loading: boolean
-  caption: string
-}) {
-  // A month of daily buckets makes hair-thin bars, so long series are folded into ~8
-  // consecutive groups (labelled by their first bucket) — the reference's bar count.
-  const data = useMemo(() => {
-    const size = Math.max(1, Math.ceil(series.length / 8))
-    const out: { period: string; answered: number; missed: number }[] = []
-    for (let i = 0; i < series.length; i += size) {
-      const chunk = series.slice(i, i + size)
-      out.push({
-        period: chunk[0].period,
-        answered: chunk.reduce((s, p) => s + p.answered, 0),
-        missed: chunk.reduce((s, p) => s + p.missed, 0),
-      })
-    }
-    return out
-  }, [series])
-  const total = (summary?.answered ?? 0) + (summary?.missed ?? 0)
-  return (
-    <Panel className="flex lg:min-h-0 flex-col overflow-hidden p-3">
-      <div className="flex items-center gap-1">
-        <h3 className="text-sm font-semibold text-slate-900">Answer Rate</h3>
-        <InfoDot text="Answered Leads as a share of answered + missed, buyer side. The bars show answered against missed per bucket of the selected range." />
-      </div>
-      {loading || !summary ? (
-        <Skeleton className="mt-1.5 h-6 w-28" />
-      ) : (
-        <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
-          <span className="text-xl font-bold tracking-tight text-slate-900">{summary.answer_rate}%</span>
-          <DeltaPill value={summary.point_deltas?.answer_rate} tone="up-good" suffix="pp" />
-          <span className="text-[11px] text-slate-400">{caption}</span>
-        </div>
-      )}
-      <div className="mt-1.5 flex items-center gap-3 text-[10px] text-slate-500">
-        <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: C.primary }} />Answered</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: C.soft }} />Missed</span>
-        {!loading && summary && <span className="ml-auto tabular-nums text-slate-400">{num(total)} delivered</span>}
-      </div>
-      <div className="mt-2 h-36 lg:h-auto lg:min-h-0 lg:flex-1">
-        {loading ? (
-          <div className="flex h-full items-end gap-1.5 px-1 pb-4">
-            {[38, 62, 45, 78, 55, 88, 66].map((h, i) => <div key={i} className="flex-1 animate-pulse rounded-t bg-slate-100" style={{ height: `${h}%` }} />)}
-          </div>
-        ) : data.length === 0 ? (
-          <EmptyHint message="No answered or missed Leads in this period." />
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barGap={2} barCategoryGap="30%">
-              <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
-              <XAxis dataKey="period" tickFormatter={formatPeriod} tick={{ fontSize: 10, fill: C.axis }} tickLine={false} axisLine={false} minTickGap={16} />
-              <YAxis hide />
-              <Tooltip content={<SeriesTooltip format={num} />} cursor={{ fill: '#f1f5f9' }} />
-              <Bar dataKey="answered" name="Answered" fill={C.primary} radius={[3, 3, 0, 0]} maxBarSize={18} isAnimationActive={false} />
-              <Bar dataKey="missed" name="Missed" fill={C.soft} radius={[3, 3, 0, 0]} maxBarSize={18} isAnimationActive={false} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-    </Panel>
-  )
-}
-
-// ─── Top Buyers / Campaigns (the reference's Top Customer Locations card) ─────
+// ─── Spend leaders (one wide card: Answer Rate + Top Buyers/Campaigns) ────────
+//
+// The money question the earlier dashboard answered across two ranked panels — who bills
+// the most, who costs the most — put back in one wide card, with the half that was
+// missing: the bottom of each list. Both ends sit side by side so the spread reads in one
+// look. The crown, the rank badge and the per-row change against the previous period come
+// from those old panels; the share bar and the tabs come from the card this replaces.
 
 interface RankRow {
   key: string
@@ -903,64 +847,247 @@ interface RankRow {
   name: string | null
   value: number
   share: number
+  counted: number
   delta: number | null
 }
 
-function TopCard({ buyers, campaigns, loading, canAccess }: {
+/**
+ * The two ends of a ranked list: the biggest `n`, and the smallest `n` counted up from the
+ * bottom. With ten or fewer rows the lists would overlap, so the tail starts after the head.
+ */
+function endsOf(rows: RankRow[], n = 5): { top: RankRow[]; low: RankRow[] } {
+  const top = rows.slice(0, n)
+  return { top, low: rows.slice(Math.max(top.length, rows.length - n)).reverse() }
+}
+
+/** One figure in the card's summary strip. */
+function LeaderStat({ label, value, foot, delta, tone }: {
+  label: string
+  value: string
+  foot?: string
+  delta?: number | null
+  tone?: Tone
+}) {
+  return (
+    <div className="flex min-w-0 shrink-0 flex-col justify-center rounded-lg bg-slate-50 px-2 py-1.5">
+      <div className="flex items-center gap-1">
+        <span className="truncate text-[9px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
+        {delta !== undefined && tone && <DeltaPill value={delta} tone={tone} />}
+      </div>
+      <div className="truncate text-sm font-bold tabular-nums text-slate-900">{value}</div>
+      {foot && <div className="truncate text-[9px] text-slate-400">{foot}</div>}
+    </div>
+  )
+}
+
+/** Green up / red down / grey flat, against the same entity in the previous period. */
+function TrendArrow({ delta }: { delta: number | null }) {
+  const flat = delta == null || delta === 0
+  return (
+    <span
+      title={delta == null ? 'No comparable prior period' : `${signed(delta, '%')} vs previous period`}
+      className={cx(
+        'w-9 shrink-0 text-right text-[10px] font-bold tabular-nums',
+        flat ? 'text-slate-300' : delta > 0 ? 'text-emerald-600' : 'text-rose-500',
+      )}
+    >
+      {flat ? '–' : `${delta > 0 ? '↑' : '↓'}${Math.abs(delta).toFixed(0)}%`}
+    </span>
+  )
+}
+
+/**
+ * One end of the ranking. `end` colours the whole column — navy and a crown for the
+ * leaders, amber for the tail — and marks its first row with a label, so "top" and "low"
+ * read without comparing the figures.
+ */
+function LeaderList({ end, title, hint, rows, max, unit, loading, empty }: {
+  end: 'top' | 'low'
+  title: string
+  hint: string
+  rows: RankRow[]
+  /** The whole list's biggest value — every bar is drawn against it, so the tail looks small. */
+  max: number
+  /** "Revenue" or "Spend" — the column head over the figures. */
+  unit: string
+  loading: boolean
+  empty: string
+}) {
+  const isTop = end === 'top'
+  return (
+    <div className="flex min-w-0 flex-col lg:min-h-0">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1">
+        <div className="flex min-w-0 items-center gap-1">
+          <span className={cx('inline-flex h-4 w-4 shrink-0 items-center justify-center rounded', isTop ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600')}>
+            {isTop ? <IconCrown /> : <IconTrendDown />}
+          </span>
+          <h4 className="truncate text-[11px] font-bold uppercase tracking-wide text-slate-600">{title}</h4>
+          <InfoDot text={hint} />
+        </div>
+        <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-slate-400">{unit}</span>
+      </div>
+      {loading ? (
+        <div className="mt-1.5 space-y-1.5">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-7 rounded-lg" />)}</div>
+      ) : rows.length === 0 ? (
+        <EmptyHint message={empty} />
+      ) : (
+        <ol className="mt-1 flex lg:min-h-0 lg:flex-1 flex-col lg:justify-evenly">
+          {rows.map((r, i) => (
+            <li key={r.key} className="flex items-center gap-1.5 rounded-lg px-1 py-[3px] hover:bg-slate-50">
+              <span
+                className={cx(
+                  'inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[9px] font-bold tabular-nums',
+                  i === 0
+                    ? isTop ? 'bg-brand text-white' : 'bg-amber-500 text-white'
+                    : 'bg-slate-100 text-slate-500',
+                )}
+              >
+                {i + 1}
+              </span>
+              {/* Buyers and campaigns have no logo — the code's first three characters stand in. */}
+              <span className={cx('inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[8px] font-bold', tintFor(r.code))} aria-hidden>
+                {codeInitials(r.code)}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-baseline gap-1">
+                  <span className="truncate text-[11px] font-semibold text-slate-800">{r.code}</span>
+                  {r.name && <span className="truncate text-[9px] text-slate-400">{r.name}</span>}
+                  {i === 0 && (
+                    <span className={cx('shrink-0 rounded px-1 text-[8px] font-bold uppercase tracking-wide', isTop ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600')}>
+                      {isTop ? 'Highest' : 'Lowest'}
+                    </span>
+                  )}
+                </span>
+                <span className="mt-[3px] flex items-center gap-1">
+                  <span className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-100">
+                    <span
+                      className={cx('block h-full rounded-full', isTop ? 'bg-brand' : 'bg-amber-400')}
+                      style={{ width: `${max > 0 ? Math.max(2, (r.value / max) * 100) : 2}%` }}
+                    />
+                  </span>
+                  <span className="w-7 shrink-0 text-right text-[9px] tabular-nums text-slate-400">{r.share.toFixed(r.share >= 10 ? 0 : 1)}%</span>
+                </span>
+              </span>
+              <span className="shrink-0 text-right">
+                <span className="block text-[11px] font-bold tabular-nums text-slate-900">{moneyCompact(r.value)}</span>
+                <span className="block text-[9px] tabular-nums text-slate-400">{num(r.counted)} leads</span>
+              </span>
+              <TrendArrow delta={r.delta} />
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  )
+}
+
+function SpendLeadersCard({ buyers, campaigns, summary, loading, caption, canAccess }: {
   buyers: RankRow[]
   campaigns: RankRow[]
+  summary: Summary | null
   loading: boolean
+  caption: string
   canAccess: (k: string) => boolean
 }) {
   const [tab, setTab] = useState<'buyers' | 'campaigns'>('buyers')
-  const rows = tab === 'buyers' ? buyers : campaigns
-  const perm = tab === 'buyers' ? 'buyers' : 'campaigns'
+  const isBuyers = tab === 'buyers'
+  const rows = isBuyers ? buyers : campaigns
+  const { top, low } = useMemo(() => endsOf(rows), [rows])
+  const max = rows[0]?.value ?? 0
+  const perm = isBuyers ? 'buyers' : 'campaigns'
+  // Buyers are billed (revenue), campaigns are paid (Lead cost) — two sides of the same
+  // money. Portal expenses stay out of the campaign total: no campaign carries them.
+  const total = (isBuyers ? summary?.revenue : summary?.cost) ?? 0
+  const active = (isBuyers ? summary?.active_buyers : summary?.active_campaigns) ?? 0
+  const leader = rows[0]
+  const tail = rows.length ? rows[rows.length - 1] : undefined
   return (
-    <Panel className="flex lg:min-h-0 flex-col overflow-hidden p-3">
-      <div className="flex items-center justify-between gap-2">
+    <Panel className="flex lg:min-h-0 flex-col overflow-hidden p-3 md:col-span-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1">
-          <h3 className="text-sm font-semibold text-slate-900">Top {tab === 'buyers' ? 'Buyers' : 'Campaigns'}</h3>
-          <InfoDot text={tab === 'buyers'
-            ? 'Top 5 buyers by revenue, with each one\'s share of the period\'s revenue. The arrow compares the buyer against itself in the previous period.'
-            : 'Top 5 campaigns by spend, with each one\'s share of the period\'s Expenses. The arrow compares the campaign against itself in the previous period.'} />
+          <h3 className="text-sm font-semibold text-slate-900">
+            {isBuyers ? 'Buyer Revenue' : 'Campaign Spend'} · Highest & Lowest
+          </h3>
+          <InfoDot text={isBuyers
+            ? "Every buyer billed in the period, ranked by revenue: the five biggest beside the five smallest. Share is the buyer's part of the period's revenue; the arrow compares the buyer against itself in the previous period."
+            : "Every campaign paid in the period, ranked by Lead cost: the five biggest beside the five smallest. Share is the campaign's part of the period's Expenses; the arrow compares the campaign against itself in the previous period."} />
         </div>
         <MiniTabs tabs={[{ id: 'buyers', label: 'Buyers' }, { id: 'campaigns', label: 'Campaigns' }]} value={tab} onChange={setTab} />
       </div>
-      <div className="mt-2 lg:min-h-0 flex-1 lg:overflow-y-auto">
-        {loading ? (
-          <div className="space-y-2">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-8 rounded-lg" />)}</div>
-        ) : rows.length === 0 ? (
-          <EmptyHint message={`No ${tab === 'buyers' ? 'buyer' : 'campaign'} activity in this period.`} />
-        ) : (
-          <ol className="space-y-1">
-            {rows.map((r, i) => (
-              <li key={r.key} className="flex items-center gap-2 rounded-lg px-1 py-0.5 hover:bg-slate-50">
-                <span className="w-3 text-[11px] font-semibold tabular-nums text-slate-400">{i + 1}.</span>
-                <span className={cx('inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[8px] font-bold', tintFor(r.code))} aria-hidden>
-                  {codeInitials(r.code)}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-xs">
-                  <span className="font-semibold text-slate-800">{r.code}</span>
-                  {r.name && <span className="text-[10px] text-slate-400"> · {r.name}</span>}
-                </span>
-                <span className="shrink-0 text-xs font-bold tabular-nums text-slate-900">{money(r.value)}</span>
-                <span className="w-8 shrink-0 text-right text-[10px] tabular-nums text-slate-400">{r.share.toFixed(0)}%</span>
-                <span
-                  title={r.delta == null ? 'No comparable prior period' : `${signed(r.delta, '%')} vs previous period`}
-                  className={cx('w-4 shrink-0 text-center text-[11px] font-bold', r.delta == null || r.delta === 0 ? 'text-slate-300' : r.delta > 0 ? 'text-emerald-500' : 'text-rose-500')}
-                >
-                  {r.delta == null || r.delta === 0 ? '–' : r.delta > 0 ? '↑' : '↓'}
-                </span>
-              </li>
-            ))}
-          </ol>
+
+      {/* Two columns: what the period came to on the left, who it came from on the right.
+          Stacking the figures gives each one a whole line to itself and hands the width
+          back to the names, which is where the reading actually happens. Below the
+          breakpoint the figures go back to a 2×2 block above the lists. */}
+      <div className="mt-2 grid lg:min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(8.5rem,0.85fr)_2.6fr] lg:overflow-y-auto no-scrollbar">
+      {/* Each figure is the height of its own text — never a fixed share of the column, which
+          on a short screen squeezed a value under the box below it. Leftover room goes
+          between the boxes; when there is none, the body scrolls. The title and the tabs
+          above stay put while it does, and the bar itself is hidden — see .no-scrollbar. */}
+      <div className="grid shrink-0 grid-cols-2 gap-1.5 sm:grid-cols-4 lg:flex lg:flex-col lg:justify-between lg:gap-2">
+        <LeaderStat
+          label={isBuyers ? 'Total billed' : 'Total spend'}
+          value={loading ? '—' : money(total)}
+          delta={isBuyers ? summary?.deltas.revenue : summary?.deltas.cost}
+          tone={isBuyers ? 'up-good' : 'down-good'}
+          foot={caption}
+        />
+        <LeaderStat
+          label={isBuyers ? 'Active buyers' : 'Active campaigns'}
+          value={loading ? '—' : num(active)}
+          foot={active > 0 ? `${money(total / active)} each on avg.` : undefined}
+        />
+        <LeaderStat
+          label="Top of the list"
+          value={leader ? leader.code : '—'}
+          foot={leader ? `${money(leader.value)} · ${leader.share.toFixed(0)}% of the total` : undefined}
+        />
+        <LeaderStat
+          label="Bottom of the list"
+          value={tail ? tail.code : '—'}
+          foot={tail ? `${money(tail.value)} · ${tail.share.toFixed(tail.share >= 10 ? 0 : 1)}% of the total` : undefined}
+        />
+      </div>
+
+      {/* The two ends, side by side. */}
+      <div className="grid lg:min-h-52 grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+        <LeaderList
+          end="top"
+          title={isBuyers ? 'Top 5 buyers' : 'Top 5 campaigns'}
+          hint={isBuyers ? 'The five buyers that billed the most in this period.' : 'The five campaigns that cost the most in this period.'}
+          rows={top}
+          max={max}
+          unit={isBuyers ? 'Revenue' : 'Spend'}
+          loading={loading}
+          empty={`No ${isBuyers ? 'buyer' : 'campaign'} activity in this period.`}
+        />
+        <LeaderList
+          end="low"
+          title={isBuyers ? 'Lowest 5 buyers' : 'Lowest 5 campaigns'}
+          hint={isBuyers
+            ? 'The five buyers that billed the least, smallest first — the accounts worth chasing or retiring.'
+            : 'The five campaigns that cost the least, smallest first — the spend worth growing or cutting.'}
+          rows={low}
+          max={max}
+          unit={isBuyers ? 'Revenue' : 'Spend'}
+          loading={loading}
+          empty={rows.length === 0
+            ? `No ${isBuyers ? 'buyer' : 'campaign'} activity in this period.`
+            : `Only ${rows.length} ${isBuyers ? 'buyer' : 'campaign'}${rows.length === 1 ? '' : 's'} billed in this period — every one is listed beside this.`}
+        />
+      </div>
+      </div>
+
+      <div className="mt-1.5 flex shrink-0 items-center justify-between gap-2 border-t border-slate-100 pt-1.5">
+        <p className="truncate text-[10px] text-slate-400">
+          {rows.length > 0 && `Ranked over ${num(rows.length)} ${isBuyers ? 'buyer' : 'campaign'}${rows.length === 1 ? '' : 's'} with activity${rows.length >= RANK_LIMIT ? ` (the ${RANK_LIMIT} biggest)` : ''}`}
+        </p>
+        {canAccess(perm) && (
+          <Link to={`/${perm}`} className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-brand hover:underline">
+            View all <IconArrowR />
+          </Link>
         )}
       </div>
-      {canAccess(perm) && (
-        <Link to={`/${perm}`} className="mt-3 inline-flex items-center gap-1 self-end text-[11px] font-semibold text-brand hover:underline">
-          View all <IconArrowR />
-        </Link>
-      )}
     </Panel>
   )
 }
@@ -1045,13 +1172,14 @@ function DashboardPage() {
   const prevSummary = useAsync(() => api.summary(prev), [prev.from, prev.to])
   const trends = useAsync(() => api.trends({ ...range, granularity }), [range.from, range.to, granularity])
   const prevTrends = useAsync(() => api.trends({ ...prev, granularity }), [prev.from, prev.to, granularity])
-  const topBuyers = useAsync(() => api.topBuyers({ ...range, limit: 5 }), [range.from, range.to])
-  const topCampaigns = useAsync(() => api.topCampaigns({ ...range, limit: 5 }), [range.from, range.to])
+  // Deep enough to hold both ends: the card shows the top five AND the bottom five, so it
+  // needs the whole ranking, not just its head. 50 is the API's own ceiling.
+  const topBuyers = useAsync(() => api.topBuyers({ ...range, limit: RANK_LIMIT }), [range.from, range.to])
+  const topCampaigns = useAsync(() => api.topCampaigns({ ...range, limit: RANK_LIMIT }), [range.from, range.to])
   const topSources = useAsync(() => api.topSources({ ...range, limit: 20 }), [range.from, range.to])
-  // Per-row change needs the previous window's ranking, matched by id; a wider limit
-  // because today's top 5 may have sat well down the table last period.
-  const prevBuyers = useAsync(() => api.topBuyers({ ...prev, limit: 50 }), [prev.from, prev.to])
-  const prevCampaigns = useAsync(() => api.topCampaigns({ ...prev, limit: 50 }), [prev.from, prev.to])
+  // Per-row change needs the previous window's ranking, matched by id.
+  const prevBuyers = useAsync(() => api.topBuyers({ ...prev, limit: RANK_LIMIT }), [prev.from, prev.to])
+  const prevCampaigns = useAsync(() => api.topCampaigns({ ...prev, limit: RANK_LIMIT }), [prev.from, prev.to])
 
   // Team Today reads the attendance roster in the org's clock. Hooks can't be conditional,
   // so a viewer without the Attendance page gets a resolved null and the fallback card.
@@ -1079,6 +1207,7 @@ function DashboardPage() {
       name: b.name,
       value: b.revenue,
       share: total > 0 ? (b.revenue / total) * 100 : 0,
+      counted: b.counted,
       delta: changePct(before.get(b.id), b.revenue),
     }))
   }, [topBuyers.data, prevBuyers.data, s?.revenue])
@@ -1092,6 +1221,7 @@ function DashboardPage() {
       name: c.name,
       value: c.cost,
       share: total > 0 ? (c.cost / total) * 100 : 0,
+      counted: c.counted,
       delta: changePct(before.get(c.id), c.cost),
     }))
   }, [topCampaigns.data, prevCampaigns.data, s?.cost])
@@ -1223,8 +1353,14 @@ function DashboardPage() {
           {/* Bottom row — three cells sharing the remaining height. */}
           <div className="grid lg:min-h-0 flex-[1.1] grid-cols-1 gap-3 md:grid-cols-3 md:[grid-template-rows:minmax(0,1fr)]">
             <LeadMixCard summary={s} prevSummary={ps} sources={sources} loading={summary.loading} sourcesLoading={topSources.loading} canAccess={canAccess} />
-            <AnswerRateCard summary={s} series={series} loading={trends.loading || summary.loading} caption={caption} />
-            <TopCard buyers={buyerRows} campaigns={campaignRows} loading={topBuyers.loading || topCampaigns.loading} canAccess={canAccess} />
+            <SpendLeadersCard
+              buyers={buyerRows}
+              campaigns={campaignRows}
+              summary={s}
+              loading={topBuyers.loading || topCampaigns.loading || summary.loading}
+              caption={caption}
+              canAccess={canAccess}
+            />
           </div>
 
           {/* One banner for any block that failed — the rest of the page stays usable. */}

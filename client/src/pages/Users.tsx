@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api/client'
+import { PerformerBadge } from '../lib/performers'
 import { useAuth } from '../auth/AuthContext'
 import { DEFAULT_USER_PAGES, PAGES } from '../auth/pages'
 import { PageHeader } from '../components/Layout'
@@ -196,7 +197,10 @@ export default function Users() {
                           {displayNameOf(u).charAt(0).toUpperCase()}
                         </span>
                         <div className="min-w-0">
-                          <div className="truncate font-medium text-slate-800">{displayNameOf(u)}</div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate font-medium text-slate-800">{displayNameOf(u)}</span>
+                            <PerformerBadge staffId={u.staff_id} name={u.name} compact />
+                          </div>
                           {u.name && (
                             <div className="truncate text-xs text-slate-400">
                               {identifierOf(u)}

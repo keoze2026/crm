@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useEffect, useState, type ReactNode } from 'react'
 import { cx } from './ui'
 import { useAuth } from '../auth/AuthContext'
+import { PerformerBadge } from '../lib/performers'
 import { AUTH_ONLY_PAGES } from '../auth/pages'
 
 interface NavItem {
@@ -127,7 +128,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               {(user.name ?? user.email ?? user.username ?? '?').charAt(0).toUpperCase()}
             </span>
             <div className="min-w-0 flex-1 leading-tight">
-              <div className="truncate text-sm font-semibold text-white">{user.name ?? user.email ?? user.username}</div>
+              <div className="flex items-center gap-1.5">
+                {/* An account carries no staff id, so the badge resolves on the name. */}
+                <span className="truncate text-sm font-semibold text-white">{user.name ?? user.email ?? user.username}</span>
+                <PerformerBadge name={user.name} compact />
+              </div>
               <div className="truncate text-xs capitalize text-slate-400">{user.role}</div>
             </div>
             <button

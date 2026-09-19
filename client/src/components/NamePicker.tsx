@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api/client'
 import { anchorTo, focusQuietly, type Anchor } from '../lib/popover'
+import { PerformerBadge } from '../lib/performers'
 import { matches, parseNameList } from '../lib/queues'
 import type { StaffMember } from '../types'
 import { Spinner, cx } from './ui'
@@ -116,6 +117,8 @@ export default function NamePicker({
         )}
       >
         <span className="truncate">{value || placeholder}</span>
+        {/* The cell carries the name, not the id — the badge resolves it against the roster. */}
+        <PerformerBadge name={value} compact className="ml-auto" />
         <CaretIcon open={open} />
       </button>
 
@@ -156,10 +159,11 @@ export default function NamePicker({
                         className="min-w-0 flex-1 text-left"
                       >
                         <span className={cx(
-                          'block truncate text-xs font-semibold',
+                          'flex items-center gap-1 text-xs font-semibold',
                           selected ? 'text-white' : 'text-slate-800',
                         )}>
-                          {p.name}
+                          <span className="truncate">{p.name}</span>
+                          <PerformerBadge staffId={p.id} compact />
                         </span>
                         {/* The departments are the reason this list is shared — a name is
                             never picked without seeing which band the person belongs to. */}

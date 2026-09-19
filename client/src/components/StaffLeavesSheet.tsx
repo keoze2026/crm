@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { api } from '../api/client'
+import { PerformerBadge } from '../lib/performers'
 import { LEAVE_MARKERS, returnVerdict, type ReturnVerdict } from '../lib/staff'
 import type { StaffLeave, StaffMember } from '../types'
 import {
@@ -199,14 +200,17 @@ function Cells({
         />
       </td>
       <td className={cellCls}>
-        <select
-          value={draft.staff_id}
-          onChange={(e) => setPerson(e.target.value === '' ? '' : Number(e.target.value))}
-          className={cx(fieldCls, 'font-semibold', draft.staff_id === '' && 'text-slate-500')}
-        >
-          <option value="">Select name</option>
-          {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+        <div className="flex items-center gap-1">
+          <select
+            value={draft.staff_id}
+            onChange={(e) => setPerson(e.target.value === '' ? '' : Number(e.target.value))}
+            className={cx(fieldCls, 'font-semibold', draft.staff_id === '' && 'text-slate-500')}
+          >
+            <option value="">Select name</option>
+            {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          {typeof draft.staff_id === 'number' && <PerformerBadge staffId={draft.staff_id} compact />}
+        </div>
       </td>
       <td className={cellCls}>
         <select

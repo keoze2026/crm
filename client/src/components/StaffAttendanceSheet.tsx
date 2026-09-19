@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react'
 import { api } from '../api/client'
+import { PerformerBadge } from '../lib/performers'
 import {
   ATTENDANCE_STATUSES, clockLabel, earlyBy, emptyLoginTally, gapLabel, hoursLabel,
   impliedStatus, lateBy, netHours, punctuality, type LoginTally,
 } from '../lib/staff'
-import type { StaffAttendanceRow, StaffMember } from '../types'
+import type { AttendanceDay, StaffAttendanceRow, StaffMember } from '../types'
 import PunctualityBadge from './PunctualityBadge'
 import {
   addRowCls, cellCls, fieldCls, headCls, idxCell, removeBtnCls, rowCls, tableCls, theadCls,
@@ -13,21 +14,22 @@ import { RevertIcon, TrashIcon } from './sheetIcons'
 import { EmptyState, cx } from './ui'
 
 /**
- * One day's attendance for the whole roster — a row per staff member for the selected
- * date, the way the Attendance page's daily roster reads.
+ * One day's attendance for the whole roster — the Attendance page's day sheet, and the only
+ * attendance table in the CRM.
  *
  * EVERY row is editable, whether or not the check-in bot recorded the day. A day the bot
  * recorded arrives filled in from its record; the first edit stores a row beside it that
- * REPLACES that day, and the Attendance page reads the same replacement, so the two pages
- * never disagree. The bot's own tables are never written to, which is what lets the revert
- * button put its untouched record back.
+ * REPLACES that day, and every other attendance figure in the app — this page's cards, the
+ * Staff Summary, the reports, the Dashboard — reads the same replacement, so no two screens
+ * can disagree about a day. The bot's own tables are never written to, which is what lets
+ * the revert button put its untouched record back.
  *
  * Everyone the bot didn't record gets an empty row that saves itself on the first edit —
  * an untouched row is never written, so looking at a roster of thirty doesn't create thirty
  * empty records.
  *
  * Each clock cell is marked against the hours that person is expected to keep, set on the
- * Staff tab. Anyone with no schedule there is never marked.
+ * Staff page. Anyone with no schedule there is never marked.
  *
  * The Flag column turns those two marks into one verdict per day — on time, late in, early
  * out, or both — so the sheet can be read down a single column, and the day that went wrong
@@ -42,9 +44,14 @@ import { EmptyState, cx } from './ui'
  * many times that person has logged in late so far this month. A single late morning is
  * rarely the point — the sixth one is — and reading it off a day sheet otherwise means
  * opening thirty of them.
+ *
+ * What the bot knows and this app doesn't — how many breaks were taken and for how long,
+ * how late anyone came back from one, who is online right now — rides along in the Break
+ * and Name cells, so the sheet carries the whole day rather than half of it.
  */
 export default function StaffAttendanceSheet({
-  date, rows, staff, monthTallies, monthLabel, onChanged,
+  date, rows, staff, monthTallies, monthLabel, bot, online, breakAllowanceMin = 60,
+  onBreakDetail, onChanged,
 }: {
   /** The day being shown, "YYYY-MM-DD". */
   date: string
@@ -54,6 +61,13 @@ export default function StaffAttendanceSheet({
   monthTallies: Map<number, LoginTally>
   /** That month, worded — for the column heading and its tooltips. */
   monthLabel: string
+  /** The bot's own record of the same day, by staff id — breaks, returns, its account. */
+  bot?: Map<number, AttendanceDay>
+  /** The bot accounts checked in right now. */
+  online?: Set<string>
+  breakAllowanceMin?: number
+  /** Open the break breakdown for a day the bot recorded breaks on. */
+  onBreakDetail?: (row: AttendanceDay) => void
   onChanged: () => void
 }) {
   const byStaff = new Map(rows.map((r) => [r.staff_id, r]))
@@ -61,19 +75,19 @@ export default function StaffAttendanceSheet({
   return (
     <>
       <div className="overflow-x-auto">
-        <table className={cx(tableCls, 'min-w-4xl')}>
+        <table className={cx(tableCls, 'min-w-5xl')}>
           <colgroup>
-            <col style={{ width: '5%' }} />
-            <col style={{ width: '16%' }} />
-            <col style={{ width: '13%' }} />
+            <col style={{ width: '4%' }} />
+            <col style={{ width: '17%' }} />
+            <col style={{ width: '12%' }} />
             <col style={{ width: '10%' }} />
             <col style={{ width: '10%' }} />
-            <col style={{ width: '9%' }} />
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '10%' }} />
             <col style={{ width: '6%' }} />
-            <col style={{ width: '6%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '9%' }} />
-            <col style={{ width: '5%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '4%' }} />
           </colgroup>
           <thead>
             <tr className={theadCls}>
@@ -106,6 +120,10 @@ export default function StaffAttendanceSheet({
                 date={date}
                 monthTally={monthTallies.get(person.id) ?? emptyLoginTally()}
                 monthLabel={monthLabel}
+                bot={bot?.get(person.id) ?? null}
+                online={online}
+                breakAllowanceMin={breakAllowanceMin}
+                onBreakDetail={onBreakDetail}
                 onChanged={onChanged}
               />
             ))}
@@ -115,7 +133,7 @@ export default function StaffAttendanceSheet({
 
       {staff.length === 0 && (
         <div className="mt-3">
-          <EmptyState message="No staff yet — add someone on the Staff tab." />
+          <EmptyState message="No staff yet — add someone on the Staff Management page." />
         </div>
       )}
     </>
@@ -148,6 +166,45 @@ function DepartmentCell({ person }: { person: StaffMember }) {
   )
 }
 
+/**
+ * The colour each status is worn in, everywhere a status is shown. Green is a full day at
+ * work, amber a partial one, violet an agreed day off, rose an unexplained one, and blue
+ * somebody still at their desk — so a column of statuses can be read down without reading
+ * a single word of it.
+ */
+const STATUS_TONE: Record<string, string> = {
+  'present':  'border-emerald-400 bg-emerald-50 text-emerald-800',
+  'still in': 'border-sky-400 bg-sky-50 text-sky-800',
+  'half day': 'border-amber-400 bg-amber-50 text-amber-900',
+  'leave':    'border-violet-400 bg-violet-50 text-violet-800',
+  'holiday':  'border-slate-300 bg-slate-100 text-slate-600',
+  'absent':   'border-rose-400 bg-rose-50 text-rose-800',
+}
+
+const statusTone = (status: string): string =>
+  STATUS_TONE[status.trim().toLowerCase()] ?? 'border-slate-300 bg-white text-slate-700'
+
+/** The same tag outside the sheet — the cards above it, and anywhere a day is quoted. */
+export function StatusTag({ status, implied = false, className }: {
+  status: string
+  /** True when nothing is stored and this is only what the clock times mean. */
+  implied?: boolean
+  className?: string
+}) {
+  if (!status) return <span className="text-slate-300">—</span>
+  return (
+    <span
+      title={implied ? `Nothing stored for this day — its times read as "${status}"` : undefined}
+      className={cx(
+        'inline-flex items-center whitespace-nowrap rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase leading-4 tracking-wide',
+        statusTone(status), implied && 'opacity-60', className,
+      )}
+    >
+      {status}
+    </span>
+  )
+}
+
 interface Draft {
   login_at: string
   logout_at: string
@@ -175,7 +232,8 @@ const draftOf = (row: StaffAttendanceRow | null): Draft => row === null ? { ...B
  * hand-keyed day, or nothing at all — and in every case it is edited the same way.
  */
 function DayRow({
-  index, person, row, date, monthTally, monthLabel, onChanged,
+  index, person, row, date, monthTally, monthLabel, bot, online, breakAllowanceMin,
+  onBreakDetail, onChanged,
 }: {
   index: number
   person: StaffMember
@@ -185,6 +243,11 @@ function DayRow({
   /** This person's late / on-time logins across the whole month — see the Late column. */
   monthTally: LoginTally
   monthLabel: string
+  /** The bot's own record of this day, for the things only it knows. */
+  bot: AttendanceDay | null
+  online?: Set<string>
+  breakAllowanceMin: number
+  onBreakDetail?: (row: AttendanceDay) => void
   onChanged: () => void
 }) {
   const saved = draftOf(row)
@@ -210,6 +273,8 @@ function DayRow({
   // undo, and a first edit will create the record that replaces it.
   const fromBot = row?.source === 'fetched'
   const overridden = fromBot && row.edited
+  const isOnline = bot?.user_id != null && (online?.has(bot.user_id) ?? false)
+  const overBreak = Math.max(0, Number(draft.break_min || 0) - breakAllowanceMin)
 
   const save = async (over?: Partial<Draft>) => {
     const next = { ...draft, ...over }
@@ -259,7 +324,19 @@ function DayRow({
   return (
     <tr ref={rowRef} onBlur={onRowBlur} className={row === null ? addRowCls : rowCls}>
       <td className={cx(idxCell, row === null && 'text-slate-400')}>{index}</td>
-      <td className={cx(cellCls, 'font-semibold')}>{person.name}</td>
+      <td className={cx(cellCls, 'font-semibold')}>
+        <span className="flex items-center gap-1">
+          {/* The bot's live state, where it knows this person at all. */}
+          {bot && (
+            <span
+              title={isOnline ? `${person.name} is checked in right now` : `Not checked in · bot account ${bot.user_id}`}
+              className={cx('h-1.5 w-1.5 shrink-0 rounded-full', isOnline ? 'bg-emerald-500' : 'bg-slate-300')}
+            />
+          )}
+          <span className="truncate" title={bot?.username ? `@${bot.username}` : undefined}>{person.name}</span>
+          <PerformerBadge staffId={person.id} compact />
+        </span>
+      </td>
       <td className={cellCls}><DepartmentCell person={person} /></td>
       <td className={cellCls}>
         <input
@@ -286,9 +363,14 @@ function DayRow({
         <input
           value={draft.break_min}
           inputMode="numeric"
+          title={`Minutes on break · ${breakAllowanceMin}m allowed`}
           onChange={(e) => { if (/^\d*$/.test(e.target.value)) setDraft({ ...draft, break_min: e.target.value }) }}
-          className={cx(fieldCls, 'text-right tabular-nums', overridden && editedCls)}
+          className={cx(
+            fieldCls, 'text-right tabular-nums',
+            overridden ? editedCls : overBreak > 0 && 'border-rose-400 bg-rose-50 font-semibold text-rose-800',
+          )}
         />
+        <BreakNote bot={bot} overMin={overBreak} onOpen={onBreakDetail} />
       </td>
       <td className={cx(cellCls, 'text-center font-semibold tabular-nums')}>{hoursLabel(hours)}</td>
       <td className={cx(cellCls, 'text-center')}><PunctualityBadge flag={flag} compact /></td>
@@ -296,14 +378,17 @@ function DayRow({
         <select
           value={status}
           onChange={(e) => { setDraft({ ...draft, status: e.target.value }); save({ status: e.target.value }) }}
+          title={draft.status === ''
+            ? 'Nothing stored for this day — this is what its clock times mean'
+            : `Stored for this day${overridden ? ", replacing the bot's own record" : ''}`}
           className={cx(
-            fieldCls, 'capitalize', overridden && editedCls,
-            // An implied status is greyed: it says what the clock times mean, not what
+            fieldCls, 'border font-bold uppercase tracking-wide', statusTone(status),
+            // An implied status is faded: it says what the clock times mean, not what
             // anybody decided, and nothing has been written for this day.
-            draft.status === '' && 'text-slate-500 italic',
+            draft.status === '' && 'opacity-60 italic',
           )}
         >
-          {ATTENDANCE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          {ATTENDANCE_STATUSES.map((s) => <option key={s} value={s} className="bg-white font-semibold normal-case text-slate-900">{s}</option>)}
         </select>
       </td>
       <td className="p-0">
@@ -325,6 +410,44 @@ function DayRow({
         </div>
       </td>
     </tr>
+  )
+}
+
+/**
+ * What the bot logged under the break cell: how many breaks were taken, how far past the
+ * allowance the day ran, and how late anyone came back from one.
+ *
+ * The minutes above are editable and the correction decides the day's total; these are the
+ * bot's own record of how that total was spent, which no correction re-times. Click to see
+ * each break.
+ */
+function BreakNote({ bot, overMin, onOpen }: {
+  bot: AttendanceDay | null
+  /** Minutes past the allowance, from the figure in the cell above. */
+  overMin: number
+  onOpen?: (row: AttendanceDay) => void
+}) {
+  const parts = [
+    bot && bot.break_count > 0 && `${bot.break_count} break${bot.break_count > 1 ? 's' : ''}`,
+    overMin > 0 && `+${gapLabel(overMin)} over`,
+    bot && bot.late_return_min > 0 && `back +${gapLabel(bot.late_return_min)}`,
+    bot?.on_break && 'out now',
+  ].filter(Boolean) as string[]
+  if (parts.length === 0) return null
+  const label = parts.join(' · ')
+  const tone = overMin > 0 || (bot?.late_return_min ?? 0) > 0 ? 'text-rose-700' : 'text-slate-500'
+  if (!bot || bot.break_count === 0 || !onOpen) {
+    return <span className={cx('mt-0.5 block truncate text-center text-[10px] font-bold leading-3', tone)}>{label}</span>
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(bot)}
+      title={`Breaks: ${bot.break_detail || '—'} · click for each one`}
+      className={cx('mt-0.5 block w-full truncate text-center text-[10px] font-bold leading-3 underline decoration-dotted underline-offset-2 hover:text-brand', tone)}
+    >
+      {label}
+    </button>
   )
 }
 

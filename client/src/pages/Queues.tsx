@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { api } from '../api/client'
+import { PerformerBadge } from '../lib/performers'
 import { PageHeader } from '../components/Layout'
 import QueueLists from '../components/QueueLists'
 import QueuesSheet from '../components/QueuesSheet'
@@ -233,7 +234,12 @@ function History({ days }: { days: HistoryDay[] }) {
                       const edited = entryDay(row.updated_at) !== entryDay(row.created_at)
                       return (
                         <tr key={row.id} className="border-t border-slate-200 align-top">
-                          <td className="px-2 py-1 font-semibold text-slate-900">{row.name}</td>
+                          <td className="px-2 py-1 font-semibold text-slate-900">
+                            <span className="flex items-center gap-1">
+                              {row.name}
+                              <PerformerBadge staffId={row.person_id} compact />
+                            </span>
+                          </td>
                           <td className="px-2 py-1">
                             {row.codes.length === 0 ? (
                               <span className="text-slate-400">—</span>

@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Review and top performer logic</title>
+<style>
+  :root{
+    --navy:#1f4e8c; --navy-dark:#173d70; --ink:#0f172a; --muted:#64748b; --faint:#94a3b8;
+    --line:#e2e8f0; --tint:#f1f5f9; --green:#047857; --green-bg:#ecfdf5; --green-line:#a7f3d0;
+    --red:#be123c; --red-bg:#fff1f2; --red-line:#fecdd3; --amber:#b45309; --amber-bg:#fffbeb;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:'Segoe UI',ui-sans-serif,system-ui,-apple-system,sans-serif;color:var(--ink);font-size:10.5pt;line-height:1.5}
+  h1,h2,h3,h4{line-height:1.2;letter-spacing:-.01em;margin:0}
+  /* Space above a heading is padding, not margin: Chromium doubles the PDF bookmark title
+     of a heading whose top margin is truncated at the top of a page. */
+  h2{font-size:20pt;color:var(--navy);margin:0 0 4mm;padding:1mm 0 2mm;border-bottom:2px solid var(--navy);break-after:avoid}
+  h3{font-size:13.5pt;color:var(--ink);margin:0 0 2.5mm;padding-top:6mm;break-after:avoid}
+  h4{font-size:11pt;color:var(--navy);margin:0 0 1.5mm;padding-top:4mm;break-after:avoid}
+  p{margin:0 0 2.5mm}
+  ul,ol{margin:0 0 3mm;padding-left:5mm}
+  li{margin-bottom:1mm}
+  a{color:var(--navy);text-decoration:none}
+  strong{font-weight:600}
+  code,.k{font-family:inherit;font-weight:600}
+  .section{break-before:page}
+  .num{color:var(--faint);font-weight:500;margin-right:2mm}
+  .lede{font-size:11.5pt;color:var(--muted);margin-bottom:5mm}
+  .note{border-left:3px solid var(--navy);background:var(--tint);padding:2.5mm 3.5mm;margin:3mm 0 4mm;break-inside:avoid}
+  .note.warn{border-color:var(--amber);background:var(--amber-bg)}
+  .note.good{border-color:var(--green);background:var(--green-bg)}
+  .note.bad{border-color:var(--red);background:var(--red-bg)}
+  .note p:last-child{margin:0}
+  figure{margin:3mm 0 5mm;break-inside:avoid}
+  figure img{display:block;width:100%;border:1px solid var(--line);border-radius:4px}
+  figure.narrow img{width:60%}
+  figure.mid img{width:80%}
+  figure.tall img{height:212mm;width:auto;max-width:100%;margin:0 auto}
+  figcaption{font-size:9pt;color:var(--muted);margin-top:1.5mm}
+  table{width:100%;border-collapse:collapse;margin:2mm 0 4mm;font-size:9.5pt}
+  th,td{border:1px solid var(--line);padding:1.8mm 2.5mm;vertical-align:top;text-align:left}
+  th{background:var(--navy);color:#fff;font-weight:600;font-size:9pt;letter-spacing:.02em}
+  tr{break-inside:avoid}
+  td.c{text-align:center}
+  .pill{display:inline-block;border-radius:999px;padding:0 2mm;font-size:8.5pt;font-weight:700;line-height:1.7;white-space:nowrap;border:1px solid}
+  .pill.g{background:var(--green-bg);color:var(--green);border-color:var(--green-line)}
+  .pill.r{background:var(--red-bg);color:var(--red);border-color:var(--red-line)}
+  .pill.n{background:#fff;color:var(--navy);border-color:#bfd0e6}
+  .pill.q{background:var(--tint);color:var(--muted);border-color:var(--line)}
+  .pill.b{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:4mm}
+  .card{border:1px solid var(--line);border-radius:5px;padding:3mm 3.5mm;break-inside:avoid}
+  .card h4{padding-top:0}
+  .kpi{font-size:20pt;font-weight:700;color:var(--navy);line-height:1}
+  .small{font-size:9pt;color:var(--muted)}
+  .formula{font-size:12pt;font-weight:600;color:var(--navy);text-align:center;padding:3mm;border:1px dashed #bfd0e6;border-radius:5px;margin:3mm 0;background:#f8fafc}
+
+  /* Cover */
+  .cover{height:265mm;display:flex;flex-direction:column;justify-content:space-between;break-after:page}
+  .cover .brand{display:flex;align-items:center;gap:3mm;color:var(--navy);font-weight:700;font-size:13pt}
+  .cover .brand span.sub{font-weight:500;color:var(--muted);font-size:10pt}
+  .cover h1{font-size:34pt;color:var(--navy);margin:0 0 5mm}
+  .cover .sub{font-size:14pt;color:var(--muted);max-width:150mm}
+  .cover .meta{border-top:1px solid var(--line);padding-top:4mm;display:grid;grid-template-columns:1fr 1fr 1fr;gap:4mm;font-size:9.5pt}
+  .cover .meta b{display:block;color:var(--muted);font-weight:500;font-size:8.5pt;text-transform:uppercase;letter-spacing:.06em}
+  .cover .band{background:var(--navy);color:#fff;border-radius:6px;padding:6mm 7mm}
+  .cover .band h3{color:#fff;margin:0 0 2mm;font-size:12pt}
+  .cover .band p{color:#dbe6f5;margin:0;font-size:10pt}
+
+  /* Contents */
+  .toc ol{list-style:none;padding:0;margin:0}
+  .toc li{display:flex;align-items:baseline;gap:2mm;padding:1.6mm 0;border-bottom:1px dotted var(--line);font-size:11pt}
+  .toc li .n{color:var(--faint);width:8mm;font-weight:600}
+  .toc li a{flex:1;color:var(--ink)}
+  .toc li.sub{padding-left:10mm;font-size:10pt}
+  .toc li.sub a{color:var(--muted)}
+
+  /* Flow */
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:3mm;margin:3mm 0 5mm}
+  .flow .step{border:1px solid var(--line);border-radius:5px;padding:3mm;background:#fff}
+  .flow .step b{display:block;color:var(--navy);font-size:10pt;margin-bottom:1mm}
+  .flow .step span{font-size:9pt;color:var(--muted)}
+  .flow .step .t{display:inline-block;background:var(--navy);color:#fff;border-radius:999px;width:6mm;height:6mm;line-height:6mm;text-align:center;font-size:9pt;font-weight:700;margin-bottom:1.5mm}
+</style>
+</head>
+<body>
+
+<!-- ─── Cover ─────────────────────────────────────────────────────────────── -->
+<section class="cover">
+  <div>
+    <div class="brand">Platform-CRM <span class="sub">· Operations</span></div>
+  </div>
+  <div>
+    <div style="color:var(--muted);font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:9.5pt;margin-bottom:3mm">HR guide</div>
+    <h1>Review and top performer logic</h1>
+    <p class="sub">How the CRM decides each month's Top Performer and Lowest Performer, what every rating on the Review page is worth, what the optional controls on the Top Performer tab do, and how the date filters change what you see.</p>
+  </div>
+  <div>
+    <div class="band">
+      <h3>The short version</h3>
+      <p>Every person is scored against a list of up to twelve criteria for one calendar month. Four criteria are read automatically from that month's Review, Attendance and Leaves sheets; the rest are confirmed by a manager. The score is the share of criteria met. The highest scorer at 80% or above is the Top Performer and earns the $200 incentive; the lowest scorer, when someone clearly trails the rest, is the Lowest Performer. Everything — reviews, attendance, leaves, confirmations, switches — belongs to the month being judged.</p>
+    </div>
+    <div class="meta" style="margin-top:6mm">
+      <div><b>Prepared for</b>Human Resources</div>
+      <div><b>Version</b>September 2026 · month-constrained logic</div>
+      <div><b>Applies to</b>Review page · Top Performer tab · staff badges</div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Contents ──────────────────────────────────────────────────────────── -->
+<section class="toc" style="break-after:page">
+  <h2>Contents</h2>
+  <ol>
+    <li><span class="n">1</span><a href="#cycle">The monthly cycle</a></li>
+    <li><span class="n">2</span><a href="#review">Reviewing on the Review page</a></li>
+    <li class="sub"><span class="n">2.1</span><a href="#performance">Performance tab — ratings and what they are worth</a></li>
+    <li class="sub"><span class="n">2.2</span><a href="#behaviour">Behaviour tab — ratings and what they are worth</a></li>
+    <li class="sub"><span class="n">2.3</span><a href="#department">Department tab</a></li>
+    <li><span class="n">3</span><a href="#top">How the Top Performer is chosen</a></li>
+    <li class="sub"><span class="n">3.1</span><a href="#criteria">The twelve criteria</a></li>
+    <li class="sub"><span class="n">3.2</span><a href="#score">How a score is worked out</a></li>
+    <li class="sub"><span class="n">3.3</span><a href="#ranking">Ranking order and tie-breaks</a></li>
+    <li class="sub"><span class="n">3.4</span><a href="#topwho">Who is named Top Performer</a></li>
+    <li class="sub"><span class="n">3.5</span><a href="#lowwho">Who is named Lowest Performer</a></li>
+    <li class="sub"><span class="n">3.6</span><a href="#cards">The headline cards and tiles</a></li>
+    <li><span class="n">4</span><a href="#controls">Optional fields and controls on the Top Performer tab</a></li>
+    <li><span class="n">5</span><a href="#dates">How date filters affect what you see</a></li>
+    <li><span class="n">6</span><a href="#example">Worked example — August 2026</a></li>
+    <li><span class="n">7</span><a href="#checklist">Reviewer's checklist</a></li>
+    <li><span class="n">8</span><a href="#glossary">Quick reference — badges and pills</a></li>
+  </ol>
+</section>
+
+<!-- ─── 1 Cycle ───────────────────────────────────────────────────────────── -->
+<section id="cycle">
+  <h2><span class="num">1</span> The monthly cycle</h2>
+  <p class="lede">A review is about the month that has just finished. The sheet you fill in during September judges August, and the Top Performer of August is decided from August's data alone.</p>
+
+  <div class="flow">
+    <div class="step"><span class="t">1</span><b>Month ends</b><span>Attendance and the Leaves sheet for the month are complete.</span></div>
+    <div class="step"><span class="t">2</span><b>Reviews are written</b><span>Performance and Behaviour rows are keyed in on the Review page, with the month picker set to the month reviewed.</span></div>
+    <div class="step"><span class="t">3</span><b>Criteria are confirmed</b><span>On the Top Performer tab a manager switches on the optional criteria and ticks the ones only a manager can vouch for.</span></div>
+    <div class="step"><span class="t">4</span><b>Names are announced</b><span>The two headline cards name the Top and Lowest performer; the badges beside their names follow across the CRM.</span></div>
+  </div>
+
+  <h3>What feeds the decision</h3>
+  <table>
+    <tr><th style="width:28%">Source</th><th>Where it is entered</th><th style="width:34%">What it decides</th></tr>
+    <tr><td><strong>Behaviour review</strong></td><td>Review page → Behavior tab, month picker on the month judged</td><td>Criterion 1 · Exemplary Behavior</td></tr>
+    <tr><td><strong>Performance review</strong></td><td>Review page → Performance tab (rating and percentage)</td><td>Criterion 9 · Goal Achievement</td></tr>
+    <tr><td><strong>Attendance</strong></td><td>Attendance page → Day Sheet (the check-in bot's record, corrected by hand), every day of the month, judged against the expected login / logout set on the Staff page</td><td>Criterion 2 · Punctuality and Criterion 4 · Timely Login</td></tr>
+    <tr><td><strong>Leaves sheet</strong></td><td>Staff Management → Leaves, rows dated within the month; the <em>Half Day</em> and <em>Late Login</em> columns</td><td>Counts against criteria 2 and 4</td></tr>
+    <tr><td><strong>Manager confirmations</strong></td><td>Review page → Top Performer tab, the chips beside each name</td><td>Criteria 3, 5, 6, 7 and any of 8, 10, 11, 12 that are switched on</td></tr>
+    <tr><td><strong>Month settings</strong></td><td>Top Performer tab — the optional-criteria switches and the Goal Achievement target</td><td>Which criteria are in play, and the percentage bar for criterion 9</td></tr>
+  </table>
+
+  <div class="note">
+    <p><strong>Everything is month-constrained.</strong> Each of the six sources above is stored against a month. Confirmations ticked for August stay with August; switching a criterion on for August does not switch it on for September. Opening a different month shows that month's own answer, and nothing you see is ever carried over from the month before.</p>
+  </div>
+
+</section>
+
+<!-- ─── 2 Review page ─────────────────────────────────────────────────────── -->
+<section id="review" class="section">
+  <h2><span class="num">2</span> Reviewing on the Review page</h2>
+  <p class="lede">The Review page has four tabs. Performance and Behaviour hold one row per person per month; Department holds one score per department per month; Top Performer reads the first two and decides the month. Each rating you choose has a fixed value in the Top Performer calculation, set out below.</p>
+
+  <figure>
+    <img src="images/review-header.jpg" alt="Review page header with tabs" />
+    <figcaption>The header: the month being reviewed, the month picker, a PDF export of whichever tab is open, and the four tabs.</figcaption>
+  </figure>
+
+  <h3 id="performance"><span class="num">2.1</span> Performance tab — ratings and what they are worth</h3>
+  <p>One row per person, grouped under the department they sit in on the Staff page. Each row has a <strong>rating</strong>, a <strong>percentage</strong> and free-text <strong>notes</strong>. The rating and the percentage together decide criterion 9, <em>Goal Achievement</em>, when that criterion is switched on (it is on by default).</p>
+
+  <table>
+    <tr><th style="width:24%">Rating chosen</th><th style="width:22%">Goal Achievement (criterion 9)</th><th>How it is valued</th></tr>
+    <tr><td><span class="pill g">Excellent</span></td><td><span class="pill g">Met</span></td><td>Met on the rating alone. The percentage does not matter for the criterion (it still counts as a tie-break — see 3.3).</td></tr>
+    <tr><td><span class="pill g">Good</span></td><td><span class="pill g">Met</span></td><td>Met on the rating alone, exactly as Excellent is.</td></tr>
+    <tr><td><span class="pill n">Average</span></td><td><span class="pill q">Depends on %</span></td><td>Met only if the percentage reaches the month's <strong>Goal Achievement target</strong> (80% unless changed). 81% with Average is met; 74% with Average is not.</td></tr>
+    <tr><td><span class="pill r">Below Average</span></td><td><span class="pill q">Depends on %</span></td><td>Same rule as Average: the percentage must reach the target. In practice a Below Average row rarely carries a percentage that high.</td></tr>
+    <tr><td><span class="pill r">Poor</span></td><td><span class="pill q">Depends on %</span></td><td>Same rule as Average. A Poor rating with a percentage under the target is not met.</td></tr>
+    <tr><td><span class="pill q">No row, or blank rating and blank %</span></td><td><span class="pill q">? Unknown</span></td><td>Shown as a grey <strong>?</strong> on the Top Performer tab. An unknown criterion is <strong>counted as not met</strong>, so a missing review costs the person a criterion.</td></tr>
+  </table>
+
+  <div class="note">
+    <p><strong>What the percentage does.</strong> Two things. First, it can rescue criterion 9 for an Average / Below Average / Poor rating when it reaches the target. Second, it is the <strong>first tie-break</strong> in the ranking: two people who meet the same number of criteria are ordered by performance percentage, higher first. Enter it for everyone, not only for the people with a middling rating.</p>
+  </div>
+  <p><strong>Notes</strong> are for the person's file and the PDF export; they play no part in the calculation. Elsewhere in the CRM (the Dashboard's Staff view) Excellent and Good are shown green, Average in navy, Below Average and Poor red — the same reading as the table above.</p>
+
+  <figure>
+    <img src="images/performance-sheet.jpg" alt="The Performance tab" />
+    <figcaption>The Performance tab for August 2026. Rows sit under their department band; the <em>+</em> row under each band adds a person. The green $200 and red Low badges beside two names are August's own result, printed back onto the sheet that produced it.</figcaption>
+  </figure>
+
+  <h3 id="behaviour"><span class="num">2.2</span> Behaviour tab — ratings and what they are worth</h3>
+  <p>One row per person with a single <strong>behaviour analysis</strong> rating. It decides criterion 1, <em>Exemplary Behavior</em>, which is always in play.</p>
+
+  <table>
+    <tr><th style="width:28%">Rating chosen</th><th style="width:22%">Exemplary Behavior (criterion 1)</th><th>How it is valued</th></tr>
+    <tr><td><span class="pill g">Consistent Performance</span></td><td><span class="pill g">Met</span></td><td rowspan="5">Any rating other than <em>Low Performer</em> meets the criterion. The five positive wordings are equal for the calculation — they describe the person, they do not score differently. (On the Dashboard, Consistent Performance and Good Standing are shown green and the middle three in navy, but that is presentation only.)</td></tr>
+    <tr><td><span class="pill g">Good Standing</span></td><td><span class="pill g">Met</span></td></tr>
+    <tr><td><span class="pill n">Meets Expectations</span></td><td><span class="pill g">Met</span></td></tr>
+    <tr><td><span class="pill n">On Track</span></td><td><span class="pill g">Met</span></td></tr>
+    <tr><td><span class="pill n">Satisfactory</span></td><td><span class="pill g">Met</span></td></tr>
+    <tr><td><span class="pill r">Low Performer</span></td><td><span class="pill r">Not met</span></td><td>The one rating that fails criterion 1. Because criterion 1 always applies, a Low Performer cannot score 100% for the month.</td></tr>
+    <tr><td><span class="pill q">No row, or blank rating</span></td><td><span class="pill q">? Unknown</span></td><td>Grey <strong>?</strong> on the Top Performer tab, counted as not met.</td></tr>
+  </table>
+
+  <figure>
+    <img src="images/behaviour-sheet.jpg" alt="The Behaviour tab" />
+    <figcaption>The Behavior tab for the same month. Same layout as Performance, without the percentage and notes columns.</figcaption>
+  </figure>
+
+  <h3 id="department"><span class="num">2.3</span> Department tab</h3>
+  <p>A rating and a percentage per department for the month. It is the department scorecard shown on the Dashboard's Staff view and exported to PDF; it <strong>does not feed the Top Performer</strong> calculation, which is about individuals.</p>
+
+  <h4>The name cell</h4>
+  <p>Names are picked from the Staff page roster, and that is how a review is linked to a person. A review written before the person was added to the roster is matched by the printed name, so spell the name as it appears on the Staff page. A row whose name matches nobody on the roster is kept on the sheet but is not scored for anyone.</p>
+</section>
+
+<!-- ─── 3 Top performer ───────────────────────────────────────────────────── -->
+<section id="top" class="section">
+  <h2><span class="num">3</span> How the Top Performer is chosen</h2>
+  <p class="lede">Every person on the roster is judged against the criteria in play for the month. Four verdicts are read from the data; the rest are the manager's confirmations. The score is the share of criteria met, and the two headline cards read the ends of the ranking.</p>
+
+  <figure>
+    <img src="images/top-overview.jpg" alt="The Top Performer tab" />
+    <figcaption>The Top Performer tab: the two headline cards, four summary tiles, the two criteria panels and, below them, the ranking.</figcaption>
+  </figure>
+
+  <h3 id="criteria"><span class="num">3.1</span> The twelve criteria</h3>
+  <p>Criteria 1–7 <strong>always apply</strong>. Criteria 8–12 are the "if applicable" ones: a manager switches on the ones that apply to the month (see section 4), and only those count. Goal Achievement (9) is on unless it is switched off.</p>
+
+  <table>
+    <tr><th style="width:5%">#</th><th style="width:22%">Criterion</th><th style="width:15%">Checked by</th><th>Exact rule used</th></tr>
+    <tr><td class="c">1</td><td><strong>Exemplary Behavior</strong><br><span class="small">Always demonstrate best practices in conduct.</span></td><td>CRM · Review › Behaviour</td><td>Met when the person's behaviour analysis for the month is anything but <em>Low Performer</em>. No row → unknown.</td></tr>
+    <tr><td class="c">2</td><td><strong>Punctuality</strong><br><span class="small">Consistently arrive and complete work on time.</span></td><td>CRM · Attendance + Leaves</td><td>Met when <strong>no day</strong> of the month ended before the person's expected logout (a logout even one minute early counts) <strong>and</strong> the Leaves sheet has no <em>Half Day</em> row for them in the month. Needs at least one day with a login; with no logouts to judge and no Half Day rows, unknown.</td></tr>
+    <tr><td class="c">3</td><td><strong>Documentation</strong><br><span class="small">Record and submit all work in PDF format.</span></td><td>Manager</td><td>Met when a manager has ticked it for the person for this month.</td></tr>
+    <tr><td class="c">4</td><td><strong>Timely Login</strong><br><span class="small">Never delay in logging into work systems.</span></td><td>CRM · Attendance + Leaves</td><td>Met when <strong>no login</strong> in the month is after the person's expected login (no grace period) <strong>and</strong> the Leaves sheet has no <em>Late Login</em> row for them. Needs at least one day with a login; with no expected login set and no Late Login rows, unknown.</td></tr>
+    <tr><td class="c">5</td><td><strong>Active Participation</strong><br><span class="small">Engage in team meetings and contribute ideas for growth.</span></td><td>Manager</td><td>Ticked for the person for this month.</td></tr>
+    <tr><td class="c">6</td><td><strong>Professional Interactions</strong><br><span class="small">Maintain respectful relationships with seniors, management, and teammates.</span></td><td>Manager</td><td>Ticked for the person for this month.</td></tr>
+    <tr><td class="c">7</td><td><strong>Written Task Submission</strong><br><span class="small">Submit all tasks in writing.</span></td><td>Manager</td><td>Ticked for the person for this month.</td></tr>
+    <tr><td class="c">8</td><td><strong>Continuous Learning</strong> <span class="pill q">optional</span><br><span class="small">Actively seek opportunities for professional development.</span></td><td>Manager</td><td>Only counts when switched on for the month; then ticked per person.</td></tr>
+    <tr><td class="c">9</td><td><strong>Goal Achievement</strong> <span class="pill q">optional · on by default</span><br><span class="small">Meet or exceed performance targets and goals.</span></td><td>CRM · Review › Performance</td><td>Met when the performance rating is <em>Excellent</em> or <em>Good</em>, <strong>or</strong> the percentage reaches the month's Goal Achievement target (80% unless changed). No row → unknown.</td></tr>
+    <tr><td class="c">10</td><td><strong>Collaboration</strong> <span class="pill q">optional</span><br><span class="small">Work effectively with others to achieve team objectives.</span></td><td>Manager</td><td>Only counts when switched on; then ticked per person.</td></tr>
+    <tr><td class="c">11</td><td><strong>Innovation</strong> <span class="pill q">optional</span><br><span class="small">Propose and implement new ideas that enhance productivity or efficiency.</span></td><td>Manager</td><td>Only counts when switched on; then ticked per person.</td></tr>
+    <tr><td class="c">12</td><td><strong>Feedback Acceptance</strong> <span class="pill q">optional</span><br><span class="small">Openly receive and act on feedback for improvement.</span></td><td>Manager</td><td>Only counts when switched on; then ticked per person.</td></tr>
+  </table>
+
+  <div class="note warn">
+    <p><strong>Expected hours must be set.</strong> Criteria 2 and 4 are judged against the <em>Expected Login</em> and <em>Expected Logout</em> columns on the Staff page. A person with neither set can never be marked late or early — so both criteria show as unknown for them, which counts as not met. With the default eight criteria in play, the most such a person can score is 6 of 8 = 75%, under the 80% bar: they cannot be Top Performer until their hours are on the Staff page.</p>
+  </div>
+
+  <figure>
+    <img src="images/top-criteria.jpg" alt="The two criteria panels" />
+    <figcaption>The criteria panels. Left: 1–7, always in play. Right: 8–12 with their switches, and the Goal Achievement target under them. Filled numbers are checked by the CRM; outlined numbers are the manager's to confirm.</figcaption>
+  </figure>
+
+  <h3 id="score"><span class="num">3.2</span> How a score is worked out</h3>
+  <div class="formula">Score = criteria met ÷ criteria in play, as a whole percentage</div>
+  <ul>
+    <li><strong>Criteria in play</strong> = the seven core criteria plus whichever of 8–12 are switched on for the month. With the default settings that is 8; with all five optional criteria on it is 12.</li>
+    <li>A criterion is <strong>met</strong> (green tick), <strong>not met</strong> (red cross) or <strong>unknown</strong> (grey ?). Unknown counts as not met — the CRM never gives credit for evidence it does not have.</li>
+    <li>A manager's criterion is met only when ticked. Nothing is assumed.</li>
+  </ul>
+  <p>Example: with 8 criteria in play, a person who meets 7 scores <strong>88%</strong> (7 ÷ 8 = 0.875, rounded). Meeting 3 of 8 scores 38%; 2 of 8 scores 25%.</p>
+
+  <figure>
+    <img src="images/top-ranking-row.jpg" alt="One row of the ranking" />
+    <figcaption>One row of the ranking: rank, person (with department and days present), the four verdicts the CRM checked, the manager's chips, the score bar and the status. This person meets 7 of 8 — Punctuality failed on an early logout — so they are "1 to go".</figcaption>
+  </figure>
+
+  <h3 id="ranking"><span class="num">3.3</span> Ranking order and tie-breaks</h3>
+  <p>The list is ordered by these rules, each one applied only when the previous rule ties:</p>
+  <ol>
+    <li><strong>Criteria met</strong> — more first.</li>
+    <li><strong>Performance percentage</strong> from the Performance tab — higher first. A person with no percentage sorts below anyone who has one.</li>
+    <li><strong>Share of on-time logins</strong> in the month — higher first.</li>
+    <li><strong>Minutes late</strong> summed over the month — fewer first.</li>
+    <li>The roster order on the Staff page, then the name.</li>
+  </ol>
+  <p>People with the same number of criteria met <strong>share a rank number</strong>, the way a leaderboard reads: 1, 2, 3, 3, 3, 6… The tie-breaks decide the order they are printed in, not the number.</p>
+
+  <h3 id="topwho"><span class="num">3.4</span> Who is named Top Performer</h3>
+  <div class="grid2">
+    <div class="card">
+      <h4>The rule</h4>
+      <ol>
+        <li>Take everyone scoring <strong>80% or more</strong> — the <em>Top Performers list</em>.</li>
+        <li>The <strong>highest score</strong> on that list is the Top Performer of the Month, and earns the <strong>$200</strong> incentive.</li>
+        <li>If several people share that highest score, <strong>all of them</strong> are named ("Top performers · tied").</li>
+        <li>If nobody reaches 80%, <strong>nobody</strong> is named: the card reads "No one at 80% yet".</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h4>Top Performer is not the same as Eligible</h4>
+      <p><span class="pill g">Eligible</span> means every criterion in play is met — 100%. It is the incentive mark the client's list describes, and the row is tinted green with a crown.</p>
+      <p><strong>Top Performer</strong> is whoever scores highest once over 80%. In a month where nobody is perfect, the Top Performer is still named (at 88%, say) even though nobody is Eligible. In a month where someone is Eligible, they are necessarily the Top Performer.</p>
+    </div>
+  </div>
+
+  <h3 id="lowwho"><span class="num">3.5</span> Who is named Lowest Performer</h3>
+  <p>The Lowest Performer is the <strong>lowest score</strong> of the month — everyone tied at that score — but <strong>only when naming somebody says something</strong>. All three of these must hold:</p>
+  <ol>
+    <li>At least two people were judged.</li>
+    <li>Somebody scored better — the lowest score is not also the highest. A month with no reviews and no attendance, where everyone scores 0%, therefore names nobody.</li>
+    <li>The lowest score is under 80%.</li>
+  </ol>
+  <p>When the rule does not hold the red card reads "No one behind the rest". The Lowest Performer wears a red <span class="pill r">↓ Low</span> badge beside their name wherever that name is printed in the CRM for that month.</p>
+
+  <div class="note bad">
+    <p><strong>A missing review can make someone the Lowest Performer.</strong> Because unknown counts as not met, a person with no Behaviour row, no Performance row and no attendance scores 0% — and if others have data, they trail. Before announcing the month, make sure every active person has both review rows (the "Have a review this month" tile counts them).</p>
+  </div>
+
+  <h3 id="cards"><span class="num">3.6</span> The headline cards and tiles</h3>
+  <div class="grid2">
+    <figure>
+      <img src="images/top-headlines.jpg" alt="The two headline cards" />
+      <figcaption>Green card: the Top Performer(s) with their score, and the share of the roster on the Top Performers list (80%+). Red card: the Lowest Performer(s) with their score, and the share of the roster under 80%.</figcaption>
+    </figure>
+    <figure>
+      <img src="images/top-tiles.jpg" alt="The four summary tiles" />
+      <figcaption>The tiles count the roster: how many are Eligible (100%), how many pass all four automatic checks, the average score, and how many have at least one review row this month.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ─── 4 Controls ────────────────────────────────────────────────────────── -->
+<section id="controls" class="section">
+  <h2><span class="num">4</span> Optional fields and controls on the Top Performer tab</h2>
+  <p class="lede">Everything below is saved <strong>per month</strong> and, apart from the two display preferences, shared with every manager who opens that month.</p>
+
+  <h3>Additional criteria switches (8–12)</h3>
+  <p>The five toggles in the <em>Additional criteria (if applicable)</em> panel put a criterion in or out of play for the month. A criterion that is off is greyed out and does not appear in the ranking, is not counted in the score, and cannot be ticked. Switching one on adds it to the "criteria in play" total for <strong>everyone</strong> — so every score drops until the criterion is confirmed, which is why it is best to set the switches <em>before</em> ticking.</p>
+  <ul>
+    <li><strong>Goal Achievement (9)</strong> is on by default and is read from the Performance tab.</li>
+    <li>8, 10, 11 and 12 are off by default and, when on, are confirmed by chip like criteria 3, 5, 6 and 7.</li>
+  </ul>
+  <figure class="mid">
+    <img src="images/top-additional-on.jpg" alt="Continuous Learning switched on" />
+    <figcaption>Continuous Learning switched on for the month. The criterion is now in play: 9 criteria instead of 8.</figcaption>
+  </figure>
+  <figure>
+    <img src="images/top-row-nine-criteria.jpg" alt="A row with nine criteria in play" />
+    <figcaption>The same person as before, now judged on 9 criteria. Their 7 met is now 78% instead of 88%, and a fifth chip — Continuous Learning — waits to be confirmed.</figcaption>
+  </figure>
+
+  <h3>Goal Achievement target</h3>
+  <p>The number field under the switches (default <strong>80</strong>, range 0–100). It is the percentage a Performance row must reach for criterion 9 to be met when the rating alone (Excellent / Good) does not meet it. Lowering it to 75 lets an Average · 76% row count; raising it to 90 does not affect Excellent or Good rows at all. It is saved for the month.</p>
+
+  <h3>Confirmation chips (per person)</h3>
+  <p>In the <em>You confirm</em> column each manager-checked criterion is a chip. Tap it to credit that criterion to that person for the month; tap again to take it back. Filled navy means credited. Each tap is saved a moment later — the <strong>Saved / Saving… / Not saved</strong> word beside the ranking title says where it stands — and is visible to every other manager who opens the month.</p>
+  <figure>
+    <img src="images/top-row-ticked.jpg" alt="A row with chips ticked" />
+    <figcaption>Three chips credited on one row. The score and the "to go" status update at once.</figcaption>
+  </figure>
+
+  <h3>Credit to everyone shown (header chips)</h3>
+  <p>The small chips in the column header credit one criterion to <strong>everyone currently shown</strong> in the list in a single tap — useful when, say, every person submitted their PDFs. If everyone shown already has it, the same tap takes it back from all of them. "Shown" respects the search box and the filter below, so you can narrow the list first.</p>
+  <figure>
+    <img src="images/top-ranking-columns.jpg" alt="The column header with credit-all chips" />
+    <figcaption>The column header. Each chip beside "You confirm" credits (or removes) that criterion for everyone in the list.</figcaption>
+  </figure>
+
+  <h3>Re-rank</h3>
+  <p>Scores change with every tick, and a live list would re-sort under your finger — the person you just ticked would jump away. So the first tick <strong>holds the order</strong> on screen. Rank numbers and scores keep updating in place; when the order on screen no longer matches the true ranking a <strong>Re-rank</strong> button appears beside the title. Press it when you have finished ticking to see the real order. Changing the month, or reloading, also restores the true order.</p>
+  <figure>
+    <img src="images/top-rerank.jpg" alt="The Re-rank button" />
+    <figcaption>The Re-rank button appears once ticks have changed the order underneath the held list.</figcaption>
+  </figure>
+
+  <h3>Search, and "Only people who pass every automatic check"</h3>
+  <p>The search box narrows the list by name or department. The checkbox keeps only people whose four CRM-checked criteria (1, 2, 4 and, if on, 9) are all met — the shortlist from which the Eligible people will come. Neither changes any score; they only change who is listed (and who the header chips apply to).</p>
+  <figure>
+    <img src="images/top-only-eligible.jpg" alt="The filter applied with nobody passing" />
+    <figcaption>The filter applied in a month where nobody passes all the automatic checks — the list is empty and says so.</figcaption>
+  </figure>
+
+  <h3>Display preferences (this browser only)</h3>
+  <ul>
+    <li><strong>Hide guide / Show guide</strong> — the three-step "How it works" panel can be hidden; the choice is remembered in this browser only.</li>
+    <li><strong>Folding the criteria panels</strong> — each panel's header folds its list away; also remembered per browser.</li>
+  </ul>
+
+  <h3>PDF</h3>
+  <p>The PDF button in the page header exports whichever tab is open. On the Top Performer tab it prints the ranking exactly as shown — the criteria in play, every verdict, the scores and the incentive mark — as the month's record.</p>
+</section>
+
+<!-- ─── 5 Dates ───────────────────────────────────────────────────────────── -->
+<section id="dates" class="section">
+  <h2><span class="num">5</span> How date filters affect what you see</h2>
+  <p class="lede">A date filter never changes the data or the result. It chooses <strong>which month's answer</strong> a page displays. The green $200 and red Low badges beside a name always belong to one specific month, and each page decides that month from its own filter.</p>
+
+  <table>
+    <tr><th style="width:26%">Page</th><th style="width:30%">Its date filter</th><th>Which month the Top Performer, Lowest Performer and badges speak for</th></tr>
+    <tr><td><strong>Review</strong> (all four tabs)</td><td>Month picker in the header. Opens on the month before the current one.</td><td>The month picked. Change the month and the Top Performer tab re-reads that month's reviews, attendance, leaves, switches and ticks; the badges in the name cells of Performance and Behaviour follow.</td></tr>
+    <tr><td><strong>Staff Management</strong> — Staff tab</td><td>None of its own (a search box). The month picker on the Leaves and Salaries tabs sets the page's month.</td><td>The Leaves / Salaries month — the month before now unless changed. The "Top Performer" preview panel and the badges on the roster show that month.</td></tr>
+    <tr><td><strong>Staff Management</strong> — Leaves, Salaries</td><td>Month picker. Opens on the month before now.</td><td>The month picked.</td></tr>
+    <tr><td><strong>Attendance</strong> — Day Sheet</td><td>A single date. Opens on today.</td><td>The month that date falls in. A day in August wears August's badges; a day in September wears September's.</td></tr>
+    <tr><td><strong>Attendance</strong> — Staff Summary</td><td>Month picker. Opens on the current month.</td><td>The month picked.</td></tr>
+    <tr><td><strong>Attendance</strong> — Staff Reports</td><td>From / To dates, with weekly and monthly presets.</td><td>The month the range <strong>starts</strong> in. A range that straddles two months uses the first.</td></tr>
+    <tr><td><strong>Dashboard</strong> — Staff view</td><td>Month picker. Opens on the current month.</td><td>The <strong>review month</strong> shown on the cards, which is one month <em>behind</em> the picker (attendance for September sits beside August's reviews). Badges follow the reviews.</td></tr>
+    <tr><td><strong>Queues</strong>, <strong>Users</strong>, the sidebar</td><td>No date filter.</td><td>The month a review is written about: the month before the current one.</td></tr>
+  </table>
+
+  <h3>The roster is judged as of the month</h3>
+  <p>Someone marked <em>Inactive</em> on the Staff page today is still ranked in a past month if that month holds any evidence for them — an attendance day, a Leaves row or a review. They were on the team that month, so they compete for that month. Active and On-leave staff are always ranked. A person with no evidence at all in a month is still ranked if they are Active — at 0% if nothing was recorded.</p>
+
+  <h3>The current month is provisional</h3>
+  <p>The picker allows the month in progress. The result then rests on partial attendance and, usually, no reviews yet — so most people show grey ? verdicts and nobody reaches 80%. Treat it as a preview; the month's real answer is read once its reviews are in.</p>
+
+  <div class="grid2">
+    <figure>
+      <img src="images/attendance-day.jpg" alt="Attendance day sheet for 31 August" />
+      <figcaption>The Day Sheet on 31 August 2026: the Low badges are August's Lowest Performers.</figcaption>
+    </figure>
+    <figure>
+      <img src="images/dashboard-staff.jpg" alt="Dashboard staff view" />
+      <figcaption>The Dashboard's Staff view on September 2026 — reviews and badges are for August, as the subtitle says.</figcaption>
+    </figure>
+  </div>
+  <div class="grid2">
+    <figure>
+      <img src="images/staff-page.jpg" alt="Staff Management with the Top Performer preview" />
+      <figcaption>Staff Management: the Top Performer preview panel and the roster badges follow the page's month (August 2026 here).</figcaption>
+    </figure>
+    <figure>
+      <img src="images/month-picker.jpg" alt="The month picker on the Review page" />
+      <figcaption>The month picker used on Review, Staff Management, the Attendance Staff Summary and the Dashboard's Staff view. Step with the chevrons, or open the grid to jump to any month of any year.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ─── 6 Example ─────────────────────────────────────────────────────────── -->
+<section id="example" class="section">
+  <h2><span class="num">6</span> Worked example — August 2026</h2>
+  <p class="lede">The month in the screenshots, with the default settings: 8 criteria in play (1–7 plus Goal Achievement), target 80%.</p>
+
+  <h3>Top Performer: Amara Oduya, 88%</h3>
+  <table>
+    <tr><th style="width:5%">#</th><th style="width:26%">Criterion</th><th style="width:12%">Verdict</th><th>Evidence</th></tr>
+    <tr><td class="c">1</td><td>Exemplary Behavior</td><td><span class="pill g">Met</span></td><td>Behaviour tab: <em>Meets Expectations</em>.</td></tr>
+    <tr><td class="c">2</td><td>Punctuality</td><td><span class="pill r">Not met</span></td><td>Logged out 17:30 on 31 Aug against an expected 18:00 — one early logout of one judged.</td></tr>
+    <tr><td class="c">3</td><td>Documentation</td><td><span class="pill g">Met</span></td><td>Confirmed by the manager.</td></tr>
+    <tr><td class="c">4</td><td>Timely Login</td><td><span class="pill g">Met</span></td><td>Logged in 09:00 against an expected 09:00; no Late Login row on Leaves.</td></tr>
+    <tr><td class="c">5</td><td>Active Participation</td><td><span class="pill g">Met</span></td><td>Confirmed.</td></tr>
+    <tr><td class="c">6</td><td>Professional Interactions</td><td><span class="pill g">Met</span></td><td>Confirmed.</td></tr>
+    <tr><td class="c">7</td><td>Written Task Submission</td><td><span class="pill g">Met</span></td><td>Confirmed.</td></tr>
+    <tr><td class="c">9</td><td>Goal Achievement</td><td><span class="pill g">Met</span></td><td>Performance tab: <em>Excellent · 95%</em> — met on the rating.</td></tr>
+    <tr><td></td><td><strong>Score</strong></td><td colspan="2"><strong>7 of 8 = 88%</strong> — over the 80% bar and the highest in the month, so Top Performer and the $200 incentive. Not <em>Eligible</em> (100%) because of the early logout: "1 to go".</td></tr>
+  </table>
+
+  <h3>Lowest Performers: three people tied at 0%</h3>
+  <p>Juno Castellanos, Noor Haddad and Tomas Varga each score 0 of 8. Juno's Behaviour row is <em>Low Performer</em> (criterion 1 not met) and their Performance row is <em>Poor · 67%</em> (under the 80% target, criterion 9 not met); the two attendance criteria are unknown because they had no recorded day in the month, and the four manager criteria are unticked. Noor and Tomas have no review rows at all and no attendance, so every criterion is unknown or unticked. The rule for naming a Lowest Performer holds — more than one person, somebody scored better, 0% is under 80% — so all three tied at the bottom are named.</p>
+
+  <h3>Everyone in between</h3>
+  <p>Corin Whitlock meets 3 of 8 (38%): Behaviour, Punctuality and Goal Achievement, with a late login (09:14 against an expected 08:30) failing Timely Login, and no chips yet. Six people sit at 25% and share rank 3 — Behaviour and Goal Achievement met from their reviews, nothing confirmed, and attendance either unknown (no recorded day in August) or failed. The tie-breaks order them: Farrah Idris and Kwame Boateng (95%) print above Goran Milic, Lior Ashkenazi and Benicio Sarto (88%), and Benicio prints last of those three because his one login was 7 minutes late. Five people sit at 13% (rank 9): one criterion met each, whether a Behaviour rating with a Performance row under the target, or — Dafna Klein — a full day's attendance with no review rows at all.</p>
+  <p>Kwame Boateng is marked <em>Inactive</em> on the Staff page today, but August holds a Leaves row and both review rows for him, so he is ranked for August. Juno Castellanos has a <em>Late Login</em> row on the Leaves sheet, but with no attendance day recorded in the month the attendance criteria stay unknown rather than failed — a Leaves mark only counts against a month that has attendance to judge.</p>
+
+  <figure class="tall">
+    <img src="images/top-ranking.jpg" alt="The August 2026 ranking" />
+    <figcaption>The August 2026 ranking as it stands, before any further confirmations.</figcaption>
+  </figure>
+</section>
+
+<!-- ─── 7 Checklist ───────────────────────────────────────────────────────── -->
+<section id="checklist" class="section">
+  <h2><span class="num">7</span> Reviewer's checklist</h2>
+  <p class="lede">Work through this once a month, in this order, before announcing the names.</p>
+
+  <h3>Before you open the Top Performer tab</h3>
+  <ol>
+    <li><strong>Staff page:</strong> every active person has an Expected Login and Expected Logout. Without them criteria 2 and 4 are unknown and the person cannot pass 75%.</li>
+    <li><strong>Attendance:</strong> the month's days are complete and corrected — a wrong logout time is an early-out against the person.</li>
+    <li><strong>Leaves sheet:</strong> Half Day and Late Login rows are entered for the month (these count against criteria 2 and 4 even when the attendance record looks clean).</li>
+    <li><strong>Review page, month picker on the month judged:</strong> a Performance row (rating <em>and</em> percentage) and a Behaviour row for every active person. Names picked from the roster.</li>
+  </ol>
+
+  <h3>On the Top Performer tab</h3>
+  <ol start="5">
+    <li>Set the <strong>additional criteria switches</strong> and the <strong>Goal Achievement target</strong> for the month first, before ticking.</li>
+    <li>Confirm the manager criteria per person, only once seen. Use the header chips for anything that applies to everybody.</li>
+    <li>Press <strong>Re-rank</strong>. Check the two headline cards.</li>
+    <li>Confirm the status word reads <strong>Saved</strong>.</li>
+    <li>Export the <strong>PDF</strong> as the month's record.</li>
+  </ol>
+
+  <div class="note good">
+    <p><strong>Fairness rules of thumb.</strong> The same rating means the same thing for everyone — Good and Excellent both meet Goal Achievement; every Behaviour wording but Low Performer meets Exemplary Behavior. A criterion nobody ticks is a criterion nobody meets, so if a criterion is switched on it must be confirmed for everyone who deserves it, not only the front-runners. And the month is the unit: what happened in July is never read into August.</p>
+  </div>
+</section>
+
+<!-- ─── 8 Glossary ────────────────────────────────────────────────────────── -->
+<section id="glossary" class="section">
+  <h2><span class="num">8</span> Quick reference — badges and pills</h2>
+  <table>
+    <tr><th style="width:30%">Mark</th><th>Meaning</th></tr>
+    <tr><td><span class="pill g">♛ $200 incentive</span> / <span class="pill g">$200</span></td><td>Top Performer of the month the page is showing. Hover for the month and the incentive.</td></tr>
+    <tr><td><span class="pill r">↓ Low performer</span> / <span class="pill r">Low</span></td><td>Lowest Performer of the month the page is showing.</td></tr>
+    <tr><td><span class="pill g">✓ Eligible</span></td><td>Every criterion in play met — 100%. Row tinted green; the rank badge becomes a crown.</td></tr>
+    <tr><td><span class="pill n">● 2 to go</span> / <span class="pill q">● 5 to go</span></td><td>How many criteria the person still lacks. Navy when two or fewer.</td></tr>
+    <tr><td><span class="pill g">✓ Criterion</span></td><td>CRM-checked criterion met. Hover for the evidence it was read from.</td></tr>
+    <tr><td><span class="pill r">✕ Criterion</span></td><td>CRM-checked criterion not met. Hover for what failed it ("2 late logins of 20", "1 Half Day on Leaves"…).</td></tr>
+    <tr><td><span class="pill q">? Criterion</span></td><td>Nothing recorded to judge — no review row, no attendance, or no expected hours. Counts as not met.</td></tr>
+    <tr><td><span class="pill b">✓ Criterion</span> (filled chip)</td><td>Manager-confirmed criterion, credited for this person this month.</td></tr>
+    <tr><td><span class="pill q">Criterion</span> (outlined chip)</td><td>Manager criterion not yet confirmed for this person.</td></tr>
+    <tr><td><strong>Saved · Saving… · Not saved</strong></td><td>Whether the month's ticks and switches are on the server. "Not saved — check your connection" means the last change is only in this browser.</td></tr>
+    <tr><td><strong>Re-rank</strong></td><td>The order on screen is held while you tick; press to restore the true order.</td></tr>
+  </table>
+
+  <table style="margin-top:6mm">
+    <tr><th style="width:30%">Number</th><th>Where it comes from</th></tr>
+    <tr><td><strong>80%</strong></td><td>The bar for the Top Performers list, and the threshold under which a Lowest Performer can be named. Fixed.</td></tr>
+    <tr><td><strong>$200</strong></td><td>The month's incentive, printed on the green badge. Fixed.</td></tr>
+    <tr><td><strong>Goal Achievement target (80 by default)</strong></td><td>Editable per month on the Top Performer tab. The percentage that meets criterion 9 for a rating below Good.</td></tr>
+    <tr><td><strong>8 criteria (by default)</strong></td><td>1–7 always, plus Goal Achievement. Each optional criterion switched on adds one to the total everyone is scored out of.</td></tr>
+  </table>
+</section>
+
+</body>
+</html>

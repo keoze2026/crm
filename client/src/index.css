@@ -86,6 +86,17 @@ body {
   .sidebar-nav:hover {
     scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
   }
+  /* Scrolls, but shows no bar — for a panel inside a fixed-height card, where a track
+     would eat into a column that is already narrow. The content still scrolls with the
+     wheel, a trackpad, touch and the keyboard. */
+  .no-scrollbar {
+    scrollbar-width: none;            /* Firefox */
+    -ms-overflow-style: none;         /* old Edge */
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
   /* Dark glass panel (e.g. login card frame on the grid backdrop). */
   .glass-dark {
     background-color: rgba(17, 24, 39, 0.65);

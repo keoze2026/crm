@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import './index.css'
 import { AuthProvider } from './auth/AuthContext'
+import { PerformerProvider } from './lib/performers'
 import RequireAuth from './auth/RequireAuth'
 import RequirePage from './auth/RequirePage'
 import Layout from './components/Layout'
@@ -58,7 +59,11 @@ const router = createBrowserRouter([
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AuthProvider>
-      <RouterProvider router={router} />
+      {/* The month's top and lowest performer, so their badges show beside their name on
+          every page — fetched once, inside the session. */}
+      <PerformerProvider>
+        <RouterProvider router={router} />
+      </PerformerProvider>
     </AuthProvider>
   </StrictMode>,
 )

@@ -4,8 +4,8 @@
  * The twelve criteria are the client's own list, kept in their numbering and wording. Four
  * of them are read off fields the CRM already keeps for the month:
  *   1 Exemplary Behavior  ← Review page · Behaviour tab (the behaviour analysis rating)
- *   2 Punctuality         ← Complete Attendance (logout vs expected logout) + Leaves (Half Day)
- *   4 Timely Login        ← Complete Attendance (login vs expected login) + Leaves (Late Login)
+ *   2 Punctuality         ← Attendance day sheet (logout vs expected logout) + Leaves (Half Day)
+ *   4 Timely Login        ← Attendance day sheet (login vs expected login) + Leaves (Late Login)
  *   9 Goal Achievement    ← Review page · Performance tab (rating and percentage)
  * The other eight are nothing the CRM records (documents, meetings, feedback…), so they
  * are confirmed by the manager per person.
@@ -42,9 +42,9 @@ export interface Criterion {
 
 export const CRITERIA: Criterion[] = [
   { id: 'behaviour', n: 1, label: 'Exemplary Behavior', detail: 'Always demonstrate best practices in conduct.', group: 'core', source: 'behaviour', how: 'Their behaviour analysis on the Review page for this month is anything but "Low Performer".' },
-  { id: 'punctuality', n: 2, label: 'Punctuality', detail: 'Consistently arrive and complete work on time.', group: 'core', source: 'attendance', how: 'Every day on Complete Attendance ran to their expected logout, and the Leaves sheet has no Half Day against them.' },
+  { id: 'punctuality', n: 2, label: 'Punctuality', detail: 'Consistently arrive and complete work on time.', group: 'core', source: 'attendance', how: 'Every day on the Attendance sheet ran to their expected logout, and the Leaves sheet has no Half Day against them.' },
   { id: 'documentation', n: 3, label: 'Documentation', detail: 'Record and submit all work in PDF format.', group: 'core', source: 'manual' },
-  { id: 'login', n: 4, label: 'Timely Login', detail: 'Never delay in logging into work systems.', group: 'core', source: 'attendance', how: 'No login on Complete Attendance is after their expected login, and the Leaves sheet has no Late Login against them.' },
+  { id: 'login', n: 4, label: 'Timely Login', detail: 'Never delay in logging into work systems.', group: 'core', source: 'attendance', how: 'No login on the Attendance sheet is after their expected login, and the Leaves sheet has no Late Login against them.' },
   { id: 'participation', n: 5, label: 'Active Participation', detail: 'Engage in team meetings and contribute ideas for growth.', group: 'core', source: 'manual' },
   { id: 'professional', n: 6, label: 'Professional Interactions', detail: 'Maintain respectful relationships with seniors, management, and teammates.', group: 'core', source: 'manual' },
   { id: 'written', n: 7, label: 'Written Task Submission', detail: 'Submit all tasks in writing.', group: 'core', source: 'manual' },
@@ -108,7 +108,14 @@ export interface AttendanceDayLite {
   logout_at: string | null
 }
 
-/** Build every person's evidence from the month's sheets. Inactive staff are left out. */
+/**
+ * Build every person's evidence from the month's sheets.
+ *
+ * The roster is judged AS OF THE MONTH: somebody marked Inactive today is left out unless
+ * the month holds something for them — an attendance day, a leave row or a review — in
+ * which case they were on the team that month and rank with everyone else. Active and
+ * on-leave staff always rank.
+ */
 export function buildCandidates(
   staff: StaffMember[],
   attendance: AttendanceDayLite[],
@@ -124,8 +131,11 @@ export function buildCandidates(
   const find = (entries: ReviewEntry[], m: StaffMember) =>
     entries.find((e) => e.staff_id === m.id) ?? entries.find((e) => e.person_name.trim().toLowerCase() === m.name.trim().toLowerCase()) ?? null
 
+  const inMonth = (m: StaffMember) =>
+    (days.get(m.id)?.length ?? 0) > 0 || (leaveRows.get(m.id)?.length ?? 0) > 0 || find(performance, m) !== null || find(behaviour, m) !== null
+
   return staff
-    .filter((m) => m.status !== 'inactive')
+    .filter((m) => m.status !== 'inactive' || inMonth(m))
     .map((m) => {
       const own = days.get(m.id) ?? []
       const present = own.filter((d) => d.login_at)
@@ -265,4 +275,54 @@ export function toWire(settings: IncentiveSettings, ticks: ManualTicks): Pick<To
   const out: Record<string, string[]> = {}
   for (const [staffId, ids] of Object.entries(ticks)) if (ids.length) out[staffId] = ids
   return { settings: { additional: settings.additional, min_performance: settings.minPerformance }, ticks: out }
+}
+
+// ─── Who is top, who is bottom ────────────────────────────────────────────────
+//
+// The month's two names, decided from the same ranking the sheet shows, so the Review tab,
+// the scorecards and the badges worn beside staff names everywhere else can never disagree.
+
+/** What the month's incentive is worth — the green badge says so. */
+export const INCENTIVE_USD = 200
+
+/** The score that puts someone on the Top Performers list. */
+export const TOP_PERFORMER_PCT = 80
+
+/** A person's score as a whole percentage of the criteria in play. */
+export const scorePct = (r: RankedRow) => Math.round((r.met / Math.max(1, r.total)) * 100)
+
+export interface PerformerPicks {
+  /** Everyone tied at the best score, provided it reaches TOP_PERFORMER_PCT. */
+  top: RankedRow[]
+  /** Everyone tied at the worst score — empty unless there is a real spread (see below). */
+  low: RankedRow[]
+  /** Everyone at or above TOP_PERFORMER_PCT, the Top Performers list itself. */
+  listed: RankedRow[]
+  topPct: number
+  lowPct: number
+}
+
+/**
+ * The month's ends.
+ *
+ * Top is the highest scorer (or the people tied with them) once they clear the 80% bar —
+ * the same rule the headline has always used. Bottom is the lowest scorer, but only when
+ * naming one says something: there must be at least two people, somebody must have scored
+ * better, and the score must itself be under the bar. A month where everyone scored the
+ * same — including a month with no reviews at all, where everyone scores zero — names
+ * nobody, rather than pinning a red badge on whoever happens to sort last.
+ */
+export function pickPerformers(rows: RankedRow[]): PerformerPicks {
+  const listed = rows.filter((r) => scorePct(r) >= TOP_PERFORMER_PCT)
+  const topPct = listed.length ? Math.max(...listed.map(scorePct)) : 0
+  const lowPct = rows.length ? Math.min(...rows.map(scorePct)) : 0
+  const best = rows.length ? Math.max(...rows.map(scorePct)) : 0
+  const spread = rows.length > 1 && lowPct < best && lowPct < TOP_PERFORMER_PCT
+  return {
+    top: listed.filter((r) => scorePct(r) === topPct),
+    low: spread ? rows.filter((r) => scorePct(r) === lowPct) : [],
+    listed,
+    topPct,
+    lowPct,
+  }
 }

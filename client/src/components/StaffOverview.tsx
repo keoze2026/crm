@@ -7,6 +7,7 @@
 // language as the Dashboard: white cards, navy accents, green/red only for good/bad.
 import { useState } from 'react'
 import { api } from '../api/client'
+import { PerformerBadge } from '../lib/performers'
 import { Spinner, cx } from './ui'
 import { gapLabel, lateBy, staffStatus } from '../lib/staff'
 import { BRAND } from '../lib/theme'
@@ -65,7 +66,7 @@ export default function StaffOverview({ staff, departments, today, todayRows, to
   onDepartmentsChanged: () => void
   /** The org's day, "YYYY-MM-DD". */
   today: string
-  /** Today's rows from Complete Attendance. */
+  /** Today's rows from the Attendance page's day sheet. */
   todayRows: StaffAttendanceRow[]
   todayLoading: boolean
   /** The Top Performer ranking for the month, or null while it loads / when nothing applies. */
@@ -235,17 +236,17 @@ export default function StaffOverview({ staff, departments, today, todayRows, to
             <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-3 text-[11px]">
               {late.map(({ m, min }) => (
                 <span key={m.id} className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-1.5 py-0.5 font-medium text-rose-700 ring-1 ring-inset ring-rose-200">
-                  {m.name} <span className="tabular-nums">{gapLabel(min)} late</span>
+                  {m.name} <PerformerBadge staffId={m.id} compact /> <span className="tabular-nums">{gapLabel(min)} late</span>
                 </span>
               ))}
               {notIn.slice(0, 6).map((m) => (
                 <span key={m.id} className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-1.5 py-0.5 text-slate-500">
-                  <span className={cx('h-1.5 w-1.5 rounded-full', staffStatus(m.status).dot)} />{m.name} <span className="text-slate-400">not in</span>
+                  <span className={cx('h-1.5 w-1.5 rounded-full', staffStatus(m.status).dot)} />{m.name} <PerformerBadge staffId={m.id} compact /> <span className="text-slate-400">not in</span>
                 </span>
               ))}
               {notIn.length > 6 && <span className="text-slate-400">+{notIn.length - 6} more</span>}
               <button type="button" onClick={onOpenAttendance} className="ml-auto inline-flex items-center gap-1 font-semibold text-brand hover:underline">
-                Complete Attendance <IconArrowR />
+                Attendance <IconArrowR />
               </button>
             </div>
           )}
@@ -273,7 +274,10 @@ export default function StaffOverview({ staff, departments, today, todayRows, to
                       <Avatar name={r.candidate.member.name} />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center justify-between gap-2">
-                          <span className="truncate text-xs font-semibold text-slate-800">{r.candidate.member.name}</span>
+                          <span className="flex min-w-0 items-center gap-1 truncate text-xs font-semibold text-slate-800">
+                            <span className="truncate">{r.candidate.member.name}</span>
+                            <PerformerBadge staffId={r.candidate.member.id} compact />
+                          </span>
                           <span className="shrink-0 text-[11px] font-semibold tabular-nums text-slate-600">{r.met}/{r.total}</span>
                         </span>
                         <span className="mt-1 block h-1 overflow-hidden rounded-full bg-slate-100">

@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api/client'
+import { PerformerBadge } from '../lib/performers'
 import { anchorTo, focusQuietly, type Anchor } from '../lib/popover'
 import { matches } from '../lib/queues'
 import { STAFF_STATUSES, staffStatus } from '../lib/staff'
@@ -109,13 +110,16 @@ function Row({
     <tr className={rowCls}>
       <td className={idxCell}>{index}</td>
       <td className={cellCls}>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={saveName}
-          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
-          className={cx(fieldCls, 'font-semibold')}
-        />
+        <div className="flex items-center gap-1">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={saveName}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+            className={cx(fieldCls, 'font-semibold')}
+          />
+          <PerformerBadge staffId={person.id} compact />
+        </div>
       </td>
       <td className={cellCls}>
         <DepartmentPicker

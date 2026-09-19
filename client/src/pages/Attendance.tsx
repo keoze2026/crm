@@ -10,16 +10,24 @@ import {
 } from 'recharts'
 import { api, fmtAttendanceTime } from '../api/client'
 import { useAsync } from '../lib/useAsync'
-import type { AttendanceBreakRecord, AttendanceDay, AttendanceOnBreak, AttendanceStaff } from '../types'
+import type {
+  AttendanceBreakRecord, AttendanceDay, AttendanceOnBreak,
+  StaffAttendanceRow, StaffMember,
+} from '../types'
+import StaffAttendanceSheet, { StatusTag } from '../components/StaffAttendanceSheet'
+import { buildStaffAttendancePdf } from '../lib/sheetPdf'
 import { PageHeader } from '../components/Layout'
 import { Button, CardHeader, Modal, PageLoader, SegmentedTabs, Spinner, cx } from '../components/ui'
 import { BRAND } from '../lib/theme'
 import type { Range } from '../components/DateRange'
 import { fileDateRange } from '../lib/format'
 import {
-  ORG_TZ, clockLabel, gapLabel, orgToday, punctuality, tallyPunctuality, type Punctuality,
+  ORG_TZ, clockLabel, earlyBy, gapLabel, impliedStatus, lateBy, loginTallies, monthRange,
+  netHours, orgToday, punctuality, sumLoginTallies, tallyPunctuality,
+  type LoginTally, type Punctuality,
 } from '../lib/staff'
 import PunctualityBadge from '../components/PunctualityBadge'
+import { PerformerBadge, PerformerScope } from '../lib/performers'
 import { saveXlsx } from '../lib/xlsx'
 import {
   aggregateBreaks,
@@ -153,12 +161,6 @@ function Avatar({ name, size = 28 }: { name: string | null; size?: number }) {
   )
 }
 
-function StatusBadge({ row }: { row: AttendanceDay }) {
-  if (!row.present) return <span className="text-slate-400 text-xs">—</span>
-  if (row.still_in) return <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">Checked in</span>
-  return <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Checked out</span>
-}
-
 /**
  * Minutes late against the expected login kept for that person on the Staff page, as a
  * plain number for the cells that only need "how far off, if at all".
@@ -184,9 +186,9 @@ const earlyMinutes = (r: AttendanceDay): number => r.early_min ?? 0
  * not "on time". The two ends are not judged on the same terms, because the marks they come
  * from aren't either — a login falls back to this page's flat 9:00 AM when no schedule is
  * set (lateMinutes), a logout has no such fallback and simply isn't judged. That is why a
- * person with no schedule at all can read "Late in" here while the Complete Attendance
- * sheet, which never falls back, leaves the same day unmarked. Setting their expected hours
- * on the Staff tab is what makes the two pages agree.
+ * person with no schedule at all can read "Late in" in the summaries while the day sheet,
+ * which never falls back, leaves the same day unmarked. Setting their expected hours on
+ * Staff Management is what makes the two tabs agree.
  */
 function dayFlag(r: AttendanceDay): Punctuality | null {
   return punctuality(
@@ -223,15 +225,6 @@ function ScheduleTime({ at, off, word, expected }: {
   )
 }
 
-function BreakStatusBadge({ overMin }: { overMin: number }) {
-  if (overMin > 0) return <span className="inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold bg-red-50 text-red-700">OVER by {overMin}m</span>
-  return <span className="inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-700">OK</span>
-}
-
-/**
- * A break's "Returned" cell in the bot's three states: the time they came back, `Out till
- * EOD` once the end-of-day cutoff has passed with no return, or still out.
- */
 function ReturnedCell({ b }: { b: AttendanceBreakRecord }) {
   if (b.returned_at) return <span className="tabular-nums text-slate-700">{fmtAttendanceTime(b.returned_at)}</span>
   if (b.out_till_eod) return <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-rose-700">Out till EOD</span>
@@ -241,26 +234,6 @@ function ReturnedCell({ b }: { b: AttendanceBreakRecord }) {
 /**
  * The day's late returns — how many breaks came back past stated + grace and by how much in
  * all — with any never returned from called out, since those are the ones to chase.
- */
-function LateReturnBadge({ row }: { row: AttendanceDay }) {
-  if (row.late_return_count === 0) return <span className="text-xs text-slate-400">—</span>
-  return (
-    <span
-      title={`${row.late_return_count} break${row.late_return_count === 1 ? '' : 's'} back later than stated + grace`}
-      className="inline-flex items-center gap-1 whitespace-nowrap rounded bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700"
-    >
-      {row.late_return_count}× · +{gapLabel(row.late_return_min)}
-      {row.out_till_eod_count > 0 && (
-        <span className="rounded bg-rose-100 px-1 text-[10px] font-bold uppercase">{row.out_till_eod_count} EOD</span>
-      )}
-    </span>
-  )
-}
-
-/**
- * Every break one person took on one day, as the bot recorded it: what they said, when they
- * actually came back, and how late that was. The stated minutes are what the allowance is
- * judged on and the measured ones are what the late flag is, so the two sit side by side.
  */
 function BreakDetailModal({ row, onClose }: { row: AttendanceDay; onClose: () => void }) {
   const req = useAsync(() => api.attendanceBreaks(row.user_id, row.work_date), [row.user_id, row.work_date])
@@ -339,8 +312,8 @@ function DayStatus({ row }: { row: AttendanceDay }) {
  * more useful statement than an empty space where the panel would have been.
  */
 function LateLoginPanel({ rows, onTime, date }: {
-  /** Late rows only, already ordered worst first. */
-  rows: AttendanceDay[]
+  /** Late days only, already ordered worst first. */
+  rows: DayView[]
   onTime: number
   date: string
 }) {
@@ -369,16 +342,17 @@ function LateLoginPanel({ rows, onTime, date }: {
           <p className="text-xs text-emerald-600">✓ Nobody logged in late on this date</p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
-            {rows.map((r) => (
+            {rows.map((d) => (
               <span
-                key={r.user_id}
-                title={`Logged in ${fmtAttendanceTime(r.login_at)}${r.expected_login ? ` — expected ${clockLabel(r.expected_login)}` : ' — expected 9:00 AM'}`}
+                key={d.person.id}
+                title={`Logged in ${clockLabel(d.login)} — expected ${clockLabel(d.person.expected_login)}`}
                 className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 ring-1 ring-rose-200"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                {r.staff_name || r.username || r.user_id}
-                <span className="font-bold tabular-nums">{gapLabel(lateMinutes(r))}</span>
-                <span className="text-rose-400 tabular-nums">{fmtAttendanceTime(r.login_at)}</span>
+                {d.person.name}
+                <PerformerBadge staffId={d.person.id} compact />
+                <span className="font-bold tabular-nums">{gapLabel(d.lateMin ?? 0)}</span>
+                <span className="text-rose-400 tabular-nums">{clockLabel(d.login)}</span>
               </span>
             ))}
           </div>
@@ -438,7 +412,7 @@ type Tab = 'roster' | 'summary' | 'reports'
 
 const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
   {
-    id: 'roster', label: 'Daily Roster',
+    id: 'roster', label: 'Day Sheet',
     icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>,
   },
   {
@@ -468,7 +442,7 @@ export default function Attendance() {
 
   return (
     <div>
-      <PageHeader title="Attendance" subtitle="Team check-in / check-out via Telegram bot">
+      <PageHeader title="Attendance" subtitle="The team's day: the check-in bot's record, corrected by hand where it is wrong">
         <span className="text-xs text-slate-400 tabular-nums">{clock}</span>
       </PageHeader>
 
@@ -483,90 +457,168 @@ export default function Attendance() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-//  Daily roster  (logic unchanged — styled like the Dashboard)
+//  The day sheet — the CRM's one attendance table
+//
+//  It was two: the bot's read-only roster here, and an editable "Complete Attendance"
+//  sheet on the Staff page, each showing the same day and each able to contradict the
+//  other. This is both — the sheet's spreadsheet layout and its editable cells, carrying
+//  the bot's breaks, returns and live state, over the whole roster rather than only the
+//  people the bot happened to record.
 // ════════════════════════════════════════════════════════════════════════════════
 
-const PER_PAGE = 15
+/**
+ * One person's day, as the whole CRM now reads it: what is stored for them (the bot's
+ * record, or the correction that replaces it), with the bot's own extras beside it.
+ *
+ * Everything on this tab — the cards, the panels, the sheet — is derived from this one
+ * list, so no figure above the table can contradict the row under it.
+ */
+interface DayView {
+  person: StaffMember
+  /** The stored day: the bot's, or the row keyed in over it. Null when there is none. */
+  row: StaffAttendanceRow | null
+  /** The bot's own record, for breaks, returns and its account. Null when it has none. */
+  bot: AttendanceDay | null
+  login: string | null
+  logout: string | null
+  breakMin: number
+  /** The status on record, or the one the clock times imply where none is stored. */
+  status: string
+  statusSet: boolean
+  lateMin: number | null
+  earlyMin: number | null
+  flag: Punctuality | null
+  hours: number | null
+}
+
+/** The statuses that count as a day at work — the same rule the server counts by. */
+const AT_WORK = ['present', 'half day', 'still in']
 
 function RosterView() {
   const [date, setDate] = useState(todayEST())
   const [search, setSearch] = useState('')
-  const [page, setPage] = useState(0)
-  const [sortKey, setSortKey] = useState('login_at')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
-
-  const rosterReq = useAsync(() => api.attendanceRoster(date), [date])
-  const staffReq = useAsync(() => api.attendanceStaff(), [])
-  const liveReq = useAsync(() => api.attendanceLive(), [])
-  const overBreakReq = useAsync(() => api.attendanceExceptions('over_break', date, date), [date])
-  const onBreakReq = useAsync(() => api.attendanceOnBreak(), [])
-  const lateReturnReq = useAsync(() => api.attendanceExceptions('late_return', date, date), [date])
   const [breakRow, setBreakRow] = useState<AttendanceDay | null>(null)
+  const month = date.slice(0, 7)
 
-  const rows = useMemo(() => rosterReq.data?.rows ?? [], [rosterReq.data])
-  const onlineIds = useMemo(() => new Set((liveReq.data ?? []).map((m: AttendanceDay) => m.user_id)), [liveReq.data])
+  // The roster drives the sheet: everybody gets a row for the day, whether the bot saw
+  // them or not. The bot's own roster comes along for what only it knows.
+  const staffReq = useAsync(() => api.staff(), [])
+  const sheetReq = useAsync(() => api.staffAttendance({ from: date, to: date }), [date])
+  const monthReq = useAsync(() => api.staffAttendance(monthRange(month)), [month])
+  const rosterReq = useAsync(() => api.attendanceRoster(date), [date])
+  const liveReq = useAsync(() => api.attendanceLive(), [])
+  const onBreakReq = useAsync(() => api.attendanceOnBreak(), [])
+  const overBreakReq = useAsync(() => api.attendanceExceptions('over_break', date, date), [date])
+  const lateReturnReq = useAsync(() => api.attendanceExceptions('late_return', date, date), [date])
 
-  const filtered = useMemo(() => {
-    const data = rows.filter((r) =>
-      !search ||
-      (r.staff_name ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (r.username ?? '').toLowerCase().includes(search.toLowerCase())
-    )
-    return [...data].sort((a, b) => {
-      const va = (a as unknown as Record<string, unknown>)[sortKey]
-      const vb = (b as unknown as Record<string, unknown>)[sortKey]
-      if (va == null) return 1; if (vb == null) return -1
-      const sa = typeof va === 'string' ? va.toLowerCase() : va
-      const sb = typeof vb === 'string' ? vb.toLowerCase() : vb
-      return sortDir === 'asc' ? (sa > sb ? 1 : -1) : (sa < sb ? 1 : -1)
+  const people = useMemo(() => staffReq.data ?? [], [staffReq.data])
+  // useAsync keeps the previous answer up while the next is in flight, so a day change
+  // would briefly show yesterday's rows against today's date. The sheet is only fed rows
+  // it can prove belong to the day on screen.
+  const sheetRows = useMemo(
+    () => (sheetReq.data?.from === date ? sheetReq.data.rows : []),
+    [sheetReq.data, date],
+  )
+  const botRows = useMemo(
+    () => (rosterReq.data?.date === date ? rosterReq.data.rows : []),
+    [rosterReq.data, date],
+  )
+  const allowance = rosterReq.data?.breakAllowanceMin ?? 60
+
+  const botByStaff = useMemo(() => {
+    const m = new Map<number, AttendanceDay>()
+    for (const r of botRows) if (r.staff_id != null && r.bot_seen) m.set(r.staff_id, r)
+    return m
+  }, [botRows])
+  const online = useMemo(
+    () => new Set((liveReq.data ?? []).map((m: AttendanceDay) => m.user_id)),
+    [liveReq.data],
+  )
+
+  const monthRows = useMemo(() => monthReq.data?.rows ?? [], [monthReq.data])
+  const monthTallies = useMemo(() => loginTallies(people, monthRows), [people, monthRows])
+  const monthTotals = useMemo(() => sumLoginTallies(monthTallies.values()), [monthTallies])
+  const monthLateStaff = useMemo(
+    () => [...monthTallies.values()].filter((t) => t.late > 0).length,
+    [monthTallies],
+  )
+
+  const days: DayView[] = useMemo(() => {
+    const byStaff = new Map(sheetRows.map((r) => [r.staff_id, r]))
+    return people.map((person) => {
+      const row = byStaff.get(person.id) ?? null
+      const login = row?.login_at ?? null
+      const logout = row?.logout_at ?? null
+      const lateMin = lateBy(login, person.expected_login)
+      const earlyMin = earlyBy(logout, person.expected_logout)
+      return {
+        person,
+        row,
+        bot: botByStaff.get(person.id) ?? null,
+        login,
+        logout,
+        breakMin: row?.break_min ?? 0,
+        status: row?.status.trim() ? row.status.trim() : impliedStatus(login, logout),
+        statusSet: Boolean(row?.status.trim()),
+        lateMin,
+        earlyMin,
+        flag: punctuality(lateMin, earlyMin),
+        hours: netHours(login ?? '', logout ?? '', row?.break_min ?? 0),
+      }
     })
-  }, [rows, search, sortKey, sortDir])
+  }, [people, sheetRows, botByStaff])
 
-  useEffect(() => setPage(0), [date, search, sortKey, sortDir])
-
-  const absentMembers = useMemo(() => {
-    const present = new Set(rows.map((r) => r.user_id))
-    return (staffReq.data ?? []).filter((m: AttendanceStaff) => !present.has(m.user_id))
-  }, [rows, staffReq.data])
+  const q = search.trim().toLowerCase()
+  const shown = useMemo(
+    () => (q === '' ? days : days.filter((d) =>
+      d.person.name.toLowerCase().includes(q)
+      || d.person.departments.some((x) => x.name.toLowerCase().includes(q))
+      || (d.bot?.username ?? '').toLowerCase().includes(q))),
+    [days, q],
+  )
 
   const metrics = useMemo(() => {
-    const workedRows = rows.filter((r) => r.hours != null)
+    const worked = days.filter((d) => d.hours != null && d.logout)
     return {
-      present: rows.filter((r) => r.present).length,
-      stillIn: rows.filter((r) => r.still_in).length,
-      avgHours: workedRows.length
-        ? (workedRows.reduce((s, r) => s + (r.hours ?? 0), 0) / workedRows.length).toFixed(1)
+      present: days.filter((d) => AT_WORK.includes(d.status)).length,
+      stillIn: days.filter((d) => d.status === 'still in').length,
+      avgHours: worked.length
+        ? (worked.reduce((s, d) => s + (d.hours ?? 0), 0) / worked.length).toFixed(1)
         : '—',
-      flags: tallyPunctuality(rows.map(dayFlag)),
+      flags: tallyPunctuality(days.map((d) => d.flag)),
     }
-  }, [rows])
+  }, [days])
 
   /**
-   * Everyone who logged in late on the day being shown, worst first.
-   *
-   * Read off the same rows the table below renders, so the panel can never name somebody
-   * the table says was on time. Days with no login at all are absences, not late logins,
-   * and belong in the Absent card beside this one.
+   * Everyone who logged in late on the day being shown, worst first, and everyone with no
+   * day at all. Both are read off the same rows the sheet renders, so neither panel can
+   * name somebody the table disagrees about.
    */
   const lateLogins = useMemo(
-    () => rows.filter(isLateLogin).sort((a, b) => lateMinutes(b) - lateMinutes(a)),
-    [rows],
+    () => days.filter((d) => (d.lateMin ?? 0) > 0).sort((a, b) => (b.lateMin ?? 0) - (a.lateMin ?? 0)),
+    [days],
   )
-  const onTimeLogins = useMemo(
-    () => rows.filter((r) => r.login_at != null && !isLateLogin(r)).length,
-    [rows],
-  )
+  const onTimeLogins = useMemo(() => days.filter((d) => d.login && (d.lateMin ?? 0) === 0).length, [days])
+  const absent = useMemo(() => days.filter((d) => !AT_WORK.includes(d.status)), [days])
 
-  const handleSort = (key: string) => {
-    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    else { setSortKey(key); setSortDir('asc') }
-  }
-  const sa = (key: string) => (sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '')
+  const loading = staffReq.loading || sheetReq.loading || rosterReq.loading
+  const error = staffReq.error ?? sheetReq.error ?? rosterReq.error
+  const blocks = [staffReq, sheetReq, monthReq, rosterReq, liveReq, onBreakReq, overBreakReq, lateReturnReq]
+  const refreshing = blocks.some((b) => b.refreshing)
+  const refresh = () => blocks.forEach((b) => b.reload())
+  // An edit changes the day, the month's late count beside it, and the bot-side figures
+  // the cards read — so all three are re-read rather than just the row that was typed in.
+  const onChanged = () => { sheetReq.reload(); monthReq.reload(); rosterReq.reload(); overBreakReq.reload() }
 
-  const totalPages = Math.ceil(filtered.length / PER_PAGE)
-  const pageSlice = filtered.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE)
+  const dateLabel = fullDate(date)
+  const monthName = monthLabel(month)
+  const exportPdf = () => buildStaffAttendancePdf(
+    people, sheetRows, dateLabel, monthTallies, monthName,
+  ).save(`Attendance_${date}.pdf`)
 
   return (
+    // Badges speak for the month the day on screen falls in.
+    <PerformerScope month={month}>
     <div>
       {/* Status strip */}
       <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-4 py-2.5 shadow-sm shadow-slate-900/5">
@@ -577,6 +629,7 @@ function RosterView() {
             <span key={m.user_id} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
               {m.staff_name || m.username || m.user_id}
+              <PerformerBadge userId={m.user_id} name={m.staff_name} compact />
             </span>
           ))
         }
@@ -595,6 +648,7 @@ function RosterView() {
             >
               <span className={cx('h-1.5 w-1.5 rounded-full', m.late_min > 0 ? 'bg-rose-500' : 'bg-brand')} />
               {m.staff_name || m.username || m.user_id}
+              <PerformerBadge userId={m.user_id} name={m.staff_name} compact />
               <span className="tabular-nums opacity-70">{gapLabel(m.out_for_min)} / {m.duration_min}m</span>
             </span>
           ))
@@ -603,12 +657,11 @@ function RosterView() {
 
       {/* Metric cards */}
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Present today" value={metrics.present} sub={`of ${staffReq.data?.length ?? '?'} staff`} />
+        <MetricCard label="At work" value={metrics.present} sub={`of ${people.length} staff`} />
         <MetricCard
           label="Late logins"
           value={<span className={lateLogins.length > 0 ? 'text-rose-600' : undefined}>{lateLogins.length}</span>}
-          sub={`${onTimeLogins} on time · ${fullDate(date)}`}
-         
+          sub={`${onTimeLogins} on time · ${dateLabel}`}
         />
         <MetricCard label="Still checked in" value={metrics.stillIn} sub="no logout yet" />
         <MetricCard label="Avg hours worked" value={metrics.avgHours !== '—' ? `${metrics.avgHours}h` : '—'} sub="checked-out only" />
@@ -621,32 +674,35 @@ function RosterView() {
             </span>
           }
           sub={`${metrics.flags.late} late in · ${metrics.flags.early} early out · ${metrics.flags.both} both`}
-         
         />
       </div>
 
       {/* Who was late today — named, worst first, before anything has to be scrolled to. */}
       <LateLoginPanel rows={lateLogins} onTime={onTimeLogins} date={date} />
 
+      {/* The month's late logins, the figure the sheet's own column counts up. */}
+      <MonthLoginScore label={monthName} tally={monthTotals} lateStaff={monthLateStaff} roster={people.length} />
+
       {/* Alert cards */}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {/* Absent */}
+        {/* Not at work */}
         <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/5">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <div>
-              <p className="text-xs font-semibold text-slate-700">Absent</p>
-              <p className="text-xs text-slate-400 mt-0.5">No record on {date}</p>
+              <p className="text-xs font-semibold text-slate-700">Not at work</p>
+              <p className="text-xs text-slate-400 mt-0.5">Absent, on leave or a holiday · {date}</p>
             </div>
-            <span className="text-2xl font-semibold text-slate-800">{absentMembers.length}</span>
+            <span className="text-2xl font-semibold text-slate-800">{absent.length}</span>
           </div>
           <div className="px-4 py-3 min-h-12">
-            {absentMembers.length === 0
+            {absent.length === 0
               ? <p className="text-xs text-emerald-600">✓ Full attendance</p>
               : <div className="flex flex-wrap gap-1.5">
-                {absentMembers.map((m: AttendanceStaff) => (
-                  <span key={m.user_id} className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700">
-                    <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
-                    {m.staff_name || m.username || m.user_id}
+                {absent.map((d) => (
+                  <span key={d.person.id} className="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+                    {d.person.name}
+                    <PerformerBadge staffId={d.person.id} compact />
+                    <StatusTag status={d.status} implied={!d.statusSet} />
                   </span>
                 ))}
               </div>
@@ -659,7 +715,7 @@ function RosterView() {
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <div>
               <p className="text-xs font-semibold text-slate-700">Break overages</p>
-              <p className="text-xs text-slate-400 mt-0.5">Exceeded 60-min allowance</p>
+              <p className="text-xs text-slate-400 mt-0.5">Exceeded {allowance}-min allowance</p>
             </div>
             <span className="text-2xl font-semibold text-slate-800">
               {overBreakReq.data?.rows?.length ?? 0}
@@ -721,7 +777,7 @@ function RosterView() {
           className="bg-white rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand/20"
         />
         <input
-          type="text" placeholder="Search name or username…" value={search}
+          type="text" placeholder="Search name or department…" value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="bg-white w-52 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/20"
         />
@@ -731,124 +787,96 @@ function RosterView() {
         >
           Reset
         </button>
-        <span className="ml-auto text-xs text-slate-400">{filtered.length} records</span>
+        <button
+          onClick={refresh}
+          disabled={refreshing}
+          title="Re-read the day from the check-in bot"
+          className="bg-white rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+        >
+          {refreshing ? 'Refreshing…' : 'Refresh'}
+        </button>
+        <button
+          onClick={exportPdf}
+          disabled={people.length === 0}
+          className="bg-white rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+        >
+          PDF
+        </button>
+        <span className="ml-auto text-xs text-slate-400">
+          {shown.length} of {people.length} staff · {date === todayEST() ? 'today · still filling in' : 'past day'}
+        </span>
       </div>
 
-      {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm shadow-slate-900/5">
-        <div className="overflow-x-auto">
-          <table className="table-airy w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 bg-white/40">
-                {[
-                  ['Date', 'work_date'],
-                  ['Username', 'username'],
-                  ['Name', 'staff_name'],
-                  ['Active', null],
-                  ['User ID', 'user_id'],
-                  ['Login (recorded)', 'login_at'],
-                  ['Logout (recorded)', 'logout_at'],
-                  ['Flag', null],
-                  ['Hours', 'hours'],
-                  ['Net Hours', 'net_hours'],
-                  ['Break', 'break_count'],
-                  ['Break M', 'break_min'],
-                  ['Over (m)', 'over_break_min'],
-                  ['Break Status', null],
-                  ['Late Back', 'late_return_min'],
-                  ['Break Detail', null],
-                  ['Status', null],
-                ].map(([label, key]) => (
-                  <th
-                    key={label as string}
-                    onClick={() => key && handleSort(key as string)}
-                    className={cx(
-                      'whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold text-slate-700',
-                      key ? 'cursor-pointer hover:text-slate-700 select-none' : ''
-                    )}
-                  >
-                    {label as string}{key ? sa(key as string) : ''}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rosterReq.loading ? (
-                <tr><td colSpan={17} className="py-12 text-center text-sm text-slate-400">Loading…</td></tr>
-              ) : rosterReq.error ? (
-                <tr><td colSpan={17} className="py-12 text-center text-sm text-red-500">{rosterReq.error}</td></tr>
-              ) : pageSlice.length === 0 ? (
-                <tr><td colSpan={17} className="py-12 text-center text-sm text-slate-400">No records for {date}</td></tr>
-              ) : pageSlice.map((r, i) => (
-                <tr key={i} className="border-b border-white/40 hover:bg-white/40 transition-colors">
-                  <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums text-slate-600">{r.work_date}</td>
-                  <td className="px-3 py-2.5 text-xs font-medium text-slate-700">{r.username || '—'}</td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <Avatar name={r.staff_name || r.username} size={24} />
-                      <span className="text-xs">{r.staff_name || '—'}</span>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2.5 text-center"><ActiveBadge active={onlineIds.has(r.user_id)} /></td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums text-slate-400">{r.user_id}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-xs">
-                    <ScheduleTime at={r.login_at} off={lateMinutes(r)} word="late" expected={r.expected_login} />
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-xs">
-                    <ScheduleTime at={r.logout_at} off={earlyMinutes(r)} word="early" expected={r.expected_logout} />
-                  </td>
-                  <td className="px-3 py-2.5 text-center"><PunctualityBadge flag={dayFlag(r)} compact /></td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums">{r.hours != null ? r.hours : '—'}</td>
-                  <td className={cx('px-3 py-2.5 text-xs tabular-nums', r.net_hours != null && r.net_hours < 0 ? 'text-red-600' : 'text-slate-700')}>
-                    {r.net_hours != null ? r.net_hours : '—'}
-                  </td>
-                  <td className="px-3 py-2.5 text-xs text-center tabular-nums">{r.break_count}</td>
-                  <td className="px-3 py-2.5 text-xs text-center tabular-nums">{r.break_min}</td>
-                  <td className={cx('px-3 py-2.5 text-xs text-center tabular-nums', r.over_break_min > 0 ? 'text-red-600' : 'text-slate-700')}>
-                    {r.over_break_min}
-                  </td>
-                  <td className="px-3 py-2.5"><BreakStatusBadge overMin={r.over_break_min} /></td>
-                  <td className="px-3 py-2.5"><LateReturnBadge row={r} /></td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-600">
-                    {r.break_count > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => setBreakRow(r)}
-                        title="Each break, when they came back and how late"
-                        className="rounded px-1 text-brand underline decoration-dotted underline-offset-2 hover:bg-slate-100"
-                      >
-                        {r.break_detail}
-                      </button>
-                    ) : '—'}
-                  </td>
-                  <td className="px-3 py-2.5"><StatusBadge row={r} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
-          <span>
-            {filtered.length === 0 ? 'No records'
-              : `Showing ${page * PER_PAGE + 1}–${Math.min(page * PER_PAGE + PER_PAGE, filtered.length)} of ${filtered.length}`}
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage((p) => p - 1)} disabled={page === 0}
-              className="bg-white rounded-lg border border-slate-200 px-3 py-1 text-xs disabled:opacity-40 hover:bg-slate-50"
-            >← Prev</button>
-            <span className="text-xs">Page {page + 1} / {totalPages || 1}</span>
-            <button
-              onClick={() => setPage((p) => p + 1)} disabled={page + 1 >= totalPages}
-              className="bg-white rounded-lg border border-slate-200 px-3 py-1 text-xs disabled:opacity-40 hover:bg-slate-50"
-            >Next →</button>
-          </div>
-        </div>
+      {/* The day itself — every row editable, the bot's record filled in where it has one. */}
+      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3 shadow-sm shadow-slate-900/5">
+        {loading ? (
+          <p className="py-12 text-center text-sm text-slate-400">Loading…</p>
+        ) : error ? (
+          <p className="py-12 text-center text-sm text-red-500">{error}</p>
+        ) : (
+          <StaffAttendanceSheet
+            date={date}
+            rows={sheetRows}
+            staff={shown.map((d) => d.person)}
+            monthTallies={monthTallies}
+            monthLabel={monthName}
+            bot={botByStaff}
+            online={online}
+            breakAllowanceMin={allowance}
+            onBreakDetail={setBreakRow}
+            onChanged={onChanged}
+          />
+        )}
+        <p className="mt-2 border-t border-slate-100 px-1 pt-2 text-[11px] text-slate-500">
+          Every cell is editable, including on a day the check-in bot recorded. What you key in
+          replaces that day everywhere in the CRM — this page's figures, the Staff Summary, the
+          reports and the Dashboard. The revert arrow on a corrected row puts the bot's own
+          record back; the bot's data is never written to.
+        </p>
       </div>
 
       {breakRow && <BreakDetailModal row={breakRow} onClose={() => setBreakRow(null)} />}
+    </div>
+    </PerformerScope>
+  )
+}
+
+/**
+ * The month's late logins across the roster — the column the sheet carries per person,
+ * totalled. It is the one figure on this tab that is not about the day on screen.
+ */
+function MonthLoginScore({ label, tally, lateStaff, roster }: {
+  label: string
+  tally: LoginTally
+  lateStaff: number
+  roster: number
+}) {
+  const clean = tally.late === 0
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm shadow-slate-900/5">
+      <div>
+        <p className="text-xs font-semibold text-slate-700">Late logins · {label}</p>
+        <p className="mt-0.5 text-xs text-slate-400">The whole month so far, against each person's expected login</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <Figure label="Late" value={tally.late} tone={clean ? 'text-slate-400' : 'text-rose-600'} of={tally.judged} />
+        <Figure label="On time" value={tally.onTime} tone="text-emerald-600" of={tally.judged} />
+        <Figure label="Staff affected" value={lateStaff} tone={lateStaff ? 'text-rose-600' : 'text-slate-400'} of={roster} />
+        <Figure label="Time lost" value={gapLabel(tally.lateMin)} tone={clean ? 'text-slate-400' : 'text-rose-600'} />
+        <Figure label="Worst" value={tally.worstLateMin ? gapLabel(tally.worstLateMin) : '—'} tone="text-slate-600" />
+      </div>
+    </div>
+  )
+}
+
+function Figure({ label, value, tone, of }: { label: string; value: ReactNode; tone: string; of?: number }) {
+  return (
+    <div className="leading-tight">
+      <p className="text-[11px] font-medium text-slate-400">{label}</p>
+      <p className={cx('text-lg font-semibold tabular-nums', tone)}>
+        {value}
+        {of !== undefined && <span className="text-xs text-slate-400">/{of}</span>}
+      </p>
     </div>
   )
 }
@@ -962,8 +990,8 @@ function StaffSummaryView() {
       const totalBreakMin = userRows.reduce((s, r) => s + (r.break_min ?? 0), 0)
       const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
       const meta = dir.get(id)
-      // Every day gets the same verdict the roster and the Complete Attendance sheet give
-      // it, so the month's counts are the days a supervisor already saw flagged.
+      // Every day gets the same verdict the day sheet gives it, so the month's counts are
+      // the days a supervisor already saw flagged.
       const flags = tallyPunctuality(userRows.map(dayFlag))
       // Late logins are counted from the login alone — see StaffStat.lateLoginDays.
       const lateMins = present.map(loginLateMinutes).filter((m): m is number => m != null)
@@ -1067,6 +1095,8 @@ function StaffSummaryView() {
   const error = daysReq.error
 
   return (
+    // Badges speak for the month picked.
+    <PerformerScope month={month}>
     <div>
       {/* Month navigator */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-white px-4 py-2.5 shadow-sm shadow-slate-900/5">
@@ -1244,7 +1274,10 @@ function StaffSummaryView() {
                     <div className="flex items-center gap-2.5">
                       <Avatar name={s.staff_name || s.username} size={28} />
                       <div className="leading-tight">
-                        <div className="text-xs font-medium text-slate-800">{s.staff_name || '—'}</div>
+                        <div className="flex items-center gap-1 text-xs font-medium text-slate-800">
+                          {s.staff_name || '—'}
+                          <PerformerBadge userId={s.user_id} name={s.staff_name} compact />
+                        </div>
                         {s.username && <div className="text-[11px] text-slate-400">@{s.username}</div>}
                       </div>
                     </div>
@@ -1283,6 +1316,7 @@ function StaffSummaryView() {
         <StaffDetailModal stat={selected} operationalDays={operationalDays} periodLabel={monthLabel(month)} onClose={() => setSelected(null)} />
       )}
     </div>
+    </PerformerScope>
   )
 }
 
@@ -1367,7 +1401,10 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
           <div className="flex items-center gap-3">
             <Avatar name={stat.staff_name || stat.username} size={40} />
             <div className="leading-tight">
-              <h3 className="text-lg font-semibold text-slate-900">{stat.staff_name || labelFor(stat)}</h3>
+              <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+                {stat.staff_name || labelFor(stat)}
+                <PerformerBadge userId={stat.user_id} name={stat.staff_name} />
+              </h3>
               <p className="text-xs text-slate-400">
                 {stat.username ? `@${stat.username} · ` : ''}{periodLabel}{stat.lastDay ? ` · last seen ${shortDate(stat.lastDay)}` : ''}
               </p>
@@ -1561,6 +1598,8 @@ function BreakReportsView() {
     )) }
 
   return (
+    // A range can straddle two months; badges speak for the month it STARTS in.
+    <PerformerScope month={range.from}>
     <div>
       {/* Period controls — weekly / monthly presets + explicit date filtering */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-4 py-2.5 shadow-sm shadow-slate-900/5">
@@ -1729,7 +1768,10 @@ function BreakReportsView() {
                     <div className="flex items-center gap-2.5">
                       <Avatar name={s.staff_name || s.username} size={28} />
                       <div className="leading-tight">
-                        <div className="text-xs font-medium text-slate-800">{s.staff_name || '—'}</div>
+                        <div className="flex items-center gap-1 text-xs font-medium text-slate-800">
+                          {s.staff_name || '—'}
+                          <PerformerBadge userId={s.user_id} name={s.staff_name} compact />
+                        </div>
                         {s.username && <div className="text-[11px] text-slate-400">@{s.username}</div>}
                       </div>
                     </div>
@@ -1871,26 +1913,13 @@ function BreakReportsView() {
         </div>
       </Panel>
     </div>
+    </PerformerScope>
   )
 }
 
 // ─── Status marker + export buttons ─────────────────────────────────────────────
 
 /** Active = currently checked in (from /attendance/live); otherwise Offline. */
-function ActiveBadge({ active }: { active: boolean }) {
-  return active ? (
-    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-      Active
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
-      <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-      Offline
-    </span>
-  )
-}
-
 function PdfIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

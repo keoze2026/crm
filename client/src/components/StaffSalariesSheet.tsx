@@ -1,5 +1,6 @@
 import { Fragment, useRef, useState } from 'react'
 import { api } from '../api/client'
+import { PerformerBadge } from '../lib/performers'
 import { formatMonth } from './MonthSelector'
 import { SALARY_STATUSES } from '../lib/staff'
 import type { Department, StaffMember, StaffSalary } from '../types'
@@ -130,7 +131,12 @@ function Row({ sr, salary, onChanged }: { sr: number; salary: StaffSalary; onCha
   return (
     <tr className={rowCls}>
       <td className={idxCell}>{sr}</td>
-      <td className={cx(cellCls, 'font-semibold')}>{salary.staff_name}</td>
+      <td className={cx(cellCls, 'font-semibold')}>
+        <span className="flex items-center gap-1">
+          <span className="truncate">{salary.staff_name}</span>
+          <PerformerBadge staffId={salary.staff_id} compact />
+        </span>
+      </td>
       <td className={cellCls}>
         <select
           value={status}

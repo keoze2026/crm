@@ -5,8 +5,9 @@ import DepartmentSheet from '../components/DepartmentSheet'
 import { PageHeader } from '../components/Layout'
 import { MonthSelector, currentMonth, formatMonth, shiftMonth } from '../components/MonthSelector'
 import ReviewSheet from '../components/ReviewSheet'
-import TopPerformerSheet, { TopPerformerHeadline } from '../components/TopPerformerSheet'
+import TopPerformerSheet from '../components/TopPerformerSheet'
 import { Button, Card, CardHeader, DownloadIcon, PageLoader, SegmentedTabs } from '../components/ui'
+import { PerformerScope } from '../lib/performers'
 import type { IncentiveSettings, RankedRow } from '../lib/incentive'
 import { buildBehaviourPdf, buildDepartmentsPdf, buildPerformancePdf, buildTopPerformerPdf } from '../lib/sheetPdf'
 import { monthRange } from '../lib/staff'
@@ -80,6 +81,8 @@ export default function Review() {
   }
 
   return (
+    // Every badge on the page — the name cells, the ranking — speaks for the month reviewed.
+    <PerformerScope month={month}>
     <div className="min-w-0">
       <PageHeader
         title="Review"
@@ -99,9 +102,7 @@ export default function Review() {
         <Card>
           <CardHeader
             title={`Top Performer — ${label}`}
-            subtitle="Who earns the month's incentive: the criteria, the evidence, and the ranking"
-            // The month's winners and their share of the roster, in the header's empty half.
-            action={topExport && <TopPerformerHeadline rows={topExport.rows} monthLabel={label} />}
+            subtitle="Who earns the month's incentive, and who trails the month: the criteria, the evidence, and the ranking"
           />
           <div className="p-4">
             <TopPerformerSheet
@@ -151,5 +152,6 @@ export default function Review() {
 
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
     </div>
+    </PerformerScope>
   )
 }

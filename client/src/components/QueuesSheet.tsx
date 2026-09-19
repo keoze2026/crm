@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api/client'
+import { PerformerBadge } from '../lib/performers'
 import { num } from '../lib/format'
 import { anchorTo, focusQuietly, type Anchor } from '../lib/popover'
 import { matches } from '../lib/queues'
@@ -147,19 +148,22 @@ function Row({
     <tr className={rowCls}>
       <td className={idxCell}>{index}</td>
       <td className={cellCls}>
-        <select
-          value={row.person_id}
-          disabled={busy}
-          onChange={(e) => changePerson(Number(e.target.value))}
-          className={selectCls}
-        >
-          {people.map((p) => (
-            // A name that already holds another record can't take this one too.
-            <option key={p.id} value={p.id} disabled={taken.has(p.id) && taken.get(p.id) !== row.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-1">
+          <select
+            value={row.person_id}
+            disabled={busy}
+            onChange={(e) => changePerson(Number(e.target.value))}
+            className={selectCls}
+          >
+            {people.map((p) => (
+              // A name that already holds another record can't take this one too.
+              <option key={p.id} value={p.id} disabled={taken.has(p.id) && taken.get(p.id) !== row.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <PerformerBadge staffId={row.person_id} compact />
+        </div>
       </td>
       <td className={cellCls}>
         <div className="flex items-start gap-1">

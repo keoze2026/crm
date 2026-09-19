@@ -22,40 +22,105 @@ final class AttendanceController
     private const BREAK_EOD_CUTOFF = '07:00';
 
     /**
-     * A day the bot recorded can be corrected on the Staff page's attendance sheet. That
-     * correction is a `staff_attendance` row and, where one exists, it REPLACES the day —
-     * login, logout, break and status all come from it. These expressions are how this page
-     * reads the same figures, so the two never disagree.
+     * EVERY attendance day there is, from both sides of the CRM, as one table — the `d`
+     * every query on this page reads instead of `attendance_days`.
      *
-     * Every query that reads a time or a break uses them with OVERRIDE_JOIN.
+     * A day can exist in two places: the check-in bot's own record, and a `staff_attendance`
+     * row keyed in on the attendance sheet. Where both exist the keyed-in row REPLACES the
+     * bot's day — login, logout, break and status all come from it — and where only the
+     * keyed-in row exists, the day is still a day: somebody the bot marked absent (by having
+     * no record of them at all) and who was then set to Half day shows up here as a half
+     * day, in this page's figures and in every report built off them. Deleting the row puts
+     * the bot's record back, or removes the day again; the bot's own tables are never written.
+     *
+     * Identity: `user_id` is the bot's account where there is one and a stable "staff-12"
+     * stand-in where there isn't, so two people who have never used the bot can't collapse
+     * into one row. `bot_user_id` is the real account, and the only thing break rows join on.
      */
+    private const DAYS_SOURCE = "(
+        SELECT COALESCE(d.user_id::text, 'staff-' || so.id::text) AS user_id,
+               d.user_id::text                                    AS bot_user_id,
+               so.id                                              AS staff_id,
+               d.work_date,
+               COALESCE(NULLIF(btrim(so.name), ''), d.staff_name) AS staff_name,
+               d.username,
+               CASE WHEN o.id IS NOT NULL
+                    THEN CASE WHEN o.login_at IS NULL THEN NULL
+                              ELSE (d.work_date + o.login_at) AT TIME ZONE 'America/New_York' END
+                    ELSE d.login_at END                           AS login_at,
+               CASE WHEN o.id IS NOT NULL
+                    THEN CASE WHEN o.logout_at IS NULL THEN NULL
+                              ELSE (d.work_date + o.logout_at) AT TIME ZONE 'America/New_York' END
+                    ELSE d.logout_at END                          AS logout_at,
+               d.login_stated,
+               d.logout_stated,
+               NULLIF(btrim(o.status), '')                        AS set_status,
+               (o.id IS NOT NULL)                                 AS edited,
+               TRUE                                               AS bot_seen,
+               CASE WHEN o.id IS NOT NULL THEN COALESCE(o.break_min, 0) END AS set_break_min
+          FROM attendance_days d
+          LEFT JOIN staff so ON so.attendance_user_id = d.user_id::text
+          LEFT JOIN staff_attendance o ON o.staff_id = so.id AND o.work_date = d.work_date
+        UNION ALL
+        SELECT COALESCE(NULLIF(btrim(s.attendance_user_id), ''), 'staff-' || s.id::text),
+               NULLIF(btrim(s.attendance_user_id), ''),
+               s.id,
+               o.work_date,
+               s.name,
+               NULL,
+               CASE WHEN o.login_at IS NULL THEN NULL
+                    ELSE (o.work_date + o.login_at) AT TIME ZONE 'America/New_York' END,
+               CASE WHEN o.logout_at IS NULL THEN NULL
+                    ELSE (o.work_date + o.logout_at) AT TIME ZONE 'America/New_York' END,
+               NULL,
+               NULL,
+               NULLIF(btrim(o.status), ''),
+               TRUE,
+               FALSE,
+               COALESCE(o.break_min, 0)
+          FROM staff_attendance o
+          JOIN staff s ON s.id = o.staff_id
+         WHERE NOT EXISTS (
+                   SELECT 1
+                     FROM attendance_days d2
+                    WHERE NULLIF(btrim(s.attendance_user_id), '') IS NOT NULL
+                      AND d2.user_id::text = btrim(s.attendance_user_id)
+                      AND d2.work_date = o.work_date)
+    ) d";
+
+    /** The break total: the keyed-in one where the day was corrected, the bot's otherwise. */
     private const BREAK_MIN =
-        "CASE WHEN o.id IS NOT NULL THEN COALESCE(o.break_min, 0) ELSE COALESCE(b.break_min, 0) END";
+        "CASE WHEN d.set_break_min IS NOT NULL THEN d.set_break_min ELSE COALESCE(b.break_min, 0) END";
+
+    /** Both times are already resolved by DAYS_SOURCE — these two name them for the queries. */
+    private const LOGIN_AT  = 'd.login_at';
+    private const LOGOUT_AT = 'd.logout_at';
 
     /**
-     * The override stores org-local clock times; `work_date + time AT TIME ZONE` lifts one
-     * back to the timestamptz the rest of this controller works in.
+     * The status the day carries: the one set by hand, or — where none is — the one the
+     * clock times imply, in the same words the attendance sheet uses. It is what makes a
+     * corrected day readable here: "half day" is not something the bot has a word for.
      */
-    private const LOGIN_AT =
-        "CASE WHEN o.id IS NOT NULL
-              THEN CASE WHEN o.login_at IS NULL THEN NULL
-                        ELSE (d.work_date + o.login_at) AT TIME ZONE 'America/New_York' END
-              ELSE d.login_at END";
-
-    private const LOGOUT_AT =
-        "CASE WHEN o.id IS NOT NULL
-              THEN CASE WHEN o.logout_at IS NULL THEN NULL
-                        ELSE (d.work_date + o.logout_at) AT TIME ZONE 'America/New_York' END
-              ELSE d.logout_at END";
+    private const STATUS =
+        "COALESCE(d.set_status,
+                  CASE WHEN d.login_at IS NULL THEN 'absent'
+                       WHEN d.logout_at IS NULL THEN 'still in'
+                       ELSE 'present' END)";
 
     /**
-     * Reaches the override from the bot's side: day -> the staff member who checks in with
-     * that account -> their row for the same date. LEFT JOINs throughout, so a day with no
-     * staff member or no correction still comes back with the bot's own values.
+     * Whether the day counts as a day at work. A status set by hand decides it — that is the
+     * point of setting one — and only where none is set does it fall back to "did they log in".
      */
-    private const OVERRIDE_JOIN =
-        'LEFT JOIN staff so ON so.attendance_user_id = d.user_id::text
-         LEFT JOIN staff_attendance o ON o.staff_id = so.id AND o.work_date = d.work_date';
+    private const PRESENT =
+        "CASE WHEN d.set_status IS NOT NULL
+              THEN d.set_status IN ('present', 'half day', 'still in')
+              ELSE d.login_at IS NOT NULL END";
+
+    /** The staff member behind the day, for their schedule. Every query joins it. */
+    private const OVERRIDE_JOIN = 'LEFT JOIN staff so ON so.id = d.staff_id';
+
+    /** The bot's breaks for that day, by the account that took them. */
+    private const BREAK_JOIN_ON = 'b.user_id::text = d.bot_user_id AND b.work_date = d.work_date';
 
     /**
      * The hours the staff member is expected to keep, kept on the Staff page. The same
@@ -177,8 +242,11 @@ final class AttendanceController
             "SELECT d.user_id::text, d.staff_name, d.username, d.work_date::text,
                     {$login} AS login_at, d.login_stated,
                     {$logout} AS logout_at, d.logout_stated,
-                    ({$login} IS NOT NULL) AS present,
+                    " . self::PRESENT . " AS present,
                     ({$login} IS NOT NULL AND {$logout} IS NULL) AS still_in,
+                    " . self::STATUS . " AS status,
+                    (d.set_status IS NOT NULL) AS status_set,
+                    d.edited, d.bot_seen, d.staff_id,
                     ROUND(EXTRACT(EPOCH FROM ({$logout} - {$login})) / 3600.0, 2) AS hours,
                     {$break} AS break_min,
                     COALESCE(b.break_count, 0) AS break_count,
@@ -191,11 +259,11 @@ final class AttendanceController
                     GREATEST({$break} - :allow, 0) AS over_break_min,
                     ROUND(EXTRACT(EPOCH FROM ({$logout} - {$login})) / 3600.0 - {$break} / 60.0, 2) AS net_hours,
                     " . self::scheduleColumns() . "
-             FROM attendance_days d
-             LEFT JOIN (" . self::breakDaySubquery() . ") b ON b.user_id = d.user_id AND b.work_date = d.work_date
+             FROM " . self::DAYS_SOURCE . "
+             LEFT JOIN (" . self::breakDaySubquery() . ") b ON " . self::BREAK_JOIN_ON . "
              " . self::OVERRIDE_JOIN . "
              WHERE d.work_date = :date
-             ORDER BY {$login} NULLS LAST"
+             ORDER BY {$login} NULLS LAST, d.staff_name"
         );
         $stmt->execute([':date' => $date, ':allow' => self::BREAK_ALLOW]);
         Http::json([
@@ -214,7 +282,7 @@ final class AttendanceController
             "SELECT d.user_id::text, d.staff_name, d.username,
                     {$login} AS login_at, d.login_stated,
                     " . self::scheduleColumns() . "
-             FROM attendance_days d
+             FROM " . self::DAYS_SOURCE . "
              " . self::OVERRIDE_JOIN . "
              WHERE d.work_date = (now() AT TIME ZONE :tz)::date
                AND {$login} IS NOT NULL AND {$logout} IS NULL
@@ -265,7 +333,7 @@ final class AttendanceController
         $userId = Http::query('user_id');
         $where  = ['d.work_date BETWEEN :from AND :to'];
         $params = [':from' => $from, ':to' => $to, ':allow' => self::BREAK_ALLOW];
-        if ($userId) { $where[] = 'd.user_id = :uid'; $params[':uid'] = $userId; }
+        if ($userId) { $where[] = 'd.user_id = :uid'; $params[':uid'] = (string) $userId; }
 
         $break  = self::BREAK_MIN;
         $login  = self::LOGIN_AT;
@@ -286,9 +354,13 @@ final class AttendanceController
                     GREATEST({$break} - :allow, 0) AS over_break_min,
                     ROUND(EXTRACT(EPOCH FROM ({$logout} - {$login})) / 3600.0 - {$break} / 60.0, 2) AS net_hours,
                     ({$logout} IS NOT NULL) AS completed,
+                    " . self::PRESENT . " AS present,
+                    " . self::STATUS . " AS status,
+                    (d.set_status IS NOT NULL) AS status_set,
+                    d.edited, d.bot_seen, d.staff_id,
                     " . self::scheduleColumns() . "
-             FROM attendance_days d
-             LEFT JOIN (" . self::breakDaySubquery() . ") b ON b.user_id = d.user_id AND b.work_date = d.work_date
+             FROM " . self::DAYS_SOURCE . "
+             LEFT JOIN (" . self::breakDaySubquery() . ") b ON " . self::BREAK_JOIN_ON . "
              " . self::OVERRIDE_JOIN . "
              WHERE " . implode(' AND ', $where) . "
              ORDER BY d.work_date DESC, d.staff_name"
@@ -308,13 +380,13 @@ final class AttendanceController
         $login  = self::LOGIN_AT;
         $logout = self::LOGOUT_AT;
         $stmt   = Database::connection()->prepare(
-            "SELECT d.user_id::text, d.staff_name,
-                    COUNT(*) FILTER (WHERE {$login} IS NOT NULL) AS days_present,
+            "SELECT d.user_id, d.staff_name,
+                    COUNT(*) FILTER (WHERE " . self::PRESENT . ") AS days_present,
                     COUNT(*) FILTER (WHERE {$login} IS NOT NULL AND {$logout} IS NOT NULL) AS days_complete,
                     ROUND(SUM(EXTRACT(EPOCH FROM ({$logout} - {$login})) / 3600.0)
                           FILTER (WHERE {$logout} IS NOT NULL), 2) AS total_hours,
                     MIN(d.work_date)::text AS first_day, MAX(d.work_date)::text AS last_day
-             FROM attendance_days d
+             FROM " . self::DAYS_SOURCE . "
              " . self::OVERRIDE_JOIN . "
              WHERE d.work_date BETWEEN :from AND :to
              GROUP BY d.user_id, d.staff_name ORDER BY d.staff_name"
@@ -404,21 +476,21 @@ final class AttendanceController
         $allow  = self::BREAK_ALLOW;
 
         $sql = match($type) {
-            'missing_logout' => "SELECT d.user_id::text, d.staff_name, d.work_date::text,
+            'missing_logout' => "SELECT d.user_id, d.staff_name, d.work_date::text,
                                         {$login} AS login_at
-                                   FROM attendance_days d {$join}
+                                   FROM " . self::DAYS_SOURCE . " {$join}
                                   WHERE {$login} IS NOT NULL AND {$logout} IS NULL
                                     AND d.work_date < (now() AT TIME ZONE '{$tz}')::date
                                     AND d.work_date BETWEEN :from AND :to
                                   ORDER BY d.work_date DESC",
-            'over_break'     => "SELECT d.user_id::text, d.staff_name, d.work_date::text,
+            'over_break'     => "SELECT d.user_id, d.staff_name, d.work_date::text,
                                         {$break} AS break_min,
                                         {$break} - {$allow} AS over_min
-                                   FROM attendance_days d
+                                   FROM " . self::DAYS_SOURCE . "
                               LEFT JOIN (
                                         SELECT user_id, work_date, SUM(duration_min) AS break_min
                                           FROM attendance_breaks GROUP BY user_id, work_date
-                                   ) b ON b.user_id = d.user_id AND b.work_date = d.work_date
+                                   ) b ON " . self::BREAK_JOIN_ON . "
                                    {$join}
                                   WHERE d.work_date BETWEEN :from AND :to
                                     AND {$break} > {$allow}
@@ -426,13 +498,13 @@ final class AttendanceController
             // Late is measured against the person's own expected login from the Staff page.
             // Anyone with no schedule set keeps the flat 9:00 this report has always used,
             // so it never silently empties out as schedules are filled in one by one.
-            'late'           => "SELECT d.user_id::text, d.staff_name, d.work_date::text,
+            'late'           => "SELECT d.user_id, d.staff_name, d.work_date::text,
                                         ({$login} AT TIME ZONE '{$tz}')::time::text AS local_login,
                                         to_char(COALESCE(so.expected_login, TIME '09:00'), 'HH24:MI') AS expected_login,
                                         GREATEST(0, ROUND(EXTRACT(EPOCH FROM
                                             (({$login}) AT TIME ZONE '{$tz}')::time
                                             - COALESCE(so.expected_login, TIME '09:00')) / 60.0))::int AS late_min
-                                   FROM attendance_days d {$join}
+                                   FROM " . self::DAYS_SOURCE . " {$join}
                                   WHERE {$login} IS NOT NULL
                                     AND ({$login} AT TIME ZONE '{$tz}')::time
                                         > COALESCE(so.expected_login, TIME '09:00')
@@ -474,6 +546,11 @@ final class AttendanceController
         $r['present']        = (bool)($r['present']   ?? false);
         $r['still_in']       = (bool)($r['still_in']  ?? false);
         $r['completed']      = (bool)($r['completed']  ?? false);
+        $r['status']         = $r['status'] ?? '';
+        $r['status_set']     = (bool)($r['status_set'] ?? false);
+        $r['edited']         = (bool)($r['edited']     ?? false);
+        $r['bot_seen']       = (bool)($r['bot_seen']   ?? true);
+        $r['staff_id']       = isset($r['staff_id']) ? (int)$r['staff_id'] : null;
         return $this->castSchedule($r);
     }
 

@@ -12,16 +12,20 @@
 // The list is a div grid rather than a <table>: the app's global table rules give every
 // cell the Excel-like density the sheets want, and this is a leaderboard, not a sheet —
 // it wants room, labelled pills instead of numbered columns, and chips you can tap.
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from '../api/client'
 import { cx } from './ui'
+import { PerformerBadge, usePerformerReload } from '../lib/performers'
 import { BRAND } from '../lib/theme'
 import {
   CRITERIA,
+  TOP_PERFORMER_PCT,
   activeCriteria,
   buildCandidates,
   fromWire,
+  pickPerformers,
   rankCandidates,
+  scorePct,
   toWire,
   type AttendanceDayLite,
   type Criterion,
@@ -35,7 +39,7 @@ import type { ReviewEntry, StaffLeave, StaffMember, TopPerformerState } from '..
 /** Where each verdict comes from, named after the CRM page it is read on. */
 const SOURCE_LABEL = {
   behaviour: 'Checked from Review · Behaviour',
-  attendance: 'Checked from Complete Attendance · Leaves',
+  attendance: 'Checked from Attendance · Leaves',
   performance: 'Checked from Review · Performance',
   manual: 'You confirm this',
 } as const
@@ -55,6 +59,9 @@ const IconCross = () => (
 )
 const IconAward = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="8" r="6" /><path d="M15.5 13 17 22l-5-3-5 3 1.5-9" /></svg>
+)
+const IconDownArrow = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 5v14" /><path d="m19 12-7 7-7-7" /></svg>
 )
 const IconCrown = ({ size = 12 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M3 8l4.4 3L12 5l4.6 6L21 8l-1.5 9.2a1 1 0 0 1-1 .8H5.5a1 1 0 0 1-1-.8L3 8z" /></svg>
@@ -263,19 +270,16 @@ function Guide() {
   )
 }
 
-// ─── Headline ─────────────────────────────────────────────────────────────────
+// ─── Scorecards ───────────────────────────────────────────────────────────────
 //
-// The month's answer in one glance, beside the card title where the header otherwise sat
-// empty under the month picker. The Top Performers list is everyone scoring 80% or more
-// of the criteria in play; the headline names the highest scorer on it — or everyone who
-// ties for that score — with the percentage, and the scorecard is the share of the roster
-// that made the list. Names and percentages only; the evidence is the ranking below.
-
-/** The score that puts someone on the Top Performers list. */
-export const TOP_PERFORMER_PCT = 80
-
-/** A person's score as a whole percentage of the criteria in play. */
-export const scorePct = (r: RankedRow) => Math.round((r.met / Math.max(1, r.total)) * 100)
+// The month's two answers in one glance, beside the card title where the header otherwise
+// sat empty under the month picker. The Top Performers list is everyone scoring 80% or
+// more of the criteria in play; the green card names the highest scorer on it — or
+// everyone tied for that score — and the red card, its mirror, names the lowest scorer of
+// the month. Names and percentages only; the evidence is the ranking below.
+//
+// Both cards read the same rules the app-wide badges do (lib/incentive.ts · pickPerformers),
+// so the Review tab and the badges worn beside staff names can never name different people.
 
 /** A small ring that fills clockwise to the share given, drawn in the tone passed. */
 function ShareRing({ pct, tone }: { pct: number; tone: string }) {
@@ -293,54 +297,130 @@ function ShareRing({ pct, tone }: { pct: number; tone: string }) {
   )
 }
 
-export function TopPerformerHeadline({ rows, monthLabel }: { rows: RankedRow[]; monthLabel: string }) {
-  const listed = rows.filter((r) => scorePct(r) >= TOP_PERFORMER_PCT)
-  const best = listed.length ? Math.max(...listed.map(scorePct)) : 0
-  const leaders = listed.filter((r) => scorePct(r) === best)
-  const any = leaders.length > 0
-  const share = rows.length ? Math.round((listed.length / rows.length) * 100) : 0
+/** The palette and the wording for each end — everything else about the two cards is shared. */
+const ENDS = {
+  top: {
+    frame: 'border-emerald-200 bg-gradient-to-r from-emerald-50 to-white shadow-sm shadow-emerald-100',
+    badge: 'bg-emerald-600 text-white shadow-sm',
+    kicker: 'text-emerald-700',
+    chip: 'ring-emerald-200',
+    dot: 'bg-emerald-600',
+    pill: 'bg-emerald-50 text-emerald-700',
+    ring: 'text-emerald-500',
+    figure: 'text-emerald-700',
+  },
+  low: {
+    frame: 'border-rose-200 bg-gradient-to-r from-rose-50 to-white shadow-sm shadow-rose-100',
+    badge: 'bg-rose-600 text-white shadow-sm',
+    kicker: 'text-rose-700',
+    chip: 'ring-rose-200',
+    dot: 'bg-rose-600',
+    pill: 'bg-rose-50 text-rose-700',
+    ring: 'text-rose-500',
+    figure: 'text-rose-700',
+  },
+} as const
+
+function PerformerCard({ end, people, pct, title, empty, share, shareNote, monthLabel }: {
+  end: 'top' | 'low'
+  people: RankedRow[]
+  pct: number
+  title: string
+  empty: string
+  /** The share the ring fills to — the part of the roster this end speaks for. */
+  share: number
+  shareNote: ReactNode
+  monthLabel: string
+}) {
+  const any = people.length > 0
+  const t = ENDS[end]
   return (
     <div
-      className={cx(
-        'flex flex-col overflow-hidden rounded-xl border sm:flex-row sm:items-stretch',
-        any ? 'border-emerald-200 bg-gradient-to-r from-emerald-50 to-white shadow-sm shadow-emerald-100' : 'border-slate-200 bg-white',
-      )}
-      aria-label={`Top performer, ${monthLabel}`}
+      className={cx('flex flex-col overflow-hidden rounded-xl border sm:flex-row sm:items-stretch', any ? t.frame : 'border-slate-200 bg-white')}
+      aria-label={`${title}, ${monthLabel}`}
     >
       {/* Who */}
       <div className="flex min-w-0 flex-1 items-start gap-3 px-4 py-3">
-        <span className={cx('mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full', any ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-400')}>
-          <IconCrown size={15} />
+        <span className={cx('mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full', any ? t.badge : 'bg-slate-100 text-slate-400')}>
+          {end === 'top' ? <IconCrown size={15} /> : <IconDownArrow />}
         </span>
         <div className="min-w-0">
-          <div className={cx('text-[10px] font-bold uppercase tracking-wider', any ? 'text-emerald-700' : 'text-slate-400')}>
-            Top performer{leaders.length > 1 ? 's · tied' : ''} · {monthLabel}
+          <div className={cx('text-[10px] font-bold uppercase tracking-wider', any ? t.kicker : 'text-slate-400')}>
+            {title}{people.length > 1 ? 's · tied' : ''} · {monthLabel}
           </div>
           {any ? (
             <ul className="mt-1.5 flex flex-wrap gap-1.5">
-              {leaders.map((w) => (
-                <li key={w.candidate.member.id} className="inline-flex items-center gap-1.5 rounded-full bg-white py-0.5 pl-0.5 pr-1 text-xs font-semibold text-slate-800 shadow-sm ring-1 ring-emerald-200">
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-bold text-white">{initials(w.candidate.member.name)}</span>
+              {people.map((w) => (
+                <li key={w.candidate.member.id} className={cx('inline-flex items-center gap-1.5 rounded-full bg-white py-0.5 pl-0.5 pr-1 text-xs font-semibold text-slate-800 shadow-sm ring-1', t.chip)}>
+                  <span className={cx('inline-flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold text-white', t.dot)}>{initials(w.candidate.member.name)}</span>
                   {w.candidate.member.name}
-                  <span className="rounded-full bg-emerald-50 px-1.5 py-px text-[10px] font-bold tabular-nums text-emerald-700">{best}%</span>
+                  <span className={cx('rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums', t.pill)}>{pct}%</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="mt-1 text-sm font-medium text-slate-500">No one at {TOP_PERFORMER_PCT}% yet</p>
+            <p className="mt-1 text-sm font-medium text-slate-500">{empty}</p>
           )}
         </div>
       </div>
-      {/* How many made the list */}
+      {/* How much of the roster this end speaks for */}
       <div className="flex shrink-0 items-center gap-3 border-t border-slate-100 px-4 py-3 sm:border-l sm:border-t-0">
-        <ShareRing pct={share} tone={any ? 'text-emerald-500' : 'text-slate-300'} />
+        <ShareRing pct={share} tone={any ? t.ring : 'text-slate-300'} />
         <div className="leading-tight">
-          <div className={cx('text-xl font-bold tabular-nums', any ? 'text-emerald-700' : 'text-slate-900')}>{share}%</div>
-          <div className="text-[11px] text-slate-500">
-            <span className="font-semibold text-slate-700 tabular-nums">{listed.length}</span> of {rows.length} staff scored {TOP_PERFORMER_PCT}%+
-          </div>
+          <div className={cx('text-xl font-bold tabular-nums', any ? t.figure : 'text-slate-900')}>{share}%</div>
+          <div className="text-[11px] text-slate-500">{shareNote}</div>
         </div>
       </div>
+    </div>
+  )
+}
+
+/** The month's incentive: whoever scores highest, provided they clear the bar. */
+export function TopPerformerHeadline({ rows, monthLabel }: { rows: RankedRow[]; monthLabel: string }) {
+  const { top, listed, topPct } = pickPerformers(rows)
+  const share = rows.length ? Math.round((listed.length / rows.length) * 100) : 0
+  return (
+    <PerformerCard
+      end="top"
+      people={top}
+      pct={topPct}
+      title="Top performer"
+      empty={`No one at ${TOP_PERFORMER_PCT}% yet`}
+      share={share}
+      shareNote={<><span className="font-semibold text-slate-700 tabular-nums">{listed.length}</span> of {rows.length} staff scored {TOP_PERFORMER_PCT}%+</>}
+      monthLabel={monthLabel}
+    />
+  )
+}
+
+/**
+ * The other end: whoever scores lowest. It stays empty unless naming somebody says
+ * something — a month where everybody scored the same names nobody (see pickPerformers).
+ */
+export function LowPerformerHeadline({ rows, monthLabel }: { rows: RankedRow[]; monthLabel: string }) {
+  const { low, listed, lowPct } = pickPerformers(rows)
+  const under = rows.length - listed.length
+  const share = rows.length ? Math.round((under / rows.length) * 100) : 0
+  return (
+    <PerformerCard
+      end="low"
+      people={low}
+      pct={lowPct}
+      title="Lowest performer"
+      empty={rows.length > 1 ? 'No one behind the rest' : 'Not enough of a roster to say'}
+      share={share}
+      shareNote={<><span className="font-semibold text-slate-700 tabular-nums">{under}</span> of {rows.length} staff scored under {TOP_PERFORMER_PCT}%</>}
+      monthLabel={monthLabel}
+    />
+  )
+}
+
+/** Both ends, the way the Review page's header shows them. */
+export function PerformerHeadlines({ rows, monthLabel }: { rows: RankedRow[]; monthLabel: string }) {
+  return (
+    <div className="grid gap-2 xl:grid-cols-2">
+      <TopPerformerHeadline rows={rows} monthLabel={monthLabel} />
+      <LowPerformerHeadline rows={rows} monthLabel={monthLabel} />
     </div>
   )
 }
@@ -367,23 +447,32 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
   const [sync, setSync] = useState<'saved' | 'saving' | 'error'>('saved')
   const [syncError, setSyncError] = useState<string | null>(null)
   const [onlyEligible, setOnlyEligible] = useState(false)
+  // A tick here decides who wears the badge on every other page.
+  const reloadBadges = usePerformerReload()
   const [query, setQuery] = useState('')
 
   // The page remounts this sheet on a month change (key={month}), so the initialisers
   // above read that month's own saved state. Every change is sent to the server a moment
   // later — one PUT with the whole month, debounced so a burst of ticks is one request.
   // The first render is skipped: nothing has changed yet.
+  // What the server already holds. A render that changes nothing must not write anything:
+  // a re-render that re-sent this payload could only ever overwrite the month with what it
+  // already says, and a stale copy of it would take the manager's ticks with it.
+  const onServer = useRef(JSON.stringify(toWire(fromWire(saved).settings, fromWire(saved).ticks)))
   const dirty = useRef(false)
   useEffect(() => {
     if (!dirty.current) { dirty.current = true; return }
+    const payload = toWire(settings, ticks)
+    const json = JSON.stringify(payload)
+    if (json === onServer.current) { setSync('saved'); return }
     setSync('saving')
     const handle = setTimeout(() => {
-      api.saveTopPerformer(month, toWire(settings, ticks))
-        .then(() => { setSync('saved'); setSyncError(null) })
+      api.saveTopPerformer(month, payload)
+        .then(() => { onServer.current = json; setSync('saved'); setSyncError(null); reloadBadges(month) })
         .catch((err: Error) => { setSync('error'); setSyncError(err.message) })
     }, 400)
     return () => clearTimeout(handle)
-  }, [month, settings, ticks])
+  }, [month, saved, settings, ticks, reloadBadges])
 
   const candidates = useMemo(() => buildCandidates(staff, attendance, leaves, performance, behaviour), [staff, attendance, leaves, performance, behaviour])
   const rows = useMemo(() => rankCandidates(candidates, settings, ticks), [candidates, settings, ticks])
@@ -455,10 +544,13 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
   const additional = CRITERIA.filter((c) => c.group === 'additional')
 
   // Column template shared by the header and every row.
-  const cols = 'grid-cols-[2.75rem_minmax(12rem,1.1fr)_minmax(13rem,1.2fr)_minmax(16rem,1.8fr)_8rem_6.5rem]'
+  const cols = 'grid-cols-[2.75rem_minmax(14.5rem,1.2fr)_minmax(13rem,1.2fr)_minmax(16rem,1.8fr)_8rem_6.5rem]'
 
   return (
     <div className="space-y-4">
+      {/* The month's two answers, before the tiles that count the rest of the roster. */}
+      <PerformerHeadlines rows={rows} monthLabel={monthLabel} />
+
       {/* Headline tiles, like the inspiration's stat cards. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
@@ -605,7 +697,10 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
                       <span className="flex min-w-0 items-center gap-2.5">
                         <span className={AVATAR}>{initials(m.name)}</span>
                         <span className="min-w-0 leading-tight">
-                          <span className="block truncate text-sm font-semibold text-slate-800">{m.name}</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="truncate text-sm font-semibold text-slate-800">{m.name}</span>
+                            <PerformerBadge staffId={m.id} />
+                          </span>
                           <span className="block truncate text-[11px] text-slate-400">
                             {m.departments.map((d) => d.name).join(' · ') || 'No department'}
                             <span className="text-slate-300"> · </span>
