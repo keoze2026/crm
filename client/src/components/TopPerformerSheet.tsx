@@ -12,7 +12,7 @@
 // The list is a div grid rather than a <table>: the app's global table rules give every
 // cell the Excel-like density the sheets want, and this is a leaderboard, not a sheet —
 // it wants room, labelled pills instead of numbered columns, and chips you can tap.
-import React, { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { cx } from './ui'
 import { PerformerBadge, usePerformerReload } from '../lib/performers'
@@ -22,6 +22,7 @@ import {
   TOP_PERFORMER_PCT,
   activeCriteria,
   buildCandidates,
+  criterion,
   fromWire,
   pickPerformers,
   rankCandidates,
@@ -69,22 +70,36 @@ const IconCrown = ({ size = 12 }: { size?: number }) => (
 
 // ─── Pieces ───────────────────────────────────────────────────────────────────
 
-/** A data-driven verdict as a labelled pill: green met, red not met, grey can't say. */
-function VerdictPill({ c, row }: { c: Criterion; row: RankedRow }) {
+/**
+ * A data-driven verdict as a labelled pill — green met, red not met, grey can't say — that
+ * is also a control: tap it to confirm the criterion by hand when the record is wrong or
+ * missing. A confirmed one is filled navy like the manual chips, because it is now the
+ * manager's word rather than the data's; tap again to hand it back to the data.
+ */
+function VerdictPill({ c, row, name, onToggle }: { c: Criterion; row: RankedRow; name: string; onToggle: () => void }) {
   const v = row.verdicts[c.id]
+  const confirmed = v.confirmed ?? false
   return (
-    <span
-      title={`${c.n}. ${c.label} — ${v.note}`}
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={confirmed}
+      aria-label={`${name}: ${c.label}`}
+      title={`${c.n}. ${c.label} — ${v.note}${confirmed ? ' · tap to hand back to the data' : ' · tap to confirm by hand'}`}
+      onClick={onToggle}
       className={cx(
-        'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap',
-        v.unknown ? 'bg-slate-100 text-slate-500' : v.met ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600',
+        'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap transition-colors',
+        confirmed ? 'border-brand bg-brand text-white'
+          : v.unknown ? 'border-transparent bg-slate-100 text-slate-500 hover:border-brand'
+          : v.met ? 'border-transparent bg-emerald-50 text-emerald-700 hover:border-brand'
+          : 'border-transparent bg-rose-50 text-rose-600 hover:border-brand',
       )}
     >
-      <span className={cx('inline-flex h-3.5 w-3.5 items-center justify-center rounded-full', v.unknown ? 'bg-slate-200' : v.met ? 'bg-emerald-100' : 'bg-rose-100')}>
-        {v.unknown ? <span className="text-[9px] font-bold leading-none">?</span> : v.met ? <IconCheck size={9} /> : <IconCross />}
+      <span className={cx('inline-flex h-3.5 w-3.5 items-center justify-center rounded-full', confirmed ? 'bg-white/25' : v.unknown ? 'bg-slate-200' : v.met ? 'bg-emerald-100' : 'bg-rose-100')}>
+        {confirmed || v.met ? <IconCheck size={9} /> : v.unknown ? <span className="text-[9px] font-bold leading-none">?</span> : <IconCross />}
       </span>
       {c.label}
-    </span>
+    </button>
   )
 }
 
@@ -276,26 +291,10 @@ function Guide() {
 // sat empty under the month picker. The Top Performers list is everyone scoring 80% or
 // more of the criteria in play; the green card names the highest scorer on it — or
 // everyone tied for that score — and the red card, its mirror, names the lowest scorer of
-// the month. Names and percentages only; the evidence is the ranking below.
+// the month. A name and a score, nothing else; the evidence is the ranking below.
 //
 // Both cards read the same rules the app-wide badges do (lib/incentive.ts · pickPerformers),
 // so the Review tab and the badges worn beside staff names can never name different people.
-
-/** A small ring that fills clockwise to the share given, drawn in the tone passed. */
-function ShareRing({ pct, tone }: { pct: number; tone: string }) {
-  const r = 15
-  const c = 2 * Math.PI * r
-  return (
-    <svg width="44" height="44" viewBox="0 0 40 40" className="shrink-0 -rotate-90" aria-hidden>
-      <circle cx="20" cy="20" r={r} fill="none" stroke="currentColor" strokeWidth="4" className="text-slate-200/80" />
-      <circle
-        cx="20" cy="20" r={r} fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round"
-        strokeDasharray={`${(pct / 100) * c} ${c}`}
-        className={cx('transition-[stroke-dasharray] duration-500', tone)}
-      />
-    </svg>
-  )
-}
 
 /** The palette and the wording for each end — everything else about the two cards is shared. */
 const ENDS = {
@@ -321,22 +320,19 @@ const ENDS = {
   },
 } as const
 
-function PerformerCard({ end, people, pct, title, empty, share, shareNote, monthLabel }: {
+function PerformerCard({ end, people, pct, title, empty, monthLabel }: {
   end: 'top' | 'low'
   people: RankedRow[]
   pct: number
   title: string
   empty: string
-  /** The share the ring fills to — the part of the roster this end speaks for. */
-  share: number
-  shareNote: ReactNode
   monthLabel: string
 }) {
   const any = people.length > 0
   const t = ENDS[end]
   return (
     <div
-      className={cx('flex flex-col overflow-hidden rounded-xl border sm:flex-row sm:items-stretch', any ? t.frame : 'border-slate-200 bg-white')}
+      className={cx('flex overflow-hidden rounded-xl border', any ? t.frame : 'border-slate-200 bg-white')}
       aria-label={`${title}, ${monthLabel}`}
     >
       {/* Who */}
@@ -363,22 +359,13 @@ function PerformerCard({ end, people, pct, title, empty, share, shareNote, month
           )}
         </div>
       </div>
-      {/* How much of the roster this end speaks for */}
-      <div className="flex shrink-0 items-center gap-3 border-t border-slate-100 px-4 py-3 sm:border-l sm:border-t-0">
-        <ShareRing pct={share} tone={any ? t.ring : 'text-slate-300'} />
-        <div className="leading-tight">
-          <div className={cx('text-xl font-bold tabular-nums', any ? t.figure : 'text-slate-900')}>{share}%</div>
-          <div className="text-[11px] text-slate-500">{shareNote}</div>
-        </div>
-      </div>
     </div>
   )
 }
 
 /** The month's incentive: whoever scores highest, provided they clear the bar. */
 export function TopPerformerHeadline({ rows, monthLabel }: { rows: RankedRow[]; monthLabel: string }) {
-  const { top, listed, topPct } = pickPerformers(rows)
-  const share = rows.length ? Math.round((listed.length / rows.length) * 100) : 0
+  const { top, topPct } = pickPerformers(rows)
   return (
     <PerformerCard
       end="top"
@@ -386,8 +373,6 @@ export function TopPerformerHeadline({ rows, monthLabel }: { rows: RankedRow[]; 
       pct={topPct}
       title="Top performer"
       empty={`No one at ${TOP_PERFORMER_PCT}% yet`}
-      share={share}
-      shareNote={<><span className="font-semibold text-slate-700 tabular-nums">{listed.length}</span> of {rows.length} staff scored {TOP_PERFORMER_PCT}%+</>}
       monthLabel={monthLabel}
     />
   )
@@ -398,9 +383,7 @@ export function TopPerformerHeadline({ rows, monthLabel }: { rows: RankedRow[]; 
  * something — a month where everybody scored the same names nobody (see pickPerformers).
  */
 export function LowPerformerHeadline({ rows, monthLabel }: { rows: RankedRow[]; monthLabel: string }) {
-  const { low, listed, lowPct } = pickPerformers(rows)
-  const under = rows.length - listed.length
-  const share = rows.length ? Math.round((under / rows.length) * 100) : 0
+  const { low, lowPct } = pickPerformers(rows)
   return (
     <PerformerCard
       end="low"
@@ -408,8 +391,6 @@ export function LowPerformerHeadline({ rows, monthLabel }: { rows: RankedRow[]; 
       pct={lowPct}
       title="Lowest performer"
       empty={rows.length > 1 ? 'No one behind the rest' : 'Not enough of a roster to say'}
-      share={share}
-      shareNote={<><span className="font-semibold text-slate-700 tabular-nums">{under}</span> of {rows.length} staff scored under {TOP_PERFORMER_PCT}%</>}
       monthLabel={monthLabel}
     />
   )
@@ -532,7 +513,8 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
   /** Header chip: credit one manual criterion to everyone shown — or, if they all have it, take it back. */
   const tickAll = (id: CriterionId) => {
     holdOrder()
-    const on = !shown.every((r) => r.verdicts[id].met)
+    const manual = criterion(id).source === 'manual'
+    const on = !shown.every((r) => manual ? r.verdicts[id].met : (r.verdicts[id].confirmed ?? false))
     setTicks((t) => {
       const next = { ...t }
       for (const r of shown) {
@@ -656,7 +638,24 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
             <div className={cx('grid items-center gap-3 px-4 py-2 text-[11px] font-medium text-slate-500', cols)}>
               <span>#</span>
               <span>Staff</span>
-              <span>Checked for you <span className="text-slate-400">· hover for the evidence</span></span>
+              <span className="flex flex-wrap items-center gap-1">
+                <span className="mr-1">Checked for you <span className="text-slate-400">· tap to confirm by hand</span></span>
+                {dataCriteria.map((c) => {
+                  const all = shown.length > 0 && shown.every((r) => r.verdicts[c.id].confirmed)
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => tickAll(c.id)}
+                      disabled={shown.length === 0}
+                      title={all ? `Hand "${c.label}" back to the data for everyone shown` : `Confirm "${c.label}" by hand for everyone shown`}
+                      className={cx('rounded border px-1 py-px text-[9px] font-semibold transition-colors', all ? 'border-brand bg-brand text-white' : 'border-slate-200 text-slate-400 hover:border-brand hover:text-brand')}
+                    >
+                      {c.label}
+                    </button>
+                  )
+                })}
+              </span>
               <span className="flex flex-wrap items-center gap-1">
                 <span className="mr-1">You confirm</span>
                 {manualCriteria.map((c) => {
@@ -716,7 +715,9 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
                       </span>
                       {/* Data-driven verdicts */}
                       <span className="flex flex-wrap gap-1">
-                        {dataCriteria.map((c) => <VerdictPill key={c.id} c={c} row={r} />)}
+                        {dataCriteria.map((c) => (
+                          <VerdictPill key={c.id} c={c} row={r} name={m.name} onToggle={() => tick(m.id, c.id, !(r.verdicts[c.id].confirmed ?? false))} />
+                        ))}
                       </span>
                       {/* Manual ticks */}
                       <span className="flex flex-wrap gap-1">
@@ -744,7 +745,7 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
         <p className="border-t border-slate-100 px-4 py-2.5 text-[11px] text-slate-500">
           Only people with a Performance or Behaviour rating picked for {monthLabel} are ranked
           {awaitingReview > 0 && <> — <span className="font-semibold text-amber-700">{awaitingReview} on the roster {awaitingReview === 1 ? 'is' : 'are'} not listed yet</span> because no rating has been chosen for them</>}.
-          Green = met, red = not met, grey "?" = nothing recorded for that month yet. Hover any pill to see exactly what it was read from.
+          Green = met, red = not met, grey "?" = nothing recorded for that month yet. Hover any pill to see exactly what it was read from — and tap one to confirm it by hand when the record is wrong or missing; navy means your word has replaced the data's.
           Your confirmations and the switches above are saved for {monthLabel} and shared with every manager.
         </p>
       </div>

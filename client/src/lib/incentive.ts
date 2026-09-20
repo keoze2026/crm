@@ -173,12 +173,38 @@ export interface Verdict {
   note: string
   /** True when the data can't say either way (no review, no attendance) — shown greyed. */
   unknown?: boolean
+  /**
+   * True when a manager confirmed a DATA-DRIVEN criterion by hand, over whatever the data
+   * said — the sheet shows it as theirs, and `note` keeps what the data would have said.
+   */
+  confirmed?: boolean
 }
 
 const GOOD_PERFORMANCE = /^(excellent|good)$/i
 const BAD_BEHAVIOUR = /low performer/i
 
+/**
+ * One criterion's verdict for one person.
+ *
+ * The four data-driven criteria are read from the month's sheets, but a manager can still
+ * confirm any of them by hand — a tick beats the data. That is for the day the record is
+ * wrong or missing and the manager knows better: a login the bot never saw, a review not
+ * yet typed up. Removing the tick hands the verdict back to the data. The manual criteria
+ * are ticks and nothing else.
+ */
 export function judge(c: Candidate, id: CriterionId, settings: IncentiveSettings, ticks: CriterionId[]): Verdict {
+  const auto = judgeFromData(c, id, settings)
+  if (auto === null) {
+    return { met: ticks.includes(id), note: ticks.includes(id) ? 'Confirmed by you' : 'Not confirmed yet' }
+  }
+  if (ticks.includes(id)) {
+    return { met: true, confirmed: true, note: `Confirmed by you · the data says: ${auto.note}` }
+  }
+  return auto
+}
+
+/** What the month's data says about a criterion — null for the ones no data can judge. */
+function judgeFromData(c: Candidate, id: CriterionId, settings: IncentiveSettings): Verdict | null {
   switch (id) {
     case 'behaviour': {
       const rating = c.behaviour?.rating.trim() ?? ''
@@ -212,7 +238,7 @@ export function judge(c: Candidate, id: CriterionId, settings: IncentiveSettings
       return { met: byRating || byScore, note }
     }
     default:
-      return { met: ticks.includes(id), note: ticks.includes(id) ? 'Confirmed by you' : 'Not confirmed yet' }
+      return null
   }
 }
 
