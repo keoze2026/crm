@@ -324,16 +324,13 @@ export const INCENTIVE_USD = 200
 /** The score that puts someone on the Top Performers list. */
 export const TOP_PERFORMER_PCT = 80
 
-/** The lowest performer must have scored more than this — zero is "not marked", not "last". */
-export const LOW_PERFORMER_MIN_PCT = 1
-
 /** A person's score as a whole percentage of the criteria in play. */
 export const scorePct = (r: RankedRow) => Math.round((r.met / Math.max(1, r.total)) * 100)
 
 export interface PerformerPicks {
   /** Everyone tied at the best score, provided it reaches TOP_PERFORMER_PCT. */
   top: RankedRow[]
-  /** Everyone tied at the worst score above 1% — empty unless there is a real spread (see below). */
+  /** Everyone tied at the worst score — empty unless there is a real spread (see below). */
   low: RankedRow[]
   /** Everyone at or above TOP_PERFORMER_PCT, the Top Performers list itself. */
   listed: RankedRow[]
@@ -345,24 +342,23 @@ export interface PerformerPicks {
  * The month's ends.
  *
  * Top is the highest scorer (or the people tied with them) once they clear the 80% bar —
- * the same rule the headline has always used. Bottom is the lowest scorer AMONG THE PEOPLE
- * WHO SCORED MORE THAN 1% — somebody at zero has not been scored so much as not yet
- * marked, so they are neither the lowest nor in the way of naming who is. It is only named
- * when naming it says something: at least two people to compare, somebody who scored
- * better, and a score under the bar. A month where everyone scored the same names nobody,
- * rather than pinning a red badge on whoever happens to sort last. Only reviewed people are
- * in `rows` to begin with (see buildCandidates).
+ * the same rule the headline has always used. Bottom is the lowest scorer, zero included —
+ * a reviewed person at 0% is genuinely last, not "unmarked", because only reviewed people
+ * are in `rows` to begin with (see buildCandidates; that is what keeps the not-yet-reviewed
+ * out of this). It is only named when naming it says something: at least two people to
+ * compare, somebody who scored better, and a score under the bar. A month where everyone
+ * scored the same names nobody, rather than pinning a red badge on whoever happens to sort
+ * last.
  */
 export function pickPerformers(rows: RankedRow[]): PerformerPicks {
   const listed = rows.filter((r) => scorePct(r) >= TOP_PERFORMER_PCT)
   const topPct = listed.length ? Math.max(...listed.map(scorePct)) : 0
-  const scored = rows.filter((r) => scorePct(r) > LOW_PERFORMER_MIN_PCT)
-  const lowPct = scored.length ? Math.min(...scored.map(scorePct)) : 0
+  const lowPct = rows.length ? Math.min(...rows.map(scorePct)) : 0
   const best = rows.length ? Math.max(...rows.map(scorePct)) : 0
-  const spread = scored.length > 1 && lowPct < best && lowPct < TOP_PERFORMER_PCT
+  const spread = rows.length > 1 && lowPct < best && lowPct < TOP_PERFORMER_PCT
   return {
     top: listed.filter((r) => scorePct(r) === topPct),
-    low: spread ? scored.filter((r) => scorePct(r) === lowPct) : [],
+    low: spread ? rows.filter((r) => scorePct(r) === lowPct) : [],
     listed,
     topPct,
     lowPct,

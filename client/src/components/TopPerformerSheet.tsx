@@ -220,7 +220,7 @@ const GUIDE_STEPS = [
   },
   {
     title: 'Confirm the rest',
-    text: 'Tap a criterion beside a person once you have seen it. The list holds its order until you press Re-rank.',
+    text: 'Tap a criterion beside a person once you have seen it. The list re-ranks itself as you go.',
     icon: guideIcon(<><rect x="3" y="3" width="18" height="18" rx="2.5" /><path d="m8 12 3 3 5-6" /><path d="M14.5 20.5 13 17l4-1.5z" fill={NAVY} stroke="none" /></>),
   },
   {
@@ -458,28 +458,9 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
   const candidates = useMemo(() => buildCandidates(staff, attendance, leaves, performance, behaviour), [staff, attendance, leaves, performance, behaviour])
   const rows = useMemo(() => rankCandidates(candidates, settings, ticks), [candidates, settings, ticks])
 
-  /**
-   * The order on screen is HELD while the manager is ticking.
-   *
-   * Ranking is live — a tick raises someone's score, which moves them up the list. Left to
-   * itself the list would re-sort under the cursor: the person just ticked jumps away and
-   * whoever slides into that row shows the same chip unticked, which reads as "my tick went
-   * to the wrong person". So the first tick freezes the running order (for these candidates),
-   * the rank badges and scores keep updating in place, and a Re-rank button restores the
-   * true order when the manager is ready. A month change or a data reload drops the hold.
-   */
-  const [hold, setHold] = useState<{ base: typeof candidates; ids: number[] } | null>(null)
-  const held = hold && hold.base === candidates ? hold.ids : null
-  const ordered = useMemo(() => {
-    if (!held) return rows
-    const byId = new Map(rows.map((r) => [r.candidate.member.id, r]))
-    const kept = held.map((id) => byId.get(id)).filter((r): r is RankedRow => r !== undefined)
-    const seen = new Set(held)
-    return [...kept, ...rows.filter((r) => !seen.has(r.candidate.member.id))]
-  }, [rows, held])
-  const orderStale = held !== null && ordered.some((r, i) => r !== rows[i])
-  const holdOrder = () => { if (!held) setHold({ base: candidates, ids: ordered.map((r) => r.candidate.member.id) }) }
-  const rerank = () => setHold(null)
+  // The list re-ranks itself on every tick: a confirmation raises somebody's score and they
+  // move to where that score puts them, straight away. Rows are keyed by person, so a row
+  // moving is the same element sliding, not a new one appearing under the cursor.
   const active = useMemo(() => activeCriteria(settings), [settings])
   const dataCriteria = useMemo(() => active.filter((c) => c.source !== 'manual'), [active])
   const manualCriteria = useMemo(() => active.filter((c) => c.source === 'manual'), [active])
@@ -489,7 +470,7 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
   const winners = useMemo(() => rows.filter((r) => r.allMet), [rows])
   const passData = useMemo(() => rows.filter((r) => dataCriteria.every((c) => r.verdicts[c.id].met)), [rows, dataCriteria])
   const q = query.trim().toLowerCase()
-  const shown = ordered.filter((r) =>
+  const shown = rows.filter((r) =>
     (!onlyEligible || passData.includes(r)) &&
     (!q || r.candidate.member.name.toLowerCase().includes(q) || r.candidate.member.departments.some((d) => d.name.toLowerCase().includes(q))),
   )
@@ -503,7 +484,6 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
     setSettings((s) => ({ ...s, additional: s.additional.includes(id) ? s.additional.filter((x) => x !== id) : [...s.additional, id] }))
 
   const tick = (staffId: number, id: CriterionId, on: boolean) => {
-    holdOrder()
     setTicks((t) => {
       const own = t[staffId] ?? []
       return { ...t, [staffId]: on ? [...new Set([...own, id])] : own.filter((x) => x !== id) }
@@ -512,7 +492,6 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
 
   /** Header chip: credit one manual criterion to everyone shown — or, if they all have it, take it back. */
   const tickAll = (id: CriterionId) => {
-    holdOrder()
     const manual = criterion(id).source === 'manual'
     const on = !shown.every((r) => manual ? r.verdicts[id].met : (r.verdicts[id].confirmed ?? false))
     setTicks((t) => {
@@ -597,17 +576,6 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
             >
               {sync === 'saving' ? 'Saving…' : sync === 'error' ? 'Not saved — check your connection' : 'Saved'}
             </span>
-            {orderStale && (
-              <button
-                type="button"
-                onClick={rerank}
-                title="Scores changed while you were ticking — put the list back in rank order"
-                className="inline-flex items-center gap-1 rounded-md border border-brand bg-white px-2 py-0.5 text-[11px] font-semibold text-brand transition-colors hover:bg-brand hover:text-white"
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 6h13M3 12h9M3 18h5" /><path d="m17 10 3-3 3 3M20 7v14" /></svg>
-                Re-rank
-              </button>
-            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <input

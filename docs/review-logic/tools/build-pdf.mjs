@@ -11,7 +11,7 @@ await page.pdf({
   printBackground: true,
   outline: true,
   tagged: true,
-  margin: { top: '16mm', bottom: '16mm', left: '15mm', right: '15mm' },
+  margin: { top: '12mm', bottom: '13mm', left: '13mm', right: '13mm' },
   displayHeaderFooter: true,
   headerTemplate: '<div></div>',
   footerTemplate: `<div style="width:100%;font-family:'Segoe UI',sans-serif;font-size:8px;color:#94a3b8;padding:0 15mm;display:flex;justify-content:space-between">
