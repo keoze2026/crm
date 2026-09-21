@@ -8,6 +8,7 @@ use App\Auth\AuthMiddleware;
 use App\Auth\Config;
 use App\Controllers\AccessPresetController;
 use App\Controllers\AnalyticsController;
+use App\Controllers\AnnualReviewController;
 use App\Controllers\AttendanceController;
 use App\Controllers\AuditController;
 use App\Controllers\AuthController;
@@ -151,10 +152,20 @@ $router->put('/review-entries/{id}',        fn ($p) => $reviews->updateEntry($p)
 $router->delete('/review-entries/{id}',     fn ($p) => $reviews->destroyEntry($p));
 
 // Top Performer — the Review page's fourth tab: the month's switches and the manager's
-// confirmations, shared so every browser sees the same ticks.
+// confirmations, shared so every browser sees the same ticks. /range answers a whole window
+// at once, which is what the Annual Reviews tab scores six or twelve months from.
 $topPerformer = new TopPerformerController();
 $router->get('/top-performer', fn () => $topPerformer->show());
 $router->put('/top-performer', fn () => $topPerformer->save());
+$router->get('/top-performer/range', fn () => $topPerformer->range());
+
+// Annual Reviews — the Review page's fifth tab: the half-yearly and yearly roll-ups. The
+// figures are accumulated on the client from the monthly sheets; what is stored here is the
+// layout, the cells a manager typed over them, and the version history behind Reset.
+$annualReviews = new AnnualReviewController();
+$router->get('/annual-reviews',        fn () => $annualReviews->show());
+$router->put('/annual-reviews',        fn () => $annualReviews->save());
+$router->post('/annual-reviews/reset', fn () => $annualReviews->reset());
 
 // Vendors (traffic-source payment sheets)
 $vendors = new VendorController();

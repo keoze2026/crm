@@ -53,6 +53,7 @@ final class AuthMiddleware
         'review-departments' => ['reviews'],
         'review-entries'     => ['reviews'],
         'top-performer'      => ['reviews'],
+        'annual-reviews'     => ['reviews'],
         'staff'              => ['staff', 'queues', 'reviews', 'attendance'],
         'departments'        => ['staff'],
         // The attendance sheet moved to the Attendance page, so that page's own permission

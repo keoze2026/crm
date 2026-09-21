@@ -783,3 +783,38 @@ export interface TopPerformerState {
   settings: { additional: string[]; min_performance: number }
   ticks: Record<string, string[]>
 }
+
+// ─── Annual Reviews (the Review page's roll-up tab) ────────────────────────────
+
+/**
+ * The stored half of an Annual Reviews sheet — the six- or twelve-month roll-up.
+ *
+ * The figures themselves are NOT here: the client accumulates them from the monthly review
+ * rows, the attendance and leaves sheets and the saved Top Performer ticks, so a period can
+ * never disagree with the months it is made of (see lib/annualReview.ts). What the server
+ * keeps is only what a manager put on top of that — hence every field below being an edit
+ * rather than a number.
+ */
+export interface AnnualReviewSheet {
+  /** 'half' (6 months) or 'year' (12). */
+  span: string
+  /** First of the LAST month in the window — the month the page's selector is showing. */
+  period_end: string
+  /** Months in the window: 6 or 12. */
+  months: number
+  /** Cells typed over a computed one: row key → column id → text. */
+  overrides: Record<string, Record<string, string>>
+  /** Rows added by hand for somebody the period's reviews produced no row for. */
+  extra_rows: { key: string; name: string }[]
+  /** `min_months`: months of the window a person must be reviewed in to be named. */
+  settings: { min_months?: number }
+  /** When the sheet was last saved; null when nothing has been edited yet. */
+  updated_at: string | null
+  /**
+   * The save the Reset button would restore — the most recent one more than 24 hours old.
+   * Null means today's edits are all there is, and Reset has nowhere to go.
+   */
+  reset_to: string | null
+  /** Only on a reset's answer: the version it just restored. */
+  restored_from?: string
+}

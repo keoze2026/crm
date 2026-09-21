@@ -47,6 +47,7 @@ final class Audit
         'review-departments' => 'review-department',
         'review-entries'     => 'review-entry',
         'top-performer'      => 'top-performer',
+        'annual-reviews'     => 'annual-review',
     ];
 
     /** @var array{method:string,path:string,body:array<string,mixed>}|null */

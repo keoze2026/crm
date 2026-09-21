@@ -21,6 +21,11 @@ use PDOException;
  *   GET /top-performer?month=YYYY-MM   the month's settings and ticks
  *   PUT /top-performer?month=YYYY-MM   replace them (the whole month's state, in one go —
  *                                      the tab autosaves after every change)
+ *   GET /top-performer/range?from=&to= every month in the window, for the Annual Reviews
+ *                                      tab — a twelve-month roll-up scores twelve months
+ *                                      against the same ticks a manager gave each one, and
+ *                                      asking for them one at a time would be twelve
+ *                                      round-trips before the first figure appeared.
  *
  * `month` is the month being judged, the first of that month, exactly as review rows are
  * dated. A month nobody has touched answers with the defaults and no ticks.
@@ -38,10 +43,66 @@ final class TopPerformerController
     private const DEFAULT_ADDITIONAL = ['goals'];
     private const DEFAULT_MIN_PERFORMANCE = 80;
 
+    /** The longest window /range will answer — twice the longest roll-up the page offers. */
+    private const MAX_RANGE_MONTHS = 24;
+
     public function show(): void
     {
         $month = $this->requireMonth(Http::query('month'));
         Http::json($this->state($month));
+    }
+
+    /**
+     * Every month from `from` to `to` inclusive, oldest first — one entry per month whether
+     * or not anybody has touched it, so the caller can score a period without checking
+     * which months exist. Months nobody has touched carry the defaults, exactly as show()
+     * answers them.
+     */
+    public function range(): void
+    {
+        $from = $this->requireMonth(Http::query('from'));
+        $to   = $this->requireMonth(Http::query('to'));
+        if ($from > $to) {
+            [$from, $to] = [$to, $from];
+        }
+
+        // The months first, so an over-long window is refused before anything is read.
+        $months = [];
+        for ($cursor = $from; $cursor <= $to; $cursor = date('Y-m-01', strtotime($cursor . ' +1 month'))) {
+            if (\count($months) >= self::MAX_RANGE_MONTHS) {
+                Http::error('A range may cover at most ' . self::MAX_RANGE_MONTHS . ' months', 422);
+            }
+            $months[] = $cursor;
+        }
+
+        // Two queries for the whole window rather than two per month.
+        $pdo  = Database::connection();
+        $stmt = $pdo->prepare(
+            'SELECT to_char(month, \'YYYY-MM-DD\') AS month, additional, min_performance
+               FROM top_performer_months WHERE month BETWEEN :from AND :to'
+        );
+        $stmt->execute([':from' => $from, ':to' => $to]);
+        $settings = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $settings[$row['month']] = $this->readSettings($row);
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT to_char(month, \'YYYY-MM-DD\') AS month, staff_id, criterion
+               FROM top_performer_ticks WHERE month BETWEEN :from AND :to
+           ORDER BY month, staff_id, criterion'
+        );
+        $stmt->execute([':from' => $from, ':to' => $to]);
+        $ticks = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $ticks[$row['month']][(string) $row['staff_id']][] = $row['criterion'];
+        }
+
+        Http::json(array_map(fn (string $month): array => [
+            'month'    => $month,
+            'settings' => $settings[$month] ?? $this->defaultSettings(),
+            'ticks'    => (object) ($ticks[$month] ?? []),
+        ], $months));
     }
 
     public function save(): void
@@ -105,14 +166,6 @@ final class TopPerformerController
         $stmt->execute([':month' => $month]);
         $row = $stmt->fetch();
 
-        $additional = self::DEFAULT_ADDITIONAL;
-        $min        = self::DEFAULT_MIN_PERFORMANCE;
-        if ($row) {
-            $decoded    = json_decode((string) $row['additional'], true);
-            $additional = is_array($decoded) ? array_values(array_filter($decoded, 'is_string')) : self::DEFAULT_ADDITIONAL;
-            $min        = (int) $row['min_performance'];
-        }
-
         $stmt = $pdo->prepare(
             'SELECT staff_id, criterion FROM top_performer_ticks WHERE month = :month ORDER BY staff_id, criterion'
         );
@@ -124,9 +177,32 @@ final class TopPerformerController
 
         return [
             'month'    => $month,
-            'settings' => ['additional' => $additional, 'min_performance' => $min],
+            'settings' => $row ? $this->readSettings($row) : $this->defaultSettings(),
             // An object even when empty, so the client never receives a bare [] for a map.
             'ticks'    => (object) $ticks,
+        ];
+    }
+
+    /** @return array{additional:string[],min_performance:int} */
+    private function defaultSettings(): array
+    {
+        return ['additional' => self::DEFAULT_ADDITIONAL, 'min_performance' => self::DEFAULT_MIN_PERFORMANCE];
+    }
+
+    /**
+     * A `top_performer_months` row as the API shapes it. Unknown criterion ids are left for
+     * the client to drop (fromWire), so a month saved by a newer build still reads.
+     *
+     * @return array{additional:string[],min_performance:int}
+     */
+    private function readSettings(array $row): array
+    {
+        $decoded = json_decode((string) $row['additional'], true);
+        return [
+            'additional'      => is_array($decoded)
+                ? array_values(array_filter($decoded, 'is_string'))
+                : self::DEFAULT_ADDITIONAL,
+            'min_performance' => (int) $row['min_performance'],
         ];
     }
 

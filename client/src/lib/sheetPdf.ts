@@ -9,6 +9,7 @@ import {
   returnVerdict, shortDay, staffStatus, sumLoginTallies, tallyPunctuality, type LoginTally,
 } from './staff'
 import { activeCriteria, type IncentiveSettings, type RankedRow } from './incentive'
+import type { AnnualExport } from '../components/AnnualReviewSheet'
 
 /**
  * PDF exports for the Queues, Review and Staff Management sheets — the tables as filled
@@ -31,6 +32,7 @@ const RED: [number, number, number] = [185, 28, 28]
 const ROSE: [number, number, number] = [255, 228, 230]
 const PALE_RED: [number, number, number] = [254, 226, 226]
 const GREEN: [number, number, number] = [4, 120, 87]
+const PALE_GREEN: [number, number, number] = [209, 250, 229]
 const M = 40
 
 const baseStyles: Partial<Styles> = {
@@ -668,6 +670,78 @@ export function buildTopPerformerPdf(rows: RankedRow[], settings: IncentiveSetti
       }
       if (col === first + active.length + 1 && text === 'ELIGIBLE') {
         data.cell.styles.textColor = GREEN
+      }
+    },
+    margin: { left: M, right: M },
+  })
+  return doc
+}
+
+// ─── Annual Reviews ───────────────────────────────────────────────────────────
+
+/**
+ * The Annual Reviews roll-up, printed exactly as the sheet is showing it — the columns the
+ * manager left visible, in their order and under their wording, and every cell as it reads
+ * on screen, which means a figure typed over the accumulation prints as the figure.
+ *
+ * A typed cell is marked with a small ring rather than a colour, so it survives a
+ * black-and-white print; the key under the title says so. The period's top and lowest
+ * performers are banded green and red, the way the sheet bands their rows.
+ */
+export function buildAnnualReviewPdf(state: AnnualExport): jsPDF {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
+  const { columns, rows, periodLabel, span, minMonths } = state
+  const months = span === 'half' ? 6 : 12
+  const named = rows.filter((r) => r.standing !== null)
+
+  const y = drawHeader(
+    doc,
+    `${span === 'half' ? 'HALF-YEARLY' : 'YEARLY'} REVIEW`,
+    `${periodLabel} · ${months} months accumulated · ${rows.length} ${rows.length === 1 ? 'person' : 'people'}`
+      + ` · ranked on average performance · named only on ${minMonths}+ months reviewed`,
+  )
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(...MUTED)
+  const verdict = named.length
+    ? named.map((r) => `${r.standing === 'top' ? 'Top performer' : 'Lowest performer'}: ${r.name}`).join('   ')
+    : 'Neither end of the period is named yet'
+  const lines = doc.splitTextToSize(
+    `${verdict}   (\u00b0 a figure typed in by hand, over the accumulation)`,
+    doc.internal.pageSize.getWidth() - M * 2,
+  ) as string[]
+  doc.text(lines, M, y)
+
+  autoTable(doc, {
+    startY: y + lines.length * 10 + 6,
+    theme: 'grid',
+    head: [['#', ...columns.map((c) => c.label.toUpperCase())]],
+    body: rows.map((r, i) => [
+      String(i + 1),
+      ...r.cells.map((text, j) => `${text}${r.typed.includes(columns[j].id) ? '\u00b0' : ''}`),
+    ]),
+    styles: { ...baseStyles, fontSize: 8, cellPadding: 4 },
+    headStyles: navyHead,
+    bodyStyles: { fillColor: CYAN },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 26, fillColor: BAND, fontStyle: 'bold' },
+      ...Object.fromEntries(columns.map((c, i) => [i + 1, {
+        halign: c.align ?? 'left',
+        fontStyle: c.id === 'name' ? 'bold' : 'normal',
+      }])),
+    },
+    // The two named rows are banded, and their Sr. No. cell carries the colour solid so the
+    // band is unmistakable at the left edge.
+    didParseCell: (data) => {
+      if (data.section !== 'body') return
+      const row = rows[data.row.index]
+      if (row.standing === null) return
+      const solid = row.standing === 'top' ? GREEN : RED
+      data.cell.styles.fillColor = row.standing === 'top' ? PALE_GREEN : ROSE
+      if (data.column.index === 0) {
+        data.cell.styles.fillColor = solid
+        data.cell.styles.textColor = WHITE
       }
     },
     margin: { left: M, right: M },

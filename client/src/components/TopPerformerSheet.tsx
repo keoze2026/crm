@@ -320,20 +320,32 @@ const ENDS = {
   },
 } as const
 
-function PerformerCard({ end, people, pct, title, empty, monthLabel }: {
-  end: 'top' | 'low'
-  people: RankedRow[]
+/** One named person on a scorecard, whatever period worked them out. */
+export interface EndPerson {
+  key: string | number
+  name: string
+  /** Their score as a whole percentage. */
   pct: number
+}
+
+/**
+ * One end's scorecard. Shared by the monthly tab and the Annual Reviews roll-up, so a
+ * half-yearly winner is presented exactly like a monthly one — `periodLabel` is the only
+ * thing that differs ("August 2026" against "October 2025 – September 2026").
+ */
+export function PerformerEndCard({ end, people, title, empty, periodLabel }: {
+  end: 'top' | 'low'
+  people: EndPerson[]
   title: string
   empty: string
-  monthLabel: string
+  periodLabel: string
 }) {
   const any = people.length > 0
   const t = ENDS[end]
   return (
     <div
       className={cx('flex overflow-hidden rounded-xl border', any ? t.frame : 'border-slate-200 bg-white')}
-      aria-label={`${title}, ${monthLabel}`}
+      aria-label={`${title}, ${periodLabel}`}
     >
       {/* Who */}
       <div className="flex min-w-0 flex-1 items-start gap-3 px-4 py-3">
@@ -342,15 +354,15 @@ function PerformerCard({ end, people, pct, title, empty, monthLabel }: {
         </span>
         <div className="min-w-0">
           <div className={cx('text-[10px] font-bold uppercase tracking-wider', any ? t.kicker : 'text-slate-400')}>
-            {title}{people.length > 1 ? 's · tied' : ''} · {monthLabel}
+            {title}{people.length > 1 ? 's · tied' : ''} · {periodLabel}
           </div>
           {any ? (
             <ul className="mt-1.5 flex flex-wrap gap-1.5">
               {people.map((w) => (
-                <li key={w.candidate.member.id} className={cx('inline-flex items-center gap-1.5 rounded-full bg-white py-0.5 pl-0.5 pr-1 text-xs font-semibold text-slate-800 shadow-sm ring-1', t.chip)}>
-                  <span className={cx('inline-flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold text-white', t.dot)}>{initials(w.candidate.member.name)}</span>
-                  {w.candidate.member.name}
-                  <span className={cx('rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums', t.pill)}>{pct}%</span>
+                <li key={w.key} className={cx('inline-flex items-center gap-1.5 rounded-full bg-white py-0.5 pl-0.5 pr-1 text-xs font-semibold text-slate-800 shadow-sm ring-1', t.chip)}>
+                  <span className={cx('inline-flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold text-white', t.dot)}>{initials(w.name)}</span>
+                  {w.name}
+                  <span className={cx('rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums', t.pill)}>{w.pct}%</span>
                 </li>
               ))}
             </ul>
@@ -363,17 +375,20 @@ function PerformerCard({ end, people, pct, title, empty, monthLabel }: {
   )
 }
 
+/** A month's ranked row as a scorecard entry. */
+const asEndPerson = (r: RankedRow, pct: number): EndPerson =>
+  ({ key: r.candidate.member.id, name: r.candidate.member.name, pct })
+
 /** The month's incentive: whoever scores highest, provided they clear the bar. */
 export function TopPerformerHeadline({ rows, monthLabel }: { rows: RankedRow[]; monthLabel: string }) {
   const { top, topPct } = pickPerformers(rows)
   return (
-    <PerformerCard
+    <PerformerEndCard
       end="top"
-      people={top}
-      pct={topPct}
+      people={top.map((r) => asEndPerson(r, topPct))}
       title="Top performer"
       empty={`No one at ${TOP_PERFORMER_PCT}% yet`}
-      monthLabel={monthLabel}
+      periodLabel={monthLabel}
     />
   )
 }
@@ -385,13 +400,12 @@ export function TopPerformerHeadline({ rows, monthLabel }: { rows: RankedRow[]; 
 export function LowPerformerHeadline({ rows, monthLabel }: { rows: RankedRow[]; monthLabel: string }) {
   const { low, lowPct } = pickPerformers(rows)
   return (
-    <PerformerCard
+    <PerformerEndCard
       end="low"
-      people={low}
-      pct={lowPct}
+      people={low.map((r) => asEndPerson(r, lowPct))}
       title="Lowest performer"
       empty={rows.length > 1 ? 'No one behind the rest' : 'Not enough of a roster to say'}
-      monthLabel={monthLabel}
+      periodLabel={monthLabel}
     />
   )
 }

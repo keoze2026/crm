@@ -41,6 +41,7 @@ import type {
   ReviewEntry,
   ReviewKind,
   TopPerformerState,
+  AnnualReviewSheet,
   Vendor,
   VendorLedger,
   VendorPayment,
@@ -388,6 +389,13 @@ export const api = {
   // Reviews — the Performance / Behaviour rows, both scoped to the month reviewed.
   reviewEntries: (kind: ReviewKind, month: string) =>
     request<ReviewEntry[]>(`/review-entries${qs({ kind, month })}`),
+  /**
+   * Every month's rows of one kind, in one request — for the Annual Reviews tab, which
+   * scores six or twelve months at once and would otherwise ask month by month. The rows
+   * carry their own `month`, so the caller groups them.
+   */
+  reviewEntriesAllMonths: (kind: ReviewKind) =>
+    request<ReviewEntry[]>(`/review-entries${qs({ kind })}`),
   createReviewEntry: (data: Partial<ReviewEntry> & { month: string }) =>
     request<ReviewEntry>('/review-entries', { method: 'POST', body: JSON.stringify(data) }),
   updateReviewEntry: (id: number, data: Partial<ReviewEntry>) =>
@@ -401,6 +409,25 @@ export const api = {
     request<TopPerformerState>(`/top-performer${qs({ month })}`),
   saveTopPerformer: (month: string, state: Pick<TopPerformerState, 'settings' | 'ticks'>) =>
     request<TopPerformerState>(`/top-performer${qs({ month })}`, { method: 'PUT', body: JSON.stringify(state) }),
+  /**
+   * Every month from `from` to `to` inclusive, oldest first — one entry per month whether
+   * anybody has touched it or not. The Annual Reviews tab scores a whole window against
+   * the ticks each of its months was given, and asking one month at a time would be twelve
+   * round-trips before the first figure appeared.
+   */
+  topPerformerRange: (from: string, to: string) =>
+    request<TopPerformerState[]>(`/top-performer/range${qs({ from, to })}`),
+
+  // Annual Reviews — the Review page's roll-up tab. The figures are accumulated in the
+  // browser from the monthly sheets; these three carry only the cells typed over them,
+  // plus the version history Reset reads.
+  annualReview: (span: string, month: string) =>
+    request<AnnualReviewSheet>(`/annual-reviews${qs({ span, month })}`),
+  saveAnnualReview: (span: string, month: string, sheet: Pick<AnnualReviewSheet, 'overrides' | 'extra_rows'> & { settings: { min_months: number } }) =>
+    request<AnnualReviewSheet>(`/annual-reviews${qs({ span, month })}`, { method: 'PUT', body: JSON.stringify(sheet) }),
+  /** Back to the most recent version more than 24 hours old; 409 when there is none. */
+  resetAnnualReview: (span: string, month: string) =>
+    request<AnnualReviewSheet>(`/annual-reviews/reset${qs({ span, month })}`, { method: 'POST' }),
 
   // Vendors (traffic-source payment sheets)
   vendors: () =>
