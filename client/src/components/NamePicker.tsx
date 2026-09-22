@@ -14,8 +14,8 @@ import { Spinner, cx } from './ui'
  * after that, and each entry shows the departments that person belongs to.
  *
  * Deleting takes the person off the roster entirely (their Queues record and their
- * attendance, leave and salary rows go with them). Rows already written keep the name they
- * were saved with, since a review stores the name as text as well as a link.
+ * attendance, leave, salary and salary hold rows go with them). Rows already written keep
+ * the name they were saved with, since a review stores the name as text as well as a link.
  *
  * Rendered in a portal so it escapes the sheet's horizontal scroll container.
  */
@@ -96,7 +96,7 @@ export default function NamePicker({
   }
 
   const remove = async (person: StaffMember) => {
-    if (!confirm(`Remove ${person.name} from the staff list? Their queue, attendance, leave and salary rows go too.`)) return
+    if (!confirm(`Remove ${person.name} from the staff list? Their queue, attendance, leave, salary and salary hold rows go too.`)) return
     try {
       await api.deleteStaff(person.id)
       onRosterChanged()

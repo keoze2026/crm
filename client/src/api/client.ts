@@ -34,6 +34,7 @@ import type {
   StaffAttendanceRow,
   StaffLeave,
   StaffSalary,
+  StaffSalaryHold,
   QueueAssignment,
   QueueBoard,
   QueueCode,
@@ -346,6 +347,17 @@ export const api = {
     request<StaffSalary>(`/staff-salaries/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteStaffSalary: (id: number) =>
     request<{ deleted: boolean }>(`/staff-salaries/${id}`, { method: 'DELETE' }),
+
+  // Salary Hold — a running log, not month-scoped: every row is returned, newest month
+  // first, so a hold stays visible across months until it's resolved.
+  staffSalaryHolds: () =>
+    request<StaffSalaryHold[]>('/staff-salary-holds'),
+  createStaffSalaryHold: (data: Partial<StaffSalaryHold> & { staff_id: number; month: string }) =>
+    request<StaffSalaryHold>('/staff-salary-holds', { method: 'POST', body: JSON.stringify(data) }),
+  updateStaffSalaryHold: (id: number, data: Partial<StaffSalaryHold>) =>
+    request<StaffSalaryHold>(`/staff-salary-holds/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteStaffSalaryHold: (id: number) =>
+    request<{ deleted: boolean }>(`/staff-salary-holds/${id}`, { method: 'DELETE' }),
 
   // Queues — the per-person records. `day` (YYYY-MM-DD) narrows to the records keyed in
   // on one day; omit it for the whole sheet.

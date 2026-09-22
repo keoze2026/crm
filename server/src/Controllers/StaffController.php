@@ -19,6 +19,9 @@ use App\Http;
  *                      reads too, so both pages show the same figure
  *   /staff-leaves      the leaves sheet
  *   /staff-salaries    the salary sheet, one row per person per month
+ *   /staff-salary-holds a running log of salaries held back and why — NOT month-scoped,
+ *                      unlike the other three, since a hold needs to stay visible across
+ *                      months until it is resolved
  *
  * Sr. No. is positional everywhere and never stored, exactly as on the Queues and Review
  * sheets. Statuses ("Received", "Approved") are stored as the wording the sheet shows.
@@ -177,8 +180,9 @@ final class StaffController
 
     public function destroy(array $params): void
     {
-        // ON DELETE CASCADE takes their Queues record, departments, attendance, leaves and
-        // salary rows. Reviews keep the name they were written with (staff_id is SET NULL).
+        // ON DELETE CASCADE takes their Queues record, departments, attendance, leaves,
+        // salary and salary hold rows. Reviews keep the name they were written with
+        // (staff_id is SET NULL).
         $stmt = Database::connection()->prepare('DELETE FROM staff WHERE id = :id');
         $stmt->execute([':id' => (int) $params['id']]);
         Http::json(['deleted' => $stmt->rowCount() > 0]);
@@ -628,6 +632,95 @@ final class StaffController
         Http::json(['deleted' => $stmt->rowCount() > 0]);
     }
 
+    // ─── Salary Hold (/staff-salary-holds) ─────────────────────────────────────
+    //
+    // A running log, not a monthly sheet: unlike /staff-salaries there is no one-row-per-
+    // person-per-month limit and no month filter on the list — a hold is a note about a
+    // problem that needs to stay visible until it is resolved, so every row is returned,
+    // newest month first, and the caller's own page decides how to group or filter them.
+
+    public function salaryHolds(): void
+    {
+        $stmt = Database::connection()->query(self::SALARY_HOLD_SELECT . '
+              ORDER BY h.month DESC, h.sort_order ASC, h.id ASC');
+        Http::json(array_map([$this, 'castSalaryHold'], $stmt->fetchAll()));
+    }
+
+    public function storeSalaryHold(): void
+    {
+        $body    = Http::body();
+        $staffId = (int) ($body['staff_id'] ?? 0);
+        $month   = $this->normaliseMonth($body['month'] ?? null);
+        if ($staffId <= 0 || !$this->staffExists($staffId)) {
+            Http::error('Pick a staff member', 422);
+        }
+        if ($month === null) {
+            Http::error('month must be YYYY-MM', 422);
+        }
+
+        $stmt = Database::connection()->prepare(
+            'INSERT INTO staff_salary_holds (staff_id, month, reason, status, sort_order)
+             VALUES (:staff, :month, :reason, :status,
+                     (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM staff_salary_holds))
+             RETURNING id'
+        );
+        $stmt->execute([
+            ':staff'  => $staffId,
+            ':month'  => $month,
+            ':reason' => $this->prose($body['reason'] ?? ''),
+            // Absent means "just put on hold"; an explicitly wrong value is still refused.
+            ':status' => $this->holdStatus($body['status'] ?? self::HOLD_STATUSES[0]),
+        ]);
+        Http::json($this->salaryHoldById((int) $stmt->fetchColumn()), 201);
+    }
+
+    public function updateSalaryHold(array $params): void
+    {
+        $body  = Http::body();
+        $month = \array_key_exists('month', $body) ? $this->normaliseMonth($body['month']) : null;
+        if (\array_key_exists('month', $body) && $month === null) {
+            Http::error('month must be YYYY-MM', 422);
+        }
+        // Who the row is about is itself an editable cell (a NamePicker on every row, not
+        // just the add row), so re-pointing it is a normal edit — validated the same way a
+        // new row's staff_id is.
+        $staffId = null;
+        if (\array_key_exists('staff_id', $body)) {
+            $staffId = (int) $body['staff_id'];
+            if ($staffId <= 0 || !$this->staffExists($staffId)) {
+                Http::error('Pick a staff member', 422);
+            }
+        }
+        $stmt = Database::connection()->prepare(
+            'UPDATE staff_salary_holds SET
+                staff_id   = COALESCE(:staff, staff_id),
+                month      = COALESCE(:month, month),
+                reason     = COALESCE(:reason, reason),
+                status     = COALESCE(:status, status),
+                updated_at = now()
+             WHERE id = :id RETURNING id'
+        );
+        $stmt->execute([
+            ':id'     => (int) $params['id'],
+            ':staff'  => $staffId,
+            ':month'  => $month,
+            ':reason' => isset($body['reason']) ? $this->prose($body['reason']) : null,
+            ':status' => isset($body['status']) ? $this->holdStatus($body['status']) : null,
+        ]);
+        $id = $stmt->fetchColumn();
+        if ($id === false || $id === null) {
+            Http::error('Salary hold row not found', 404);
+        }
+        Http::json($this->salaryHoldById((int) $id));
+    }
+
+    public function destroySalaryHold(array $params): void
+    {
+        $stmt = Database::connection()->prepare('DELETE FROM staff_salary_holds WHERE id = :id');
+        $stmt->execute([':id' => (int) $params['id']]);
+        Http::json(['deleted' => $stmt->rowCount() > 0]);
+    }
+
     // ─── Internals ─────────────────────────────────────────────────────────────
 
     private const LEAVE_SELECT =
@@ -646,6 +739,16 @@ final class StaffController
            FROM staff_salaries p
            JOIN staff s ON s.id = p.staff_id
       LEFT JOIN departments d ON d.id = p.department_id';
+
+    private const SALARY_HOLD_SELECT =
+        'SELECT h.id, h.staff_id, s.name AS staff_name,
+                to_char(h.month, \'YYYY-MM-DD\') AS month, h.reason, h.status,
+                h.sort_order, h.created_at, h.updated_at
+           FROM staff_salary_holds h
+           JOIN staff s ON s.id = h.staff_id';
+
+    /** The only two states a hold may be in; anything else is refused rather than stored. */
+    private const HOLD_STATUSES = ['On Hold', 'Disbursed'];
 
     /** The names to add: a scalar or a list, split on commas/newlines, blanks dropped. */
     private function names(array $body): array
@@ -824,6 +927,23 @@ final class StaffController
         return $this->castSalary($stmt->fetch() ?: []);
     }
 
+    private function salaryHoldById(int $id): array
+    {
+        $stmt = Database::connection()->prepare(self::SALARY_HOLD_SELECT . ' WHERE h.id = :id');
+        $stmt->execute([':id' => $id]);
+        return $this->castSalaryHold($stmt->fetch() ?: []);
+    }
+
+    /** "On Hold" or "Disbursed"; anything else is refused. */
+    private function holdStatus(mixed $value): string
+    {
+        $status = is_string($value) ? trim($value) : '';
+        if (!\in_array($status, self::HOLD_STATUSES, true)) {
+            Http::error('status must be "On Hold" or "Disbursed"', 422);
+        }
+        return $status;
+    }
+
     /** True when the attendance bot's tables are present in this database. */
     private function attendanceAvailable(): bool
     {
@@ -958,6 +1078,12 @@ final class StaffController
         return mb_substr(trim((string) $value), 0, 200);
     }
 
+    /** A free-text note: line breaks kept, length capped at a sane paragraph. */
+    private function prose(mixed $value): string
+    {
+        return mb_substr(trim((string) $value), 0, 2000);
+    }
+
     /**
      * Break minutes, or null for "no override" — which on a bot-recorded day means fall
      * back to what the bot itself totalled. A whole day is the ceiling.
@@ -1069,6 +1195,17 @@ final class StaffController
         $row['department_id'] = $row['department_id'] === null ? null : (int) $row['department_id'];
         $row['amount']        = $row['amount'] === null ? null : (float) $row['amount'];
         $row['sort_order']    = (int) $row['sort_order'];
+        return $row;
+    }
+
+    private function castSalaryHold(array $row): array
+    {
+        if ($row === []) {
+            return $row;
+        }
+        $row['id']         = (int) $row['id'];
+        $row['staff_id']   = (int) $row['staff_id'];
+        $row['sort_order'] = (int) $row['sort_order'];
         return $row;
     }
 }

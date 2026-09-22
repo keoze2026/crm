@@ -98,7 +98,7 @@ function Row({
   }
 
   const remove = async () => {
-    if (!confirm(`Remove ${person.name} from the staff list? Their queue, attendance, leave and salary rows go too.`)) return
+    if (!confirm(`Remove ${person.name} from the staff list? Their queue, attendance, leave, salary and salary hold rows go too.`)) return
     setBusy(true)
     try {
       await api.deleteStaff(person.id)

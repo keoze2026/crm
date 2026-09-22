@@ -631,6 +631,26 @@ export interface StaffSalary {
   updated_at: string
 }
 
+/**
+ * One row of the Salary Hold log — a running list, NOT scoped to a month like StaffSalary:
+ * a hold is a note about a problem that needs to stay visible until it is resolved, so every
+ * row carries its own month rather than inheriting a page-wide one.
+ */
+export interface StaffSalaryHold {
+  id: number
+  staff_id: number
+  staff_name: string
+  /** First of the month the hold is about, YYYY-MM-DD. */
+  month: string
+  /** Free text — why the salary is held, like a Notes cell elsewhere in the app. */
+  reason: string
+  /** 'On Hold' or 'Disbursed' — nothing else is accepted. */
+  status: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
 // ─── Queues (per-person queue records + the queue catalogue) ───────────────────
 
 /** A queue in the Queues catalogue the page ticks. */

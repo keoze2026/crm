@@ -61,6 +61,7 @@ final class AuthMiddleware
         'staff-attendance'   => ['staff', 'attendance'],
         'staff-leaves'       => ['staff'],
         'staff-salaries'     => ['staff'],
+        'staff-salary-holds' => ['staff'],
     ];
 
     public static function guard(string $method, string $path): void

@@ -139,6 +139,10 @@ $router->get('/staff-salaries',              fn () => $staff->salaries());
 $router->post('/staff-salaries',             fn () => $staff->storeSalary());
 $router->put('/staff-salaries/{id}',         fn ($p) => $staff->updateSalary($p));
 $router->delete('/staff-salaries/{id}',      fn ($p) => $staff->destroySalary($p));
+$router->get('/staff-salary-holds',          fn () => $staff->salaryHolds());
+$router->post('/staff-salary-holds',         fn () => $staff->storeSalaryHold());
+$router->put('/staff-salary-holds/{id}',     fn ($p) => $staff->updateSalaryHold($p));
+$router->delete('/staff-salary-holds/{id}',  fn ($p) => $staff->destroySalaryHold($p));
 
 // Reviews — the Department scorecard plus the Performance / Behaviour entries
 $reviews = new ReviewController();

@@ -44,6 +44,7 @@ final class Audit
         'staff-attendance'   => 'staff-attendance',
         'staff-leaves'       => 'staff-leave',
         'staff-salaries'     => 'staff-salary',
+        'staff-salary-holds' => 'staff-salary-hold',
         'review-departments' => 'review-department',
         'review-entries'     => 'review-entry',
         'top-performer'      => 'top-performer',

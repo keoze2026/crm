@@ -260,8 +260,11 @@ const ENTITY_NOUN: Record<string, string> = {
   'staff-attendance': 'staff attendance row',
   'staff-leave': 'staff leave',
   'staff-salary': 'staff salary',
+  'staff-salary-hold': 'salary hold',
   'review-department': 'department review',
   'review-entry': 'review entry',
+  'top-performer': 'top performer confirmation',
+  'annual-review': 'annual review sheet',
   'audit-log': 'system log',
   'access-preset': 'access preset',
 }

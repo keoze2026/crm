@@ -5,6 +5,7 @@ import { PageHeader } from '../components/Layout'
 import { MonthSelector, currentMonth, formatMonth, shiftMonth } from '../components/MonthSelector'
 import StaffLeavesSheet from '../components/StaffLeavesSheet'
 import StaffSalariesSheet from '../components/StaffSalariesSheet'
+import StaffSalaryHoldSheet from '../components/StaffSalaryHoldSheet'
 import StaffOverview from '../components/StaffOverview'
 import StaffSheet from '../components/StaffSheet'
 import {
@@ -13,13 +14,13 @@ import {
 } from '../components/ui'
 import { PerformerScope } from '../lib/performers'
 import { matches } from '../lib/queues'
-import { buildLeavesPdf, buildSalariesPdf, buildStaffPdf } from '../lib/sheetPdf'
+import { buildLeavesPdf, buildSalariesPdf, buildSalaryHoldsPdf, buildStaffPdf } from '../lib/sheetPdf'
 import { buildCandidates, fromWire, rankCandidates } from '../lib/incentive'
 import { monthRange } from '../lib/staff'
 import { useAsync } from '../lib/useAsync'
 import { useOrgToday } from '../lib/useOrgToday'
 
-type Tab = 'staff' | 'leaves' | 'salaries'
+type Tab = 'staff' | 'leaves' | 'salaries' | 'hold'
 
 const icon = (path: ReactNode) => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -31,6 +32,7 @@ const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
   { id: 'staff', label: 'Staff', icon: icon(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>) },
   { id: 'leaves', label: 'Leaves', icon: icon(<><path d="M8 2v4M16 2v4M3 10h18" /><rect x="3" y="4" width="18" height="18" rx="2" /><path d="m9 16 2 2 4-4" /></>) },
   { id: 'salaries', label: 'Salaries', icon: icon(<><rect x="2" y="5" width="20" height="14" rx="2" /><circle cx="12" cy="12" r="3" /><path d="M6 12h.01M18 12h.01" /></>) },
+  { id: 'hold', label: 'Salary Hold', icon: icon(<><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></>) },
 ]
 
 /**
@@ -69,6 +71,13 @@ export default function Staff() {
     () => tab === 'salaries' ? api.staffSalaries(month) : Promise.resolve([]),
     [tab, month],
   )
+  // Salary Hold is a running log, not a monthly sheet — every row is fetched regardless
+  // of the month picker (which this tab doesn't show), so a hold stays visible until it's
+  // resolved rather than scrolling out of view when the month changes.
+  const holds = useAsync(
+    () => tab === 'hold' ? api.staffSalaryHolds() : Promise.resolve([]),
+    [tab],
+  )
 
   // The Staff tab's overview previews the month's Top Performer standing (the Review page
   // owns the full sheet), so it reads the same inputs: the month's attendance and reviews.
@@ -102,6 +111,9 @@ export default function Staff() {
   const depts = useMemo(() => departments.data ?? [], [departments.data])
   const leaveRows = leaves.data ?? []
   const salaryRows = salaries.data ?? []
+  // Memoised, unlike its siblings above: it feeds another useMemo's dependency list below,
+  // and a fresh array identity every render would defeat that memo entirely.
+  const holdRows = useMemo(() => holds.data ?? [], [holds.data])
 
   const overviewRanked = useMemo(() => {
     if (tab !== 'staff' || !topAttendance.data) return null
@@ -116,12 +128,32 @@ export default function Staff() {
       ? people
       : people.filter((p) => matches(p.name, query) || p.departments.some((d) => matches(d.name, query)))
   ), [people, query])
+  // Salary Hold is filtered by the month picker like Leaves and Salaries, and by the same
+  // search box the roster uses. The month narrows what is SHOWN only — the log itself still
+  // holds every month, and the sheet's own month cell can file a new row under any of them.
+  const monthHolds = useMemo(
+    () => holdRows.filter((h) => h.month.slice(0, 7) === month),
+    [holdRows, month],
+  )
+  const shownHolds = useMemo(() => (
+    query === ''
+      ? monthHolds
+      : monthHolds.filter((h) => matches(h.staff_name, query) || matches(h.reason, query))
+  ), [monthHolds, query])
+  // Holds filed under another month that are still open. The month filter would otherwise
+  // hide them completely, and an unresolved hold nobody can see is the one thing this sheet
+  // exists to prevent — so the tab says they are there and which month to look in.
+  const elsewhere = useMemo(
+    () => holdRows.filter((h) => h.month.slice(0, 7) !== month && h.status === 'On Hold'),
+    [holdRows, month],
+  )
 
   const loading = staff.loading || departments.loading
       || (tab === 'leaves' && leaves.loading)
       || (tab === 'salaries' && salaries.loading)
+      || (tab === 'hold' && holds.loading)
   const error = staff.error ?? departments.error
-      ?? leaves.error ?? salaries.error
+      ?? leaves.error ?? salaries.error ?? holds.error
       ?? topAttendance.error ?? topPerformance.error ?? topBehaviour.error
 
   const monthLabel = formatMonth(month)
@@ -139,6 +171,10 @@ export default function Staff() {
       enabled: salaryRows.length > 0,
       run: () => buildSalariesPdf(salaryRows, depts, monthLabel).save(`Salaries_${month}.pdf`),
     },
+    hold: {
+      enabled: monthHolds.length > 0,
+      run: () => buildSalaryHoldsPdf(monthHolds, monthLabel).save(`Salary_Hold_${month}.pdf`),
+    },
   }
 
   return (
@@ -147,17 +183,17 @@ export default function Staff() {
     <PerformerScope month={month}>
     <div className="min-w-0">
       <PageHeader title="Staff Management">
-        {tab === 'staff' ? (
-          <div className="w-full sm:w-64">
+        {/* Salary Hold takes both: the month narrows the sheet, the box searches within it. */}
+        {(tab === 'staff' || tab === 'hold') && (
+          <div className="w-full sm:w-56">
             <Input
               value={search}
-              placeholder="Search a name or department…"
+              placeholder={tab === 'staff' ? 'Search a name or department…' : 'Search a name or reason…'}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-        ) : (
-          <MonthSelector value={month} onChange={setMonth} />
         )}
+        {tab !== 'staff' && <MonthSelector value={month} onChange={setMonth} />}
         <Button variant="secondary" disabled={!exports[tab].enabled} onClick={exports[tab].run}>
           <DownloadIcon />PDF
         </Button>
@@ -218,7 +254,7 @@ export default function Staff() {
             />
           </div>
         </Card>
-      ) : (
+      ) : tab === 'salaries' ? (
         <Card>
           <CardHeader
             title={`Salaries — ${monthLabel}`}
@@ -237,6 +273,40 @@ export default function Staff() {
               departments={depts}
               onChanged={salaries.reload}
             />
+          </div>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader
+            title={`Salary Hold — ${monthLabel}`}
+            action={query !== '' && monthHolds.length > 0
+              ? <Badge color="blue">{`${shownHolds.length} of ${monthHolds.length}`}</Badge>
+              : monthHolds.length > 0
+                ? <Badge color="amber">{`${monthHolds.filter((h) => h.status === 'On Hold').length} on hold`}</Badge>
+                : undefined}
+          />
+          <div className="p-4">
+            {shownHolds.length === 0 && query !== '' ? (
+              <EmptyState message={`Nothing matches "${query}" in ${monthLabel}.`} />
+            ) : (
+              <StaffSalaryHoldSheet
+                // Remount on a month change so no row keeps the previous month's draft,
+                // and the add row picks the new month up as its default.
+                key={month}
+                month={month}
+                holds={shownHolds}
+                staff={people}
+                onChanged={holds.reload}
+              />
+            )}
+            {elsewhere.length > 0 && (
+              <p className="mt-3 text-[11px] text-slate-500">
+                <span className="font-semibold text-amber-700">
+                  {elsewhere.length} other {elsewhere.length === 1 ? 'hold is' : 'holds are'} still open
+                </span>
+                {' '}outside {monthLabel} — {[...new Set(elsewhere.map((h) => formatMonth(h.month.slice(0, 7))))].join(', ')}.
+              </p>
+            )}
           </div>
         </Card>
       )}

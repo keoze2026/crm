@@ -9,6 +9,21 @@ import type { StaffMember, StaffStatus } from '../types'
 /** The SALARY cell, worded as the client's sheet words it. */
 export const SALARY_STATUSES = ['Received', 'Pending', 'Not Paid', 'On Hold']
 
+/**
+ * The Salary Hold log's own two states — the server accepts nothing else. Coloured the way
+ * STAFF_STATUSES below is, so the column reads as a signal rather than two words that have
+ * to be compared: amber while the money is still being held, green once it has gone out.
+ * `id` and `label` are the same string because, like every other status in this app, the
+ * value stored IS the wording shown.
+ */
+export const SALARY_HOLD_STATUSES: { id: string; label: string; cell: string; dot: string }[] = [
+  { id: 'On Hold', label: 'On Hold', cell: 'bg-amber-50 text-amber-800 border-amber-300', dot: 'bg-amber-500' },
+  { id: 'Disbursed', label: 'Disbursed', cell: 'bg-emerald-50 text-emerald-800 border-emerald-300', dot: 'bg-emerald-500' },
+]
+
+export const salaryHoldStatus = (id: string) =>
+  SALARY_HOLD_STATUSES.find((s) => s.id === id) ?? SALARY_HOLD_STATUSES[0]
+
 /** Where a staff member stands, and the colour that says so at a glance. */
 export const STAFF_STATUSES: { id: StaffStatus; label: string; cell: string; dot: string }[] = [
   { id: 'active', label: 'Active', cell: 'bg-emerald-50 text-emerald-800 border-emerald-300', dot: 'bg-emerald-500' },

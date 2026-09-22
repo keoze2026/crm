@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf'
 import autoTable, { type RowInput, type Styles } from 'jspdf-autotable'
 import type {
   Department, QueueAssignment, ReviewDepartment, ReviewEntry,
-  StaffAttendanceRow, StaffLeave, StaffMember, StaffSalary,
+  StaffAttendanceRow, StaffLeave, StaffMember, StaffSalary, StaffSalaryHold,
 } from '../types'
 import {
   clockLabel, earlyBy, emptyLoginTally, gapLabel, hoursLabel, lateBy, netHours, punctualityOf,
@@ -608,6 +608,48 @@ export function buildSalariesPdf(
     margin: { left: M, right: M },
   })
   return doc
+}
+
+/**
+ * Salary Hold: the running log as the tab shows it — not month-scoped like Salaries, so
+ * every row prints with its own month rather than one stamped once, newest first, exactly
+ * as the sheet lists them.
+ */
+export function buildSalaryHoldsPdf(holds: StaffSalaryHold[], monthLabel: string): jsPDF {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
+  const onHold = holds.filter((h) => h.status === 'On Hold').length
+  const y = drawHeader(doc, 'SALARY HOLD', `${monthLabel} · ${onHold} of ${holds.length} still on hold`)
+
+  autoTable(doc, {
+    startY: y,
+    theme: 'grid',
+    head: [['SR. NO', 'NAME', 'MONTH', 'REASON', 'STATUS']],
+    body: holds.map((h, i) => [String(i + 1), h.staff_name, shortMonth(h.month), h.reason, h.status]),
+    styles: baseStyles,
+    headStyles: navyHead,
+    bodyStyles: { fillColor: CYAN },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 40, fillColor: BAND, fontStyle: 'bold' },
+      1: { cellWidth: 100, fontStyle: 'bold' },
+      2: { halign: 'center', cellWidth: 60 },
+      4: { halign: 'center', cellWidth: 70 },
+    },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.column.index === 4) {
+        data.cell.styles.textColor = data.cell.raw === 'Disbursed' ? GREEN : RED
+        data.cell.styles.fontStyle = 'bold'
+      }
+    },
+    margin: { left: M, right: M },
+  })
+  return doc
+}
+
+/** "Aug 2026" from a stored YYYY-MM-DD. */
+function shortMonth(iso: string): string {
+  const d = new Date(`${iso.slice(0, 7)}-01T00:00:00`)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
 }
 
 /**
