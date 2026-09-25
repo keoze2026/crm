@@ -166,15 +166,18 @@ final class StaffController
             $this->linkAttendance($id);
         }
 
+        // Checked before the departments: linking them to a missing person would trip the
+        // foreign key and answer 500 instead of 404.
+        if ($this->staffByIds([$id]) === []) {
+            Http::error('Staff member not found', 404);
+        }
+
         // Departments arrive as the complete set the row should end up with.
         if (\array_key_exists('department_ids', $body)) {
             $this->writeDepartments($id, $this->ids($body['department_ids']));
         }
 
         $rows = $this->staffByIds([$id]);
-        if ($rows === []) {
-            Http::error('Staff member not found', 404);
-        }
         Http::json($rows[0]);
     }
 
@@ -409,7 +412,7 @@ final class StaffController
             'UPDATE staff_attendance SET
                 login_at   = CASE WHEN :login_set  THEN :login  ELSE login_at  END,
                 logout_at  = CASE WHEN :logout_set THEN :logout ELSE logout_at END,
-                break_min  = COALESCE(:break, break_min),
+                break_min  = CASE WHEN :break_set THEN :break ELSE break_min END,
                 status     = COALESCE(:status, status),
                 note       = COALESCE(:note, note),
                 updated_at = now()
@@ -422,7 +425,9 @@ final class StaffController
             ':login'      => $this->clock($body['login_at'] ?? null),
             ':logout_set' => \array_key_exists('logout_at', $body) ? 1 : 0,
             ':logout'     => $this->clock($body['logout_at'] ?? null),
-            ':break'      => \array_key_exists('break_min', $body) ? $this->breakMin($body['break_min']) : null,
+            // Sent blank clears it back to the bot's total; not sent leaves it as it is.
+            ':break_set'  => \array_key_exists('break_min', $body) ? 1 : 0,
+            ':break'      => $this->breakMin($body['break_min'] ?? null),
             ':status'     => isset($body['status']) ? $this->text($body['status']) : null,
             ':note'       => isset($body['note']) ? $this->text($body['note']) : null,
         ]);
@@ -897,8 +902,8 @@ final class StaffController
                         ELSE to_char(d.login_at AT TIME ZONE '{$tz}', 'HH24:MI') END AS login_at,
                    CASE WHEN o.id IS NOT NULL THEN to_char(o.logout_at, 'HH24:MI')
                         ELSE to_char(d.logout_at AT TIME ZONE '{$tz}', 'HH24:MI') END AS logout_at,
-                   CASE WHEN o.id IS NOT NULL THEN COALESCE(o.break_min, 0)
-                        ELSE COALESCE(b.break_min, 0) END::int AS break_min,
+                   -- A correction that leaves the break blank falls back to the bot's total.
+                   COALESCE(o.break_min, b.break_min, 0)::int AS break_min,
                    CASE WHEN o.id IS NOT NULL THEN o.status
                         WHEN d.login_at IS NULL  THEN 'absent'
                         WHEN d.logout_at IS NULL THEN 'still in'

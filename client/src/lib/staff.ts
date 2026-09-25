@@ -183,7 +183,7 @@ export function shortDay(iso: string): string {
 export function clockLabel(hhmm: string | null): string {
   if (!hhmm) return '—'
   const [h, m] = hhmm.split(':').map(Number)
-  if (Number.isNaN(h) || Number.isNaN(m)) return hhmm
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return hhmm
   const ampm = h < 12 ? 'AM' : 'PM'
   const h12 = h % 12 === 0 ? 12 : h % 12
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`

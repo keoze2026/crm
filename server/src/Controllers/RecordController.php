@@ -300,7 +300,7 @@ final class RecordController
             $r['replacement'] = (int) $r['replacement'];
             $r['counted']     = (int) $r['counted'];
             $r['rate']       = (float) $r['rate'];
-            $r['total_bill'] = round((float) $r['total_bill']);
+            $r['total_bill'] = (float) $r['total_bill'];
             $r['buyer_id']   = $r['buyer_id'] !== null ? (int) $r['buyer_id'] : null;
             $r['campaign_id'] = $r['campaign_id'] !== null ? (int) $r['campaign_id'] : null;
         }

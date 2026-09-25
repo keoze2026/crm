@@ -36,7 +36,8 @@ final class RecordFilter
             $where[] = "{$alias}.campaign_id = :campaign_id";
             $params[':campaign_id'] = (int) $campaignId;
         }
-        if ($search = Http::query('search')) {
+        // Compared to null, not truthiness: "0" is a real search (codes look like C-03).
+        if (($search = Http::query('search')) !== null) {
             $where[] = "(b.code ILIKE :search OR c.code ILIKE :search OR {$alias}.source ILIKE :search)";
             $params[':search'] = "%{$search}%";
         }

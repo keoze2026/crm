@@ -57,7 +57,8 @@ final class AttendanceController
                NULLIF(btrim(o.status), '')                        AS set_status,
                (o.id IS NOT NULL)                                 AS edited,
                TRUE                                               AS bot_seen,
-               CASE WHEN o.id IS NOT NULL THEN COALESCE(o.break_min, 0) END AS set_break_min
+               -- A correction's blank break (NULL) falls back to the bot's total, via BREAK_MIN.
+               o.break_min                                        AS set_break_min
           FROM attendance_days d
           LEFT JOIN staff so ON so.attendance_user_id = d.user_id::text
           LEFT JOIN staff_attendance o ON o.staff_id = so.id AND o.work_date = d.work_date
@@ -88,7 +89,10 @@ final class AttendanceController
                       AND d2.work_date = o.work_date)
     ) d";
 
-    /** The break total: the keyed-in one where the day was corrected, the bot's otherwise. */
+    /**
+     * The break total: the keyed-in one where a correction gives one, the bot's otherwise —
+     * a correction that leaves the break blank still reads the bot's breaks.
+     */
     private const BREAK_MIN =
         "CASE WHEN d.set_break_min IS NOT NULL THEN d.set_break_min ELSE COALESCE(b.break_min, 0) END";
 
@@ -392,7 +396,12 @@ final class AttendanceController
              GROUP BY d.user_id, d.staff_name ORDER BY d.staff_name"
         );
         $stmt->execute([':from' => $from, ':to' => $to]);
-        Http::json($stmt->fetchAll());
+        // ROUND() comes back as a numeric string (NULL with no completed day); the client
+        // declares a number.
+        Http::json(array_map(static function (array $r): array {
+            $r['total_hours'] = (float) ($r['total_hours'] ?? 0);
+            return $r;
+        }, $stmt->fetchAll()));
     }
 
     public function breaks(): void

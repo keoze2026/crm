@@ -62,6 +62,27 @@ final class AuthMiddleware
         'staff-leaves'       => ['staff'],
         'staff-salaries'     => ['staff'],
         'staff-salary-holds' => ['staff'],
+        // Money and attendance surfaces, each owned by one page. Buyers, campaigns and records
+        // stay open to every signed-in user: the Daily Sheet (/records) reads and writes them.
+        'analytics'          => ['dashboard', 'complete-report'],
+        'vendors'            => ['vendors'],
+        'vendor-payments'    => ['vendors'],
+        'portal-expenses'    => ['portal-expenses'],
+        'attendance'         => ['attendance'],
+    ];
+
+    /**
+     * Read-only grants on top of GATED_SEGMENTS: a page that only LOOKS at another page's
+     * data may GET it, never write it.
+     *
+     *  - The Staff page's overview previews the month's Top Performer from the review rows.
+     *  - The Users page's "pick from the roster" list reads the staff roster.
+     *
+     * @var array<string, array<int, string>>
+     */
+    private const READ_GRANTS = [
+        'review-entries' => ['staff'],
+        'staff'          => ['users'],
     ];
 
     public static function guard(string $method, string $path): void
@@ -81,6 +102,9 @@ final class AuthMiddleware
             return; // not a page-gated surface
         }
 
+        if ($method === 'GET') {
+            $pages = [...$pages, ...(self::READ_GRANTS[$segment] ?? [])];
+        }
         foreach ($pages as $page) {
             if (Auth::hasPermission($page)) {
                 return;

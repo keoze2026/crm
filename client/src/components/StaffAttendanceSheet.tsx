@@ -282,10 +282,17 @@ function DayRow({
     if (saving.current || !changed) return
     saving.current = true
     try {
+      // The break is only sent when it was typed. Blank means none of its own, so a
+      // bot-recorded day keeps showing the bot's total; and the first correction of an
+      // untouched bot day must not freeze the bot's figure that was merely on display.
+      const breakTyped = next.break_min !== saved.break_min
+      const breakField: { break_min?: number | null } = breakTyped
+        ? { break_min: next.break_min === '' ? null : Number(next.break_min) }
+        : fromBot && !row.edited ? { break_min: null } : {}
       const payload = {
         login_at: next.login_at === '' ? null : next.login_at,
         logout_at: next.logout_at === '' ? null : next.logout_at,
-        break_min: Number(next.break_min || 0),
+        ...breakField,
         // A row saved before anyone picked a status stores the one its clock times imply —
         // the one that was showing in the cell. The column never records something other
         // than what the person keying it in was looking at.

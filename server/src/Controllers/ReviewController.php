@@ -247,7 +247,7 @@ final class ReviewController
             ':percentage'     => $this->percent($body['percentage'] ?? null),
             ':notes'          => \array_key_exists('notes', $body) ? $this->prose($body['notes']) : null,
             ':month_set'      => \array_key_exists('month', $body) ? 1 : 0,
-            ':month'          => $this->normaliseMonth($body['month'] ?? null),
+            ':month'          => \array_key_exists('month', $body) ? $this->requireMonth($body['month']) : null,
             ':sort'           => isset($body['sort_order']) ? (int) $body['sort_order'] : null,
         ]);
         $row = $stmt->fetch();

@@ -105,8 +105,9 @@ actually away, a **late return** (back more than stated + 10 min grace), and **O
 `AttendanceController` and must match the bot's `BREAK_GRACE_MIN` / `BREAK_EOD_CUTOFF`.
 
 A `staff_attendance` row for a day the bot recorded is an **override that replaces
-that day** — login, logout, break and status all come from it, and deleting it
-restores the bot's record untouched. That is why both the Staff and Attendance
+that day** — login, logout, break and status all come from it, except that a break
+left **blank** falls back to the bot's own break total. Deleting it restores the bot's
+record untouched. That is why both the Staff and Attendance
 pages always agree.
 
 ## Prerequisites
@@ -304,6 +305,31 @@ POST   /api/admin/users/{id}/reset-totp       # lost device: wipes the authentic
 POST   /api/admin/users/{id}/enroll-link      # pending only: new link, old one stops working (409 once enrolled)
 POST   /api/admin/users/enroll-links          # new links for every active pending account at once
 ```
+
+## Tests
+
+```bash
+# Server (PHPUnit): unit tests for the core classes + API tests for every controller
+cd server
+composer test            # everything; rebuilds the crm_test database first (~2 min)
+composer test:unit       # tests/Unit only (DB-backed ones skip until crm_test exists)
+composer test:db         # just rebuild crm_test
+composer test:integration # tests/Integration: multi-step workflows across controllers
+
+# Client (Vitest): the logic in src/lib, src/api, src/auth and the sheet helpers
+cd client
+npm test
+npm run test:integration # the real api client against live php -S servers + crm_int_test
+```
+
+The API tests run each controller over real HTTP against two `php -S` servers (auth off
+on :8098, auth on on :8099) backed by a throwaway **`crm_test`** database built from
+`schema.sql`, every migration and empty stand-ins for the check-in bot's tables. It uses
+the credentials in `server/.env` but never the `crm` database — anything whose name does
+not end in `_test` is refused. `TEST_DB_NAME`, `TEST_PORT_BASE` and
+`TEST_SKIP_DB_SETUP=1` override the defaults. Tests live in `server/tests/` and next to
+each client module as `*.test.ts`; the client↔server tests live in `client/integration/`
+(they need PHP and `server/.env`; `INT_DB_NAME`, `INT_PORT_BASE`, `INT_SKIP_DB_SETUP=1`).
 
 ## Project layout
 

@@ -71,12 +71,19 @@ final class DestinationController
                 rate   = COALESCE(:rate, rate)
              WHERE id = :id RETURNING *'
         );
-        $stmt->execute([
-            ':id'     => (int) $params['id'],
-            ':name'   => $body['name']   ?? null,
-            ':status' => $body['status'] ?? null,
-            ':rate'   => $rate,
-        ]);
+        try {
+            $stmt->execute([
+                ':id'     => (int) $params['id'],
+                ':name'   => $body['name']   ?? null,
+                ':status' => $body['status'] ?? null,
+                ':rate'   => $rate,
+            ]);
+        } catch (\PDOException $e) {
+            if ($e->getCode() !== '23505') {
+                throw $e;
+            }
+            Http::error('A destination with that name already exists', 409);
+        }
         $row = $stmt->fetch();
         if (!$row) {
             Http::error('Destination not found', 404);

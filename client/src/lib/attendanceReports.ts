@@ -63,9 +63,12 @@ export interface BreakStat {
 /** Minutes-since-midnight of a UTC timestamp, in the org timezone. */
 function minutesEST(iso: string | null): number | null {
   if (!iso) return null
+  const at = new Date(iso)
+  // formatToParts throws on an Invalid Date, so a bad timestamp must be caught here.
+  if (Number.isNaN(at.getTime())) return null
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false,
-  }).formatToParts(new Date(iso))
+  }).formatToParts(at)
   const h = Number(parts.find((p) => p.type === 'hour')?.value) % 24
   const m = Number(parts.find((p) => p.type === 'minute')?.value)
   if (Number.isNaN(h) || Number.isNaN(m)) return null

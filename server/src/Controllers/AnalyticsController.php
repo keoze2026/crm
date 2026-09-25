@@ -92,7 +92,7 @@ final class AnalyticsController
         // and 'year' buckets the whole year; day / 4-day / week buckets never contain a
         // complete month and carry none.
         $byMonth = $granularity === 'month' || $granularity === 'year'
-            ? $this->portalExpensesByMonth(Database::connection())
+            ? $this->portalExpensesByMonth(Database::connection(), Http::query('from'), Http::query('to'))
             : [];
 
         $rows = array_map(function ($r) use ($granularity, $byMonth) {
@@ -386,16 +386,31 @@ final class AnalyticsController
 
     /**
      * Portal expenses per calendar month, keyed 'YYYY-MM' — used to charge the trend buckets.
+     * Only months the range fully covers are returned (the rule portalExpenses() applies to
+     * the summary), so a chart over a partial month agrees with the summary card.
      *
      * @return array<string, float>
      */
-    private function portalExpensesByMonth(PDO $pdo): array
+    private function portalExpensesByMonth(PDO $pdo, ?string $from = null, ?string $to = null): array
     {
+        $where  = [];
+        $params = [];
+        if ($from) {
+            $where[] = "date_trunc('month', month)::date >= :pe_from::date";
+            $params[':pe_from'] = $from;
+        }
+        if ($to) {
+            $where[] = "(date_trunc('month', month) + interval '1 month - 1 day')::date <= :pe_to::date";
+            $params[':pe_to'] = $to;
+        }
+        $clause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
         try {
-            $stmt = $pdo->query(
+            $stmt = $pdo->prepare(
                 "SELECT to_char(date_trunc('month', month), 'YYYY-MM') AS m, SUM(total_amount) AS total
-                 FROM portal_expenses GROUP BY 1"
+                 FROM portal_expenses {$clause} GROUP BY 1"
             );
+            $stmt->execute($params);
             $out = [];
             foreach ($stmt->fetchAll() as $r) {
                 $out[$r['m']] = (float) $r['total'];

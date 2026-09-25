@@ -312,7 +312,8 @@ export const api = {
     work_date: string
     login_at?: string | null
     logout_at?: string | null
-    break_min?: number
+    /** null = no break of its own: a bot-recorded day then shows the bot's total. */
+    break_min?: number | null
     status?: string
     note?: string
   }) =>
@@ -320,7 +321,8 @@ export const api = {
   updateStaffAttendance: (id: number, data: Partial<{
     login_at: string | null
     logout_at: string | null
-    break_min: number
+    /** null clears the break back to the bot's total; leaving it out keeps what is stored. */
+    break_min: number | null
     status: string
     note: string
   }>) =>

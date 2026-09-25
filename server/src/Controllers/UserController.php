@@ -75,6 +75,10 @@ final class UserController
         if (!in_array($role, self::ROLES, true)) {
             Http::error('Invalid role', 422);
         }
+        // The Users page can be granted to a member, but only an admin may mint another admin.
+        if ($role === 'admin' && !Auth::isAdmin()) {
+            Http::error('Only an admin can create an admin account', 403);
+        }
 
         // Email is optional now, but still has to be an email when it is given.
         $email = strtolower(trim((string) ($body['email'] ?? '')));
@@ -198,6 +202,29 @@ final class UserController
             Http::error('Invalid role', 422);
         }
 
+        $target = $this->findUser($id);
+        if ($target === null) {
+            Http::error('User not found', 404);
+        }
+        $this->refuseAdminTargetForMember($target);
+
+        // The page always sends the role, so only an actual change counts. Nobody may change
+        // their own role or access (the Users page says so), and only an admin may change roles:
+        // the Users page can be granted to a member, who must not be able to promote anyone.
+        $roleChange = isset($body['role']) && $body['role'] !== $target['role'];
+        if (Auth::id() === $id) {
+            if ($roleChange) {
+                Http::error('You cannot change the role of your own account', 409);
+            }
+            if (array_key_exists('permissions', $body) || array_key_exists('preset_id', $body)
+                || (array_key_exists('is_active', $body) && !$body['is_active'])) {
+                Http::error('You cannot change your own access', 409);
+            }
+        }
+        if ($roleChange && !Auth::isAdmin()) {
+            Http::error('Only an admin can change roles', 403);
+        }
+
         // Email: present key => set it (blank clears it, now that email is optional); absent
         // => leave unchanged. Still has to look like an email when one is actually given.
         $hasEmail = array_key_exists('email', $body);
@@ -314,6 +341,7 @@ final class UserController
     public function resetTotp(array $params): void
     {
         $id = (int) $params['id'];
+        $this->refuseAdminTargetForMember($this->findUser($id));
         [$token, $hash, $expires] = $this->newEnrollToken();
 
         $stmt = Database::connection()->prepare(
@@ -351,6 +379,7 @@ final class UserController
     public function refreshEnrollLink(array $params): void
     {
         $id = (int) $params['id'];
+        $this->refuseAdminTargetForMember($this->findUser($id));
         [$token, $hash, $expires] = $this->newEnrollToken();
 
         $stmt = Database::connection()->prepare(self::REFRESH_PENDING_LINK_SQL);
@@ -388,7 +417,9 @@ final class UserController
         $db      = Database::connection();
         $pending = $db->query(
             'SELECT id, email, name, username FROM users
-              WHERE totp_confirmed_at IS NULL AND is_active
+              WHERE totp_confirmed_at IS NULL AND is_active'
+            // A pending admin account's link would let a member enrol as that admin.
+            . (Auth::isAdmin() ? '' : " AND role <> 'admin'") . '
               ORDER BY lower(COALESCE(name, username, email)), id'
         )->fetchAll();
         $update  = $db->prepare(self::REFRESH_PENDING_LINK_SQL);
@@ -430,6 +461,7 @@ final class UserController
         if (Auth::id() === $id) {
             Http::error('You cannot delete your own account', 409);
         }
+        $this->refuseAdminTargetForMember($this->findUser($id));
 
         // ON DELETE CASCADE clears sessions; audit_log rows keep their email snapshot (SET NULL).
         $stmt = Database::connection()->prepare('DELETE FROM users WHERE id = :id RETURNING email, username');
@@ -502,9 +534,21 @@ final class UserController
     /** The identifiers an account currently holds, for validating a partial update. */
     private function findUser(int $id): ?array
     {
-        $stmt = Database::connection()->prepare('SELECT id, email, username FROM users WHERE id = :id');
+        $stmt = Database::connection()->prepare('SELECT id, email, username, role FROM users WHERE id = :id');
         $stmt->execute([':id' => $id]);
         return $stmt->fetch() ?: null;
+    }
+
+    /**
+     * A member holding the Users page manages ordinary accounts only. Editing, resetting,
+     * re-linking or deleting an admin would hand them that admin's access (a reset issues the
+     * enrolment link to whoever asked for it), so those are admin-to-admin only.
+     */
+    private function refuseAdminTargetForMember(?array $target): void
+    {
+        if ($target !== null && $target['role'] === 'admin' && !Auth::isAdmin()) {
+            Http::error('Only an admin can manage an admin account', 403);
+        }
     }
 
     /** @return array{id:int,name:string}|null */

@@ -20,6 +20,18 @@
     },
     "scripts": {
         "start": "php -S localhost:8000 -t public",
-        "seed-attendance": "php database/seed_attendance_dev.php"
+        "seed-attendance": "php database/seed_attendance_dev.php",
+        "test": "phpunit",
+        "test:unit": "phpunit --testsuite=Unit",
+        "test:db": "php tests/setup_test_db.php",
+        "test:integration": "phpunit --testsuite=Integration"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^12"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
     }
 }

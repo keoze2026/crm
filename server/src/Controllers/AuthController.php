@@ -78,7 +78,7 @@ final class AuthController
 
         // Actor for audit — captured explicitly because the token rotation below leaves the
         // request's cookie stale, so Auth::user() can no longer re-resolve it this request.
-        $actor = ['id' => $userId, 'email' => $row['email']];
+        $actor = ['id' => $userId, 'email' => $row['email'], 'username' => $row['username']];
 
         if (!Totp::verify($row['totp_secret'], $code)) {
             RateLimiter::recordFailure($userId);
@@ -151,7 +151,7 @@ final class AuthController
         Session::create((int) $user['id'], false);
         $this->markLoggedIn((int) $user['id']);
 
-        $actor = ['id' => (int) $user['id'], 'email' => $user['email']];
+        $actor = ['id' => (int) $user['id'], 'email' => $user['email'], 'username' => $user['username']];
         Audit::record('auth.enrolled', ['user' => $actor, 'entity_type' => 'user', 'entity_id' => (int) $user['id'], 'status_code' => 200]);
         Http::json(['user' => $this->publicUser($this->fetchAuthRow((int) $user['id']))]);
     }

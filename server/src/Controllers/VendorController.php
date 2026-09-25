@@ -336,11 +336,20 @@ final class VendorController
              WHERE id = :id
              RETURNING id, vendor, to_char(entry_date, \'YYYY-MM-DD\') AS entry_date, amount_paid'
         );
-        $stmt->execute([
-            ':id'   => (int) $params['id'],
-            ':date' => $date,
-            ':paid' => isset($body['amount_paid']) ? $this->money($body['amount_paid']) : null,
-        ]);
+        try {
+            $stmt->execute([
+                ':id'   => (int) $params['id'],
+                ':date' => $date,
+                ':paid' => isset($body['amount_paid']) ? $this->money($body['amount_paid']) : null,
+            ]);
+        } catch (\PDOException $e) {
+            // One payment per vendor per day (migration 026): moving onto a taken day is refused
+            // rather than silently merging two amounts.
+            if ($e->getCode() !== '23505') {
+                throw $e;
+            }
+            Http::error('This vendor already has a payment on that day — edit that one instead', 409);
+        }
         $row = $stmt->fetch();
         if (!$row) {
             Http::error('Payment row not found', 404);

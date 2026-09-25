@@ -154,10 +154,24 @@ final class CampaignController
     {
         $id  = (int) $params['id'];
         $pdo = Database::connection();
-        // Remove this campaign's sources too (no FK cascade on the link column).
+        $pdo->beginTransaction();
+        // Sources are one global catalogue, linked only to the first campaign that used them.
+        // A source another campaign still runs keeps its rate: hand its link to that campaign
+        // (the one that used it last) so its next record isn't billed at 0.
+        $pdo->prepare(
+            "UPDATE destinations d SET campaign_id = sub.campaign_id
+               FROM (SELECT DISTINCT ON (source) source, campaign_id
+                       FROM call_records
+                      WHERE record_type = 'campaign' AND source IS NOT NULL
+                        AND campaign_id IS NOT NULL AND campaign_id <> :id
+                      ORDER BY source, record_date DESC, id DESC) sub
+              WHERE d.campaign_id = :id AND d.name = sub.source"
+        )->execute([':id' => $id]);
+        // The sources only this campaign used go with it (no FK cascade on the link column).
         $pdo->prepare('DELETE FROM destinations WHERE campaign_id = :id')->execute([':id' => $id]);
         $stmt = $pdo->prepare('DELETE FROM campaigns WHERE id = :id');
         $stmt->execute([':id' => $id]);
+        $pdo->commit();
         Http::json(['deleted' => $stmt->rowCount() > 0]);
     }
 
