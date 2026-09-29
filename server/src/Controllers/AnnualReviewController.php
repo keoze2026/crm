@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\Auth\Auth;
 use App\Database;
 use App\Http;
+use App\Merge;
 
 /**
  * Annual Reviews — the hand-written layer over the Review page's half-yearly and yearly
@@ -65,10 +66,38 @@ final class AnnualReviewController
             'extra_rows' => $this->extraRows($body['extra_rows'] ?? null),
             'settings'   => $this->settings($body['settings'] ?? null, $span),
         ];
+        $base = $body['base'] ?? null;
 
         $pdo = Database::connection();
         $pdo->beginTransaction();
         try {
+            // Same contract as the Top Performer save: with `base` (the sheet as this browser
+            // last read it), only this browser's own edits are applied to what the period
+            // holds now, so two managers typing into different cells both keep theirs.
+            if (is_array($base)) {
+                $pdo->prepare('SELECT pg_advisory_xact_lock(hashtext(:key))')
+                    ->execute([':key' => "annual-review:{$span}:{$end}"]);
+                $now    = $this->state($span, $end);
+                $merged = Merge::threeWay(
+                    [
+                        'overrides'  => $base['overrides'] ?? [],
+                        'extra_rows' => $base['extra_rows'] ?? [],
+                        'settings'   => $base['settings'] ?? [],
+                    ],
+                    $sheet,
+                    [
+                        'overrides'  => (array) $now['overrides'],
+                        'extra_rows' => $now['extra_rows'],
+                        'settings'   => (array) $now['settings'],
+                    ],
+                );
+                $sheet = [
+                    'overrides'  => $this->overrides($merged['overrides'] ?? null),
+                    'extra_rows' => $this->extraRows($merged['extra_rows'] ?? null),
+                    'settings'   => $this->settings($merged['settings'] ?? null, $span),
+                ];
+            }
+
             $this->write($span, $end, $sheet);
             $this->appendVersion($span, $end, $sheet);
             $this->prune($span, $end);

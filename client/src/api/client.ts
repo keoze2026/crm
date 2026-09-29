@@ -68,13 +68,40 @@ export function setUnauthorizedHandler(fn: (() => void) | null) {
   onUnauthorized = fn
 }
 
+// Live updates (lib/live.ts) hook in here without this module importing them.
+//  - captureReads() runs a loader and is told every GET it starts, synchronously — which is
+//    how useAsync learns what a query reads, and so which change counters to watch.
+//  - The write listener hears when a write starts and settles, so a page doesn't re-read
+//    underneath a save that is still on its way, and polls the moment one lands.
+let readListener: ((path: string) => void) | null = null
+export function captureReads<T>(fn: () => T, onRead: (path: string) => void): T {
+  const outer = readListener
+  readListener = onRead
+  try { return fn() } finally { readListener = outer }
+}
+
+let writeListener: ((phase: 'start' | 'end', ok: boolean) => void) | null = null
+export function setWriteListener(fn: typeof writeListener) {
+  writeListener = fn
+}
+
 async function request<T>(path: string, options?: RequestInit & { silent401?: boolean }): Promise<T> {
   const { silent401, ...init } = options ?? {}
-  const res = await fetch(`${BASE}${path}`, {
-    credentials: 'include', // send the httpOnly session cookie
-    headers: { 'Content-Type': 'application/json' },
-    ...init,
-  })
+  const write = (init.method ?? 'GET') !== 'GET'
+  if (write) writeListener?.('start', false)
+  else readListener?.(path)
+  let res: Response
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      credentials: 'include', // send the httpOnly session cookie
+      headers: { 'Content-Type': 'application/json' },
+      ...init,
+    })
+  } catch (err) {
+    if (write) writeListener?.('end', false)
+    throw err
+  }
+  if (write) writeListener?.('end', res.ok)
   if (!res.ok) {
     if (res.status === 401 && !silent401) onUnauthorized?.()
     let message = `Request failed (${res.status})`
@@ -84,7 +111,8 @@ async function request<T>(path: string, options?: RequestInit & { silent401?: bo
     } catch {
       /* ignore */
     }
-    throw new Error(message)
+    // The status rides along for the callers that must tell "gone" from "not allowed".
+    throw Object.assign(new Error(message), { status: res.status })
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
@@ -95,7 +123,22 @@ export interface DateRange {
   to?: string
 }
 
+/** GET /changes — see ChangeSnapshot. */
+export interface ChangeSnapshot {
+  /** False when the server can't count changes yet (migration 033): re-read on a timer. */
+  tracking: boolean
+  /** Area → how many writes it has seen. Only compared, never interpreted. */
+  versions: Record<string, number>
+  /** A fingerprint of the check-in bot's recent rows; null when its tables are missing. */
+  bot: string | null
+}
+
 export const api = {
+  // Live updates. Silent on a 401: an expired session must not throw somebody out of a
+  // half-typed sheet from a background poll — their next real request will say so.
+  changes: () =>
+    request<ChangeSnapshot>('/changes', { silent401: true }),
+
   // Analytics
   summary: (range: DateRange) =>
     request<Summary>(`/analytics/summary${qs(range)}`),
@@ -421,8 +464,14 @@ export const api = {
   // whole month (settings + every tick), so every browser reads the same thing back.
   topPerformer: (month: string) =>
     request<TopPerformerState>(`/top-performer${qs({ month })}`),
-  saveTopPerformer: (month: string, state: Pick<TopPerformerState, 'settings' | 'ticks'>) =>
-    request<TopPerformerState>(`/top-performer${qs({ month })}`, { method: 'PUT', body: JSON.stringify(state) }),
+  // `base` is the month as this browser last read it: the server then applies only what
+  // changed since, on top of whatever other managers saved meanwhile, and answers the merge.
+  saveTopPerformer: (
+    month: string,
+    state: Pick<TopPerformerState, 'settings' | 'ticks'>,
+    base?: Pick<TopPerformerState, 'settings' | 'ticks'>,
+  ) =>
+    request<TopPerformerState>(`/top-performer${qs({ month })}`, { method: 'PUT', body: JSON.stringify({ ...state, base }) }),
   /**
    * Every month from `from` to `to` inclusive, oldest first — one entry per month whether
    * anybody has touched it or not. The Annual Reviews tab scores a whole window against
@@ -437,8 +486,14 @@ export const api = {
   // plus the version history Reset reads.
   annualReview: (span: string, month: string) =>
     request<AnnualReviewSheet>(`/annual-reviews${qs({ span, month })}`),
-  saveAnnualReview: (span: string, month: string, sheet: Pick<AnnualReviewSheet, 'overrides' | 'extra_rows'> & { settings: { min_months: number } }) =>
-    request<AnnualReviewSheet>(`/annual-reviews${qs({ span, month })}`, { method: 'PUT', body: JSON.stringify(sheet) }),
+  // `base`: as saveTopPerformer — the sheet as last read, so the server merges, not replaces.
+  saveAnnualReview: (
+    span: string,
+    month: string,
+    sheet: Pick<AnnualReviewSheet, 'overrides' | 'extra_rows'> & { settings: { min_months?: number } },
+    base?: Pick<AnnualReviewSheet, 'overrides' | 'extra_rows'> & { settings: { min_months?: number } },
+  ) =>
+    request<AnnualReviewSheet>(`/annual-reviews${qs({ span, month })}`, { method: 'PUT', body: JSON.stringify({ ...sheet, base }) }),
   /** Back to the most recent version more than 24 hours old; 409 when there is none. */
   resetAnnualReview: (span: string, month: string) =>
     request<AnnualReviewSheet>(`/annual-reviews/reset${qs({ span, month })}`, { method: 'POST' }),

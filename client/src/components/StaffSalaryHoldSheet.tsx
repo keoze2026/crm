@@ -8,6 +8,7 @@ import {
 } from './sheet'
 import { PlusIcon, TrashIcon } from './sheetIcons'
 import { EmptyState, cx } from './ui'
+import { useServerDraft } from '../lib/useServerDraft'
 
 /**
  * Salary Hold — a running log of salaries held back and why:
@@ -184,7 +185,7 @@ function Cells({
 function Row({
   sr, hold, staff, onChanged,
 }: { sr: number; hold: StaffSalaryHold; staff: StaffMember[]; onChanged: () => void }) {
-  const [draft, setDraft] = useState<Draft>(() => draftOf(hold))
+  const [draft, setDraft] = useServerDraft<Draft>(draftOf(hold))
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
 

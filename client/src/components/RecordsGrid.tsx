@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { api } from '../api/client'
 import { autoReplacement, replacementIsManual, standardizeCampaignCode } from '../lib/bundle'
 import { money2, num } from '../lib/format'
 import type { CallRecord, Campaign, Destination, RecordType } from '../types'
 import { Input, Select, Spinner, cx } from './ui'
 import { CampaignRatesPopover } from './CampaignRatesPopover'
+import { useServerDraft } from '../lib/useServerDraft'
 
 // The Replacement auto-fill rule (and its excluded-sources list) lives in
 // ../lib/bundle so the daily sheet, the date-range table and the Complete Report
@@ -198,27 +199,26 @@ function ExistingRow({ record, isBuyer, navy, onChanged, campaign }: {
   record: CallRecord; isBuyer: boolean; navy: boolean; onChanged: () => void
   campaign?: Campaign
 }) {
-  const [answered, setAnswered] = useState(String(record.answered))
-  const [missed,   setMissed]   = useState(String(record.missed))
+  const [answered, setAnswered] = useServerDraft(String(record.answered))
+  const [missed,   setMissed]   = useServerDraft(String(record.missed))
   // Replacement: on the campaigns sheet it is auto-filled as (Answered − Counted)
   // for every traffic source except the excluded ones (PDSO), which stay manual —
   // as do all buyer rows. This state only backs the manual case. Replacement never
   // feeds the per-row Total, but it IS summed into the footer's Replacement total.
-  const [replacement, setReplacement] = useState(String(record.replacement))
+  const [replacement, setReplacement] = useServerDraft(String(record.replacement))
   // Counted is keyed in manually so both buyer categories work: "Yes" adds missed
   // to answered, "No / Non-Missed" excludes them. It no longer auto-derives here.
-  const [counted,  setCounted]  = useState(String(record.counted))
-  const [source,   setSource]   = useState(record.source ?? '')
-  const [rate,     setRate]     = useState(String(record.rate))
+  const [counted,  setCounted]  = useServerDraft(String(record.counted))
+  const [source,   setSource]   = useServerDraft(record.source ?? '')
+  const [rate,     setRate]     = useServerDraft(String(record.rate))
   // Camp code is campaign-level (cost side); editing it renames the campaign.
-  const [code,     setCode]     = useState(campaign?.code ?? record.campaign_code ?? '')
+  const [code,     setCode]     = useServerDraft(campaign?.code ?? record.campaign_code ?? '')
   const [busy,     setBusy]     = useState(false)
   const rowRef   = useRef<HTMLTableRowElement>(null)
   const saving   = useRef(false)
 
-  // Keep the Camp field in sync when the campaign is renamed elsewhere (another
-  // source row for the same campaign, or a reload), so it never reverts a rename.
-  useEffect(() => { setCode(campaign?.code ?? record.campaign_code ?? '') }, [campaign?.code, record.campaign_code])
+  // The Camp field follows a rename made elsewhere (another source row for the same
+  // campaign, or another user) — unless it is being edited here, see useServerDraft.
 
   const countedNum = Number(counted) || 0
   const total   = countedNum * (Number(rate) || 0)

@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import { money2 } from '../lib/format'
 import type { PortalExpense } from '../types'
 import { Input, cx } from './ui'
+import { useServerDraft } from '../lib/useServerDraft'
 
 /** Number with thousands separators and up to 3 decimals (e.g. 157.785). */
 const numFmt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 3 })
@@ -144,12 +145,12 @@ function NumInput({
 function ExpenseRow({
   index, expense, grandTotal, onChanged,
 }: { index: number; expense: PortalExpense; grandTotal: number; onChanged: () => void }) {
-  const [name, setName] = useState(expense.name)
-  const [values, setValues] = useState<Values>(() => valuesOf(expense))
-  const [total, setTotal] = useState(String(expense.total_amount))
+  const [name, setName] = useServerDraft(expense.name)
+  const [values, setValues] = useServerDraft<Values>(valuesOf(expense))
+  const [total, setTotal] = useServerDraft(String(expense.total_amount))
   // True once the total diverges from the component sum (a manual lump-sum override),
   // so component edits stop auto-driving it.
-  const [overridden, setOverridden] = useState(
+  const [overridden, setOverridden] = useServerDraft(
     Math.abs(expense.total_amount - sumComponents(valuesOf(expense))) > 0.005,
   )
   const rowRef = useRef<HTMLTableRowElement>(null)

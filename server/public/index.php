@@ -6,6 +6,7 @@ use App\Audit;
 use App\Auth\Auth;
 use App\Auth\AuthMiddleware;
 use App\Auth\Config;
+use App\Changes;
 use App\Controllers\AccessPresetController;
 use App\Controllers\AnalyticsController;
 use App\Controllers\AnnualReviewController;
@@ -65,6 +66,9 @@ $router->get('/health', fn () => Http::json([
     'status'   => 'ok',
     'database' => Database::isHealthy() ? 'connected' : 'unavailable',
 ]));
+
+// Live updates: the change counters every open page polls, so it re-reads only what moved.
+$router->get('/changes', fn () => Http::json(Changes::snapshot()));
 
 // Analytics
 $analytics = new AnalyticsController();
@@ -246,6 +250,11 @@ if ($authEnabled) {
     Audit::begin($method, $path, Http::body());
     register_shutdown_function([Audit::class, 'flush']);
 }
+
+// Bump the written area's change counter once the response is decided — after the guard, so
+// a refused write moves nothing, and from a shutdown hook for the same reason as the audit.
+Changes::begin($method, $path);
+register_shutdown_function([Changes::class, 'flush']);
 
 try {
     $router->dispatch($method, $path);

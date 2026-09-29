@@ -10,6 +10,7 @@ import {
 } from './sheet'
 import { PlusIcon, TrashIcon } from './sheetIcons'
 import { cx } from './ui'
+import { useServerDraft } from '../lib/useServerDraft'
 
 /**
  * The Performance and Behaviour sheets — the same table with one column swapped, so both
@@ -274,7 +275,7 @@ function Row({
   // Only the commented-out department picker needed these:
   // departments: ReviewDepartment[]
 }) {
-  const [draft, setDraft] = useState<Draft>(() => draftOf(entry))
+  const [draft, setDraft] = useServerDraft<Draft>(draftOf(entry))
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
 

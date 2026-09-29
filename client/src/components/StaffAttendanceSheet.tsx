@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import { api } from '../api/client'
 import { PerformerBadge } from '../lib/performers'
 import {
@@ -12,6 +12,7 @@ import {
 } from './sheet'
 import { RevertIcon, TrashIcon } from './sheetIcons'
 import { EmptyState, cx } from './ui'
+import { useServerDraft } from '../lib/useServerDraft'
 
 /**
  * One day's attendance for the whole roster — the Attendance page's day sheet, and the only
@@ -107,13 +108,11 @@ export default function StaffAttendanceSheet({
           <tbody>
             {staff.map((person, i) => (
               <DayRow
-                // A row seeds its editable draft once, at mount, so the key has to change
-                // whenever the values behind it do — not only on a new day, but every time
-                // the server answers with something different for the SAME day. Without
-                // the signature a row goes on showing what it showed before: Refresh
-                // would pull a login the bot has since recorded and change nothing on
-                // screen, and a day that rolled over would keep the previous day's times.
-                key={`${person.id}-${date}-${signature(byStaff.get(person.id) ?? null)}`}
+                // A new day is a new row. Within a day the row follows the server itself
+                // (useServerDraft): a login the bot records shows up, while a correction
+                // being typed survives the bot's next write — a key that changed with the
+                // values would rebuild the row, and the half-typed times, every few seconds.
+                key={`${person.id}-${date}`}
                 index={i + 1}
                 person={person}
                 row={byStaff.get(person.id) ?? null}
@@ -139,18 +138,6 @@ export default function StaffAttendanceSheet({
     </>
   )
 }
-
-/**
- * Everything about a row that a fresh fetch could have changed, as one string.
- *
- * It goes in the React key, so a row is rebuilt from the server's values whenever they
- * differ and left alone whenever they don't — which is what keeps a half-typed correction
- * from being thrown away by an unrelated reload, while still letting Refresh actually show
- * what it fetched.
- */
-const signature = (row: StaffAttendanceRow | null): string => row === null ? 'none' : [
-  row.id, row.source, row.edited, row.login_at, row.logout_at, row.break_min, row.status,
-].join('|')
 
 /** The department chips, matching how the Queues sheet shows them. */
 function DepartmentCell({ person }: { person: StaffMember }) {
@@ -251,7 +238,7 @@ function DayRow({
   onChanged: () => void
 }) {
   const saved = draftOf(row)
-  const [draft, setDraft] = useState<Draft>(saved)
+  const [draft, setDraft] = useServerDraft<Draft>(saved)
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
 

@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import { api } from '../api/client'
 import { money, money2, num } from '../lib/format'
 import type { Buyer } from '../types'
 import { Input, cx } from './ui'
+import { useServerDraft } from '../lib/useServerDraft'
 
 /**
  * "Monthly Sheet" of buyers (revenue side), matching the client layout:
@@ -84,8 +85,8 @@ const roCell = cx(td, 'text-center tabular-nums text-[#0f172a]')
 
 // ── Existing buyer row ──────────────────────────────────────────────────────────
 function BuyerRow({ index, buyer, onChanged }: { index: number; buyer: Buyer; onChanged: () => void }) {
-  const [code, setCode] = useState(buyer.code)
-  const [rate, setRate] = useState(String(buyer.rate))
+  const [code, setCode] = useServerDraft(buyer.code)
+  const [rate, setRate] = useServerDraft(String(buyer.rate))
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
 

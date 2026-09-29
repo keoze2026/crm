@@ -11,6 +11,7 @@ import {
 } from './sheet'
 import { PlusIcon, TrashIcon } from './sheetIcons'
 import { Spinner, cx } from './ui'
+import { useServerDraft } from '../lib/useServerDraft'
 
 /**
  * The staff roster: Sr. No. · Name · Departments · Expected Login · Expected Logout · Status.
@@ -80,7 +81,7 @@ function Row({
   departments: Department[]
   onChanged: () => void
 }) {
-  const [name, setName] = useState(person.name)
+  const [name, setName] = useServerDraft(person.name)
   const [busy, setBusy] = useState(false)
 
   const save = async (data: Parameters<typeof api.updateStaff>[1]) => {
@@ -239,21 +240,16 @@ function AddRow({ departments, onChanged }: { departments: Department[]; onChang
  * how a person is taken back out of being marked late or early. So clearing the cell
  * writes null rather than being ignored.
  *
- * The draft is kept locally and adopts the server's answer when it changes, so the cell
- * shows what was typed straight away instead of flicking back while the save is in
- * flight — the render-phase reset React prescribes for state derived from props.
+ * The draft is kept locally and adopts the server's answer when it changes (useServerDraft),
+ * so the cell shows what was typed straight away instead of flicking back while the save
+ * is in flight.
  */
 function ExpectedTime({ value, label, onSave }: {
   value: string | null
   label: string
   onSave: (next: string | null) => void
 }) {
-  const [draft, setDraft] = useState(value ?? '')
-  const [seen, setSeen] = useState(value)
-  if (seen !== value) {
-    setSeen(value)
-    setDraft(value ?? '')
-  }
+  const [draft, setDraft] = useServerDraft(value ?? '')
 
   // A time field only reports a value once both halves are filled, so every change here
   // is either a whole time or a cleared cell — there is no half-typed state to guard.
@@ -317,20 +313,13 @@ function DepartmentPicker({
 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [draft, setDraft] = useState<number[]>(value)
-  const [seen, setSeen] = useState(value.join(','))
+  // The draft follows the server's answer when the row changes underneath us — unless
+  // the panel is being ticked through right now (useServerDraft keeps that).
+  const [draft, setDraft] = useServerDraft<number[]>(value)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const [pos, setPos] = useState<Anchor>({ top: 0, left: 0, width: 260 })
-
-  // Adopt the server's answer whenever the row changes underneath us — the render-phase
-  // reset React prescribes for state derived from props, rather than an effect.
-  const signature = value.join(',')
-  if (seen !== signature) {
-    setSeen(signature)
-    setDraft(value)
-  }
 
   const close = () => {
     setOpen(false)

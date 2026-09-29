@@ -4,6 +4,7 @@ import { money, money2, num } from '../lib/format'
 import type { Campaign } from '../types'
 import { Input, Select, Spinner, cx } from './ui'
 import { CampaignRatesPopover } from './CampaignRatesPopover'
+import { useServerDraft } from '../lib/useServerDraft'
 
 /**
  * Editable "Monthly Sheet" of campaigns (cost side): Destination · Answered ·
@@ -103,12 +104,12 @@ function StatusSelect({ value, onChange }: { value: string; onChange: (v: string
 function CampaignRow({ campaign, onChanged }: {
   campaign: Campaign; onChanged: () => void
 }) {
-  const [code,     setCode]     = useState(campaign.code)
-  const [status,   setStatus]   = useState(campaign.status)
-  const [answered, setAnswered] = useState(String(campaign.answered))
-  const [missed,   setMissed]   = useState(String(campaign.missed))
-  const [counted,  setCounted]  = useState(String(campaign.counted))
-  const [rate,     setRate]     = useState(rateFromCost(campaign.cost, campaign.counted))
+  const [code,     setCode]     = useServerDraft(campaign.code)
+  const [status,   setStatus]   = useServerDraft(campaign.status)
+  const [answered, setAnswered] = useServerDraft(String(campaign.answered))
+  const [missed,   setMissed]   = useServerDraft(String(campaign.missed))
+  const [counted,  setCounted]  = useServerDraft(String(campaign.counted))
+  const [rate,     setRate]     = useServerDraft(rateFromCost(campaign.cost, campaign.counted))
   const [busy,     setBusy]     = useState(false)
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)

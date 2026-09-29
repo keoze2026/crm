@@ -8,6 +8,7 @@ import {
 } from './sheet'
 import { PlusIcon, TrashIcon } from './sheetIcons'
 import { EmptyState, cx } from './ui'
+import { useServerDraft } from '../lib/useServerDraft'
 
 /**
  * The leaves sheet, column for column as the client keeps it:
@@ -273,7 +274,7 @@ function Badge({ verdict }: { verdict: ReturnVerdict }) {
 function Row({
   leave, staff, onChanged,
 }: { leave: StaffLeave; staff: StaffMember[]; onChanged: () => void }) {
-  const [draft, setDraft] = useState<Draft>(() => draftOf(leave))
+  const [draft, setDraft] = useServerDraft<Draft>(draftOf(leave))
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
 

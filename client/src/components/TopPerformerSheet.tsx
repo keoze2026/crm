@@ -17,6 +17,7 @@ import { api } from '../api/client'
 import { cx } from './ui'
 import { PerformerBadge, usePerformerReload } from '../lib/performers'
 import { BRAND } from '../lib/theme'
+import { merge3 } from '../lib/merge'
 import {
   CRITERIA,
   TOP_PERFORMER_PCT,
@@ -422,6 +423,12 @@ export function PerformerHeadlines({ rows, monthLabel }: { rows: RankedRow[]; mo
 
 // ─── Sheet ────────────────────────────────────────────────────────────────────
 
+/** The month as the server holds it, in the one shape it is saved and compared in. */
+const wireOf = (state: TopPerformerState | null) => {
+  const { settings, ticks } = fromWire(state)
+  return toWire(settings, ticks)
+}
+
 export default function TopPerformerSheet({ month, monthLabel, staff, attendance, leaves, performance, behaviour, saved, onRanked }: {
   /** "YYYY-MM" — the month being judged. */
   month: string
@@ -439,7 +446,6 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
 }) {
   const [settings, setSettings] = useState<IncentiveSettings>(() => fromWire(saved).settings)
   const [ticks, setTicks] = useState<ManualTicks>(() => fromWire(saved).ticks)
-  const [sync, setSync] = useState<'saved' | 'saving' | 'error'>('saved')
   const [syncError, setSyncError] = useState<string | null>(null)
   const [onlyEligible, setOnlyEligible] = useState(false)
   // A tick here decides who wears the badge on every other page.
@@ -450,24 +456,59 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
   // above read that month's own saved state. Every change is sent to the server a moment
   // later — one PUT with the whole month, debounced so a burst of ticks is one request.
   // The first render is skipped: nothing has changed yet.
-  // What the server already holds. A render that changes nothing must not write anything:
-  // a re-render that re-sent this payload could only ever overwrite the month with what it
-  // already says, and a stale copy of it would take the manager's ticks with it.
-  const onServer = useRef(JSON.stringify(toWire(fromWire(saved).settings, fromWire(saved).ticks)))
+  //
+  // `onServer` is the month as the server last told us, as JSON. A render that changes
+  // nothing must not write anything: a re-render that re-sent this payload could only ever
+  // overwrite the month with what it already says. It also goes with every save as `base`,
+  // so the server applies only THIS browser's changes on top of any other manager's.
+  const [onServer, setOnServer] = useState(() => JSON.stringify(wireOf(saved)))
+  // A newer copy of the month — another manager's save arriving live, or the answer to our
+  // own — is folded in on the next render: whatever was changed here since `onServer` stays
+  // as it is, everything else takes the server's. A tick is never lost to a refresh.
+  const [incoming, setIncoming] = useState<TopPerformerState | null>(null)
+  const [seenSaved, setSeenSaved] = useState(saved)
+  if (saved !== seenSaved) {
+    setSeenSaved(saved)
+    setIncoming(saved)
+  }
+  if (incoming !== null) {
+    const theirs = wireOf(incoming)
+    const merged = fromWire({ ...incoming, ...merge3(JSON.parse(onServer), toWire(settings, ticks), theirs) })
+    setIncoming(null)
+    setSettings(merged.settings)
+    setTicks(merged.ticks)
+    setOnServer(JSON.stringify(theirs))
+  }
+
   const dirty = useRef(false)
+  // The debounced save still waiting to go, so leaving the page inside the debounce sends it.
+  const pending = useRef<(() => void) | null>(null)
   useEffect(() => {
     if (!dirty.current) { dirty.current = true; return }
     const payload = toWire(settings, ticks)
     const json = JSON.stringify(payload)
-    if (json === onServer.current) { setSync('saved'); return }
-    setSync('saving')
-    const handle = setTimeout(() => {
-      api.saveTopPerformer(month, payload)
-        .then(() => { onServer.current = json; setSync('saved'); setSyncError(null); reloadBadges(month) })
-        .catch((err: Error) => { setSync('error'); setSyncError(err.message) })
-    }, 400)
+    pending.current = null
+    if (json === onServer) return
+    const base = JSON.parse(onServer) as ReturnType<typeof wireOf>
+    const send = () => {
+      pending.current = null
+      setSyncError(null)
+      api.saveTopPerformer(month, payload, base)
+        .then((state) => {
+          // The answer is the merge: this save plus whatever else landed meanwhile.
+          setOnServer(json)
+          setIncoming(state)
+          reloadBadges(month)
+        })
+        .catch((err: Error) => setSyncError(err.message))
+    }
+    pending.current = send
+    const handle = setTimeout(send, 400)
     return () => clearTimeout(handle)
-  }, [month, saved, settings, ticks, reloadBadges])
+  }, [month, onServer, settings, ticks, reloadBadges])
+  useEffect(() => () => pending.current?.(), [])
+  // Saved once the server holds what is on screen; a failed save says so until the next one.
+  const sync = syncError !== null ? 'error' : JSON.stringify(toWire(settings, ticks)) !== onServer ? 'saving' : 'saved'
 
   const candidates = useMemo(() => buildCandidates(staff, attendance, leaves, performance, behaviour), [staff, attendance, leaves, performance, behaviour])
   const rows = useMemo(() => rankCandidates(candidates, settings, ticks), [candidates, settings, ticks])

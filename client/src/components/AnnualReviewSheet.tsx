@@ -38,6 +38,7 @@ import {
   type MonthSlice,
 } from '../lib/annualReview'
 import { TOP_PERFORMER_PCT } from '../lib/incentive'
+import { merge3 } from '../lib/merge'
 import { NUMERIC, PERFORMANCE_RATINGS } from '../lib/review'
 import type { AnnualReviewSheet as AnnualSheetState } from '../types'
 import NoteCell from './NoteCell'
@@ -88,6 +89,12 @@ const stamp = (iso: string | null): string => {
 const withPercent = (col: AnnualColumn, text: string): string =>
   col.kind === 'percent' && text.trim() !== '' ? `${text}%` : text
 
+/** The period as the server holds it, in the one shape it is saved and compared in. */
+const wireOf = (state: Parameters<typeof fromWire>[0], span: AnnualSpan) => {
+  const { overrides, extraRows, settings } = fromWire(state, span)
+  return toWire(overrides, extraRows, settings)
+}
+
 export default function AnnualReviewSheet({
   span, onSpan, months, saved, onExport,
 }: {
@@ -100,11 +107,9 @@ export default function AnnualReviewSheet({
   /** Told what the sheet is showing, so the page's PDF prints that and not the raw figures. */
   onExport?: (state: AnnualExport) => void
 }) {
-  const initial = useMemo(() => fromWire(saved, span), [saved, span])
-  const [overrides, setOverrides] = useState<AnnualOverrides>(initial.overrides)
-  const [extraRows, setExtraRows] = useState<ExtraRow[]>(initial.extraRows)
-  const [settings, setSettings] = useState<AnnualSettings>(initial.settings)
-  const [sync, setSync] = useState<'saved' | 'saving' | 'error'>('saved')
+  const [overrides, setOverrides] = useState<AnnualOverrides>(() => fromWire(saved, span).overrides)
+  const [extraRows, setExtraRows] = useState<ExtraRow[]>(() => fromWire(saved, span).extraRows)
+  const [settings, setSettings] = useState<AnnualSettings>(() => fromWire(saved, span).settings)
   const [syncError, setSyncError] = useState<string | null>(null)
   const [resetTo, setResetTo] = useState<string | null>(saved?.reset_to ?? null)
   const [resetting, setResetting] = useState(false)
@@ -120,28 +125,58 @@ export default function AnnualReviewSheet({
   // change is sent a moment later as one PUT of the whole sheet. A render that changes
   // nothing must not write anything — a re-sent payload could only overwrite the period
   // with what it already says, and would append a pointless version behind Reset.
-  const onServer = useRef(JSON.stringify(toWire(initial.overrides, initial.extraRows, initial.settings)))
+  //
+  // `onServer` (the period as the server last told us) also goes with every save as
+  // `base`, and a newer copy — another manager's save arriving live, or the answer to our
+  // own — is merged in rather than swapped in: the cells typed here since `onServer` keep
+  // what was typed, the rest take the server's. See the Top Performer sheet.
+  const [onServer, setOnServer] = useState(() => JSON.stringify(wireOf(saved, span)))
+  const [incoming, setIncoming] = useState<AnnualSheetState | null>(null)
+  const [seenSaved, setSeenSaved] = useState(saved)
+  if (saved !== seenSaved) {
+    setSeenSaved(saved)
+    setIncoming(saved)
+  }
+  if (incoming !== null) {
+    const theirs = wireOf(incoming, span)
+    const merged = fromWire(merge3(JSON.parse(onServer), toWire(overrides, extraRows, settings), theirs), span)
+    setIncoming(null)
+    setOverrides(merged.overrides)
+    setExtraRows(merged.extraRows)
+    setSettings(merged.settings)
+    setOnServer(JSON.stringify(theirs))
+    // Anybody's save moves what Reset reaches for.
+    setResetTo(incoming.reset_to ?? null)
+  }
+
   const dirty = useRef(false)
+  // The debounced save still waiting to go, so leaving the page inside the debounce sends it.
+  const pending = useRef<(() => void) | null>(null)
   useEffect(() => {
     if (!dirty.current) { dirty.current = true; return }
     if (endMonth === '') return
     const payload = toWire(overrides, extraRows, settings)
     const json = JSON.stringify(payload)
-    if (json === onServer.current) { setSync('saved'); return }
-    setSync('saving')
-    const handle = setTimeout(() => {
-      api.saveAnnualReview(span, endMonth, payload)
+    pending.current = null
+    if (json === onServer) return
+    const base = JSON.parse(onServer) as ReturnType<typeof toWire>
+    const send = () => {
+      pending.current = null
+      setSyncError(null)
+      api.saveAnnualReview(span, endMonth, payload, base)
         .then((state) => {
-          onServer.current = json
-          setSync('saved')
-          setSyncError(null)
-          // The save just became a version, so what Reset reaches for may have moved.
-          setResetTo(state.reset_to)
+          setOnServer(json)
+          setIncoming(state)
         })
-        .catch((err: Error) => { setSync('error'); setSyncError(err.message) })
-    }, 600)
+        .catch((err: Error) => setSyncError(err.message))
+    }
+    pending.current = send
+    const handle = setTimeout(send, 600)
     return () => clearTimeout(handle)
-  }, [span, endMonth, overrides, extraRows, settings])
+  }, [span, endMonth, onServer, overrides, extraRows, settings])
+  useEffect(() => () => pending.current?.(), [])
+  // Saved once the server holds what is on screen; a failed save says so until the next one.
+  const sync = syncError !== null ? 'error' : JSON.stringify(toWire(overrides, extraRows, settings)) !== onServer ? 'saving' : 'saved'
 
   /** Back to the most recent save more than 24 hours old — the whole sheet at once. */
   const reset = async () => {
@@ -159,9 +194,8 @@ export default function AnnualReviewSheet({
       setExtraRows(next.extraRows)
       setSettings(next.settings)
       // The restore IS now what the server holds, so the autosave above must not re-send it.
-      onServer.current = JSON.stringify(toWire(next.overrides, next.extraRows, next.settings))
+      setOnServer(JSON.stringify(toWire(next.overrides, next.extraRows, next.settings)))
       setResetTo(state.reset_to)
-      setSync('saved')
       setSyncError(null)
     } catch (err) {
       alert((err as Error).message)

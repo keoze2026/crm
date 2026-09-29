@@ -27,6 +27,7 @@ import {
   rankCandidates,
   type RankedRow,
 } from './incentive'
+import { subscribe } from './live'
 import { monthRange } from './staff'
 import type { StaffMember } from '../types'
 
@@ -139,7 +140,9 @@ export function PerformerProvider({ children }: { children: ReactNode }) {
     ]).then(([staff, attendance, leaves, performance, behaviour, saved]) => {
       const { settings, ticks } = fromWire(saved)
       const candidates = buildCandidates(staff, attendance?.rows ?? [], leaves, performance, behaviour)
-      setData((prev) => ({ ...prev, [month]: { staff, rows: rankCandidates(candidates, settings, ticks) } }))
+      const next = { staff, rows: rankCandidates(candidates, settings, ticks) }
+      // A live re-read that changed nothing keeps the old month, so no badge re-renders.
+      setData((prev) => (JSON.stringify(prev[month]) === JSON.stringify(next) ? prev : { ...prev, [month]: next }))
     })
   }, [])
 
@@ -156,6 +159,16 @@ export function PerformerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready) return
     for (const m of wanted.current) load(m)
+  }, [ready, load])
+
+  // Somebody else's tick, review, leave or check-in can move a badge, so every month asked
+  // for is re-read when one of those changes (lib/live.ts) — useAsync's own subscriptions
+  // don't reach this cache.
+  useEffect(() => {
+    if (!ready) return
+    return subscribe(['staff', 'attendance', 'bot', 'reviews'], () => {
+      for (const m of wanted.current) load(m)
+    })
   }, [ready, load])
 
   // Every month is judged once when its data lands, not once per badge.

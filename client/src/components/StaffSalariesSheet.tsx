@@ -9,6 +9,7 @@ import {
 } from './sheet'
 import { PlusIcon, TrashIcon } from './sheetIcons'
 import { cx } from './ui'
+import { useServerDraft } from '../lib/useServerDraft'
 
 /**
  * The salary sheet: Sr. NO · NAME · SALARY, exactly as the client's spreadsheet lays it
@@ -108,7 +109,7 @@ export default function StaffSalariesSheet({
 // ── Saved row ───────────────────────────────────────────────────────────────────
 
 function Row({ sr, salary, onChanged }: { sr: number; salary: StaffSalary; onChanged: () => void }) {
-  const [status, setStatus] = useState(salary.status)
+  const [status, setStatus] = useServerDraft(salary.status)
   const saving = useRef(false)
 
   const save = async (next: string) => {

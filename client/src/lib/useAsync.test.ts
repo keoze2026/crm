@@ -3,6 +3,21 @@ import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { useAsync } from './useAsync'
 
+// Every query here reads '/staff', and the live poller is replaced by a list of the reload
+// callbacks it was handed, so a test can play a live update by calling the last one.
+const live = vi.hoisted(() => ({ fires: [] as (() => void)[] }))
+vi.mock('../api/client', () => ({
+  captureReads: <T,>(fn: () => T, onRead: (path: string) => void) => { onRead('/staff'); return fn() },
+}))
+vi.mock('./live', () => ({
+  areasOf: () => ['staff'],
+  subscribe: (_areas: string[], fire: () => void) => {
+    live.fires.push(fire)
+    return () => { live.fires = live.fires.filter((f) => f !== fire) }
+  },
+}))
+const liveUpdate = () => act(() => { live.fires[live.fires.length - 1]() })
+
 // No testing-library dependency: hooks are
 // mounted with a minimal renderHook over react-dom directly.
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -158,5 +173,48 @@ describe('useAsync', () => {
     await act(async () => {})
     expect(result.current.loading).toBe(false)
     expect(result.current.data).toEqual([1, 2])
+  })
+
+  describe('live updates', () => {
+    it('re-reads quietly: no refreshing flag while the old data stays up', async () => {
+      const { fn, calls } = controlled<string>()
+      const { result } = renderHook(() => useAsync(fn, []))
+      await act(async () => { calls[0].resolve('v1') })
+
+      liveUpdate()
+      expect(fn).toHaveBeenCalledTimes(2)
+      expect(result.current).toMatchObject({ data: 'v1', loading: false, refreshing: false })
+      await act(async () => { calls[1].resolve('v2') })
+      expect(result.current.data).toBe('v2')
+    })
+
+    it('keeps the data on screen when a live re-read fails', async () => {
+      const { fn, calls } = controlled<string>()
+      const { result } = renderHook(() => useAsync(fn, []))
+      await act(async () => { calls[0].resolve('v1') })
+      liveUpdate()
+      await act(async () => { calls[1].reject(new Error('offline')) })
+      expect(result.current).toMatchObject({ data: 'v1', error: null })
+    })
+
+    it('keeps the same object when the answer did not change', async () => {
+      const { fn, calls } = controlled<{ rows: number[] }>()
+      const { result } = renderHook(() => useAsync(fn, []))
+      await act(async () => { calls[0].resolve({ rows: [1, 2] }) })
+      const first = result.current.data
+      liveUpdate()
+      await act(async () => { calls[1].resolve({ rows: [1, 2] }) })
+      expect(result.current.data).toBe(first)
+    })
+
+    it('stops listening once unmounted', async () => {
+      const { fn, calls } = controlled<string>()
+      const before = live.fires.length
+      const { unmount } = renderHook(() => useAsync(fn, []))
+      await act(async () => { calls[0].resolve('v1') })
+      expect(live.fires).toHaveLength(before + 1)
+      unmount()
+      expect(live.fires).toHaveLength(before)
+    })
   })
 })

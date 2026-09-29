@@ -218,4 +218,46 @@ final class TopPerformerApiTest extends ApiTestCase
         $this->assertStatus(422, $this->get('/top-performer/range?to=2026-01'));
         $this->assertStatus(422, $this->get('/top-performer/range?from=2026-01&to=2026-13'));
     }
+
+    public function testASaveWithABaseKeepsAnotherManagersTicks(): void
+    {
+        $alice = (string) self::staff('Alice');
+        $bob   = (string) self::staff('Bob');
+        $start = ['settings' => self::defaults(), 'ticks' => [$alice => ['written']]];
+        $this->put('/top-performer?month=2026-08', $start);
+
+        // Two managers opened the same month. The first ticks Bob; the second, still
+        // looking at the month as it was, ticks Alice's punctuality.
+        $this->put('/top-performer?month=2026-08', [
+            'settings' => self::defaults(),
+            'ticks'    => [$alice => ['written'], $bob => ['behaviour']],
+            'base'     => $start,
+        ]);
+        $r = $this->put('/top-performer?month=2026-08', [
+            'settings' => self::defaults(),
+            'ticks'    => [$alice => ['written', 'punctuality']],
+            'base'     => $start,
+        ]);
+
+        $this->assertStatus(200, $r);
+        $ticks = $r['json']['ticks'];
+        sort($ticks[$alice]);
+        $this->assertSame(['punctuality', 'written'], $ticks[$alice]);
+        $this->assertSame(['behaviour'], $ticks[$bob]);
+    }
+
+    public function testASaveWithABaseStillRemovesWhatThisManagerUnticked(): void
+    {
+        $alice = (string) self::staff('Alice');
+        $start = ['settings' => self::defaults(), 'ticks' => [$alice => ['written', 'behaviour']]];
+        $this->put('/top-performer?month=2026-08', $start);
+
+        $r = $this->put('/top-performer?month=2026-08', [
+            'settings' => ['additional' => ['goals', 'learning'], 'min_performance' => 80],
+            'ticks'    => [$alice => ['written']],
+            'base'     => $start,
+        ]);
+        $this->assertSame([$alice => ['written']], $r['json']['ticks']);
+        $this->assertSame(['goals', 'learning'], $r['json']['settings']['additional']);
+    }
 }

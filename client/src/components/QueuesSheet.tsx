@@ -12,6 +12,7 @@ import {
   tableCls, theadCls,
 } from './sheet'
 import { Spinner, cx } from './ui'
+import { useServerDraft } from '../lib/useServerDraft'
 
 /**
  * The Queues sheet: Sr. No. · Name · Queues · Total, keyed straight into the table.
@@ -103,17 +104,10 @@ function Row({
 }) {
   // The queue dropdown edits this draft live (so Total moves with it) and saves once,
   // when it closes — one request per edit instead of one per tick.
-  const signature = row.codes.map((c) => c.id).join(',')
-  const [draft, setDraft] = useState<number[]>(() => row.codes.map((c) => c.id))
-  const [seen, setSeen] = useState(signature)
+  // It follows the server's answer when the row changes underneath us, except while the
+  // dropdown is being ticked through here (useServerDraft keeps an edit in progress).
+  const [draft, setDraft] = useServerDraft<number[]>(row.codes.map((c) => c.id))
   const [busy, setBusy] = useState(false)
-
-  // Adopt the server's answer whenever the row changes underneath us — the render-phase
-  // reset React prescribes for state derived from props, rather than an effect.
-  if (seen !== signature) {
-    setSeen(signature)
-    setDraft(signature === '' ? [] : signature.split(',').map(Number))
-  }
 
   const changePerson = async (personId: number) => {
     setBusy(true)

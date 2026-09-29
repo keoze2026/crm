@@ -5,6 +5,7 @@ import { money2, num, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { Vendor, VendorPayment } from '../types'
 import { Input, PageLoader, cx } from './ui'
+import { useServerDraft } from '../lib/useServerDraft'
 
 /**
  * Editable per-vendor payment sheet for the Vendors page, mirroring the client spreadsheet:
@@ -217,7 +218,7 @@ function PaymentRow({
 }: { payment: VendorPayment; vendorName: string; opening: number; onChanged: () => void }) {
   // Only the amount is editable. The date identifies the row (it is the campaign day), and
   // Converted Lead / Price / Payments are read from the campaign records.
-  const [paid, setPaid] = useState(String(payment.amount_paid))
+  const [paid, setPaid] = useServerDraft(String(payment.amount_paid))
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
 
@@ -349,7 +350,7 @@ function AddRow({
 function InitialAdvance({
   vendor, initialAdvance, priorNet, onSaved,
 }: { vendor: Vendor; initialAdvance: number; priorNet: number; onSaved: () => void }) {
-  const [amount, setAmount] = useState(initialAdvance ? String(initialAdvance) : '')
+  const [amount, setAmount] = useServerDraft(initialAdvance ? String(initialAdvance) : '')
   const saving = useRef(false)
 
   const n = Number(amount) || 0

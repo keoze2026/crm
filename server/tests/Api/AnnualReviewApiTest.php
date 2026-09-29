@@ -303,4 +303,28 @@ final class AnnualReviewApiTest extends ApiTestCase
         $this->assertStatus(409, $this->post('/annual-reviews/reset?span=year&month=2026-09'));
         $this->assertNull($this->get(self::YEAR)['json']['reset_to']);
     }
+
+    public function testASaveWithABaseKeepsCellsAnotherManagerTyped(): void
+    {
+        $start = ['overrides' => ['s:1' => ['rating' => 'Good']], 'extra_rows' => [], 'settings' => ['min_months' => 6]];
+        $this->put(self::YEAR, $start);
+
+        $this->put(self::YEAR, [
+            'overrides'  => ['s:1' => ['rating' => 'Good'], 's:2' => ['rating' => 'Poor']],
+            'extra_rows' => [['key' => 'm:1', 'name' => 'Temp']],
+            'settings'   => ['min_months' => 6],
+            'base'       => $start,
+        ]);
+        $r = $this->put(self::YEAR, [
+            'overrides'  => ['s:1' => ['rating' => 'Excellent']],
+            'extra_rows' => [],
+            'settings'   => ['min_months' => 4],
+            'base'       => $start,
+        ]);
+
+        $this->assertStatus(200, $r);
+        $this->assertSame(['s:1' => ['rating' => 'Excellent'], 's:2' => ['rating' => 'Poor']], $r['json']['overrides']);
+        $this->assertSame([['key' => 'm:1', 'name' => 'Temp']], $r['json']['extra_rows']);
+        $this->assertSame(['min_months' => 4], $r['json']['settings']);
+    }
 }

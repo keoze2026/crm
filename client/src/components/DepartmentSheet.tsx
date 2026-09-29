@@ -7,6 +7,7 @@ import {
 } from './sheet'
 import { PlusIcon, TrashIcon } from './sheetIcons'
 import { cx } from './ui'
+import { useServerDraft } from '../lib/useServerDraft'
 
 /**
  * The Department tab: Sr. No · Department · Perfomance · %.
@@ -103,11 +104,11 @@ function Cells({
 function Row({
   index, month, department, onChanged,
 }: { index: number; month: string; department: ReviewDepartment; onChanged: () => void }) {
-  const [draft, setDraft] = useState<Draft>(() => ({
+  const [draft, setDraft] = useServerDraft<Draft>({
     name: department.name,
     performance: department.performance,
     percentage: department.percentage === null ? '' : String(department.percentage),
-  }))
+  })
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
 

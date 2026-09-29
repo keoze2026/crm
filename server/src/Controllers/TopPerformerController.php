@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\Auth\Auth;
 use App\Database;
 use App\Http;
+use App\Merge;
 use PDOException;
 
 /**
@@ -112,10 +113,29 @@ final class TopPerformerController
 
         $settings = $this->settings($body['settings'] ?? null);
         $ticks    = $this->ticks($body['ticks'] ?? null);
+        $base     = $body['base'] ?? null;
 
         $pdo = Database::connection();
         $pdo->beginTransaction();
         try {
+            // `base` is the month as this browser last read it. With it, only what this
+            // browser changed since is applied to what the month holds NOW, so two managers
+            // ticking the same month at once both keep their ticks. Saves of one month are
+            // serialised so each merges against the other's result. Without it (an older
+            // build), the save replaces the month as it always did.
+            if (is_array($base)) {
+                $pdo->prepare('SELECT pg_advisory_xact_lock(hashtext(:key))')
+                    ->execute([':key' => "top-performer:{$month}"]);
+                $now    = $this->state($month);
+                $merged = Merge::threeWay(
+                    ['settings' => $base['settings'] ?? null, 'ticks' => $base['ticks'] ?? []],
+                    ['settings' => $settings, 'ticks' => $ticks],
+                    ['settings' => $now['settings'], 'ticks' => (array) $now['ticks']],
+                );
+                $settings = $this->settings($merged['settings'] ?? null);
+                $ticks    = $this->ticks($merged['ticks'] ?? null);
+            }
+
             $stmt = $pdo->prepare(
                 'INSERT INTO top_performer_months (month, additional, min_performance, updated_at)
                  VALUES (:month, :additional, :min, now())

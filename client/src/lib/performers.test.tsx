@@ -26,7 +26,12 @@ const m = vi.hoisted(() => ({
   rankCandidates: vi.fn(),
 }))
 
-vi.mock('../api/client', () => ({ api: m.api }))
+vi.mock('../api/client', () => ({
+  api: m.api,
+  // lib/live.ts hooks in here; these tests never see a live update.
+  setWriteListener: () => {},
+  captureReads: <T,>(fn: () => T) => fn(),
+}))
 vi.mock('../auth/AuthContext', () => ({ useAuth: () => m.auth }))
 vi.mock('./incentive', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./incentive')>()),
