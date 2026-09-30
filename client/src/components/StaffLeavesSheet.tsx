@@ -4,7 +4,7 @@ import { PerformerBadge } from '../lib/performers'
 import { LEAVE_MARKERS, returnVerdict, type ReturnVerdict } from '../lib/staff'
 import type { StaffLeave, StaffMember } from '../types'
 import {
-  addBtnCls, addRowCls, cellCls, dateFieldCls, fieldCls, headCls, removeBtnCls, rowCls, tableCls, theadCls,
+  addBtnCls, addRowCls, cellCls, dateFieldCls, fieldCls, headCls, removeBtnCls, rowCls, tableCls, theadCls, isEnterSubmit,
 } from './sheet'
 import { PlusIcon, TrashIcon } from './sheetIcons'
 import { EmptyState, cx } from './ui'
@@ -355,7 +355,7 @@ function AddRow({
   }
 
   return (
-    <tr className={addRowCls} onKeyDown={(e) => { if (e.key === 'Enter') add() }}>
+    <tr className={addRowCls} onKeyDown={(e) => { if (isEnterSubmit(e)) add() }}>
       <Cells draft={draft} onDraft={setDraft} staff={staff} />
       <td className="p-0">
         <div className="flex items-center justify-center">

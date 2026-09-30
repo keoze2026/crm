@@ -7,7 +7,7 @@ import { matches } from '../lib/queues'
 import { STAFF_STATUSES, staffStatus } from '../lib/staff'
 import type { Department, StaffMember, StaffStatus } from '../types'
 import {
-  addBtnCls, addRowCls, cellCls, fieldCls, headCls, idxCell, removeBtnCls, rowCls, tableCls, theadCls,
+  addBtnCls, addRowCls, cellCls, fieldCls, headCls, idxCell, removeBtnCls, rowCls, tableCls, theadCls, isEnterSubmit,
 } from './sheet'
 import { PlusIcon, TrashIcon } from './sheetIcons'
 import { Spinner, cx } from './ui'
@@ -191,7 +191,7 @@ function AddRow({ departments, onChanged }: { departments: Department[]; onChang
   }
 
   return (
-    <tr className={addRowCls} onKeyDown={(e) => { if (e.key === 'Enter') add() }}>
+    <tr className={addRowCls} onKeyDown={(e) => { if (isEnterSubmit(e)) add() }}>
       <td className={cx(idxCell, 'text-slate-400')}>+</td>
       <td className={cellCls}>
         <input

@@ -4,6 +4,7 @@ import type { Range } from './DateRange'
 import { money2, num, today } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { Vendor, VendorPayment } from '../types'
+import { isEnterSubmit } from './sheet'
 import { Input, PageLoader, cx } from './ui'
 import { useServerDraft } from '../lib/useServerDraft'
 
@@ -309,10 +310,8 @@ function AddRow({
     } catch (err) { alert((err as Error).message) } finally { saving.current = false }
   }
 
-  const onKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter') add() }
-
   return (
-    <tr className="bg-[#eaf5fa] text-[#0f172a]" onKeyDown={onKeyDown}>
+    <tr className="bg-[#eaf5fa] text-[#0f172a]" onKeyDown={(e) => { if (isEnterSubmit(e)) add() }}>
       <td className={cellCls}><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></td>
       <td className={cx(cellCls, 'text-center font-medium text-slate-400')}>{vendorName}</td>
       <td className={cx(roCell, 'text-right text-slate-400')} title="Comes from the Campaigns records">—</td>

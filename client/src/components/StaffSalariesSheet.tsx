@@ -5,7 +5,7 @@ import { formatMonth } from './MonthSelector'
 import { SALARY_STATUSES } from '../lib/staff'
 import type { Department, StaffMember, StaffSalary } from '../types'
 import {
-  addBtnCls, addRowCls, bandCls, cellCls, fieldCls, headCls, idxCell, removeBtnCls, rowCls, tableCls, theadCls,
+  addBtnCls, addRowCls, bandCls, cellCls, fieldCls, headCls, idxCell, removeBtnCls, rowCls, tableCls, theadCls, isEnterSubmit,
 } from './sheet'
 import { PlusIcon, TrashIcon } from './sheetIcons'
 import { cx } from './ui'
@@ -191,7 +191,7 @@ function AddRow({
   }
 
   return (
-    <tr className={addRowCls} onKeyDown={(e) => { if (e.key === 'Enter') add() }}>
+    <tr className={addRowCls} onKeyDown={(e) => { if (isEnterSubmit(e)) add() }}>
       <td className={cx(idxCell, 'text-slate-400')}>+</td>
       <td className={cellCls}>
         <select

@@ -6,7 +6,7 @@ import NamePicker from './NamePicker'
 import NoteCell from './NoteCell'
 import {
   addBtnCls, addRowCls, bandCls, cellCls, fieldCls, headCls, idxCell, removeBtnCls, rowCls,
-  tableCls, theadCls,
+  tableCls, theadCls, isEnterSubmit,
 } from './sheet'
 import { PlusIcon, TrashIcon } from './sheetIcons'
 import { cx } from './ui'
@@ -396,7 +396,7 @@ function AddRow({
   }
 
   return (
-    <tr className={addRowCls} onKeyDown={(e) => { if (e.key === "Enter") add() }}>
+    <tr className={addRowCls} onKeyDown={(e) => { if (isEnterSubmit(e)) add() }}>
       <td className={cx(idxCell, 'text-slate-400')}>+</td>
       {kind === 'behaviour' && <td className={cellCls} />}
       <Cells

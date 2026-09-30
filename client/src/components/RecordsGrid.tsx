@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import { autoReplacement, replacementIsManual, standardizeCampaignCode } from '../lib/bundle'
 import { money2, num } from '../lib/format'
 import type { CallRecord, Campaign, Destination, RecordType } from '../types'
+import { isEnterSubmit } from './sheet'
 import { Input, Select, Spinner, cx } from './ui'
 import { CampaignRatesPopover } from './CampaignRatesPopover'
 import { useServerDraft } from '../lib/useServerDraft'
@@ -412,7 +413,7 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
   }, 0)
 
   return (
-    <tr ref={rowRef} onBlur={onRowBlur} className={rowCls(navy, navy ? '!bg-white/70' : 'bg-amber-50/30')}>
+    <tr ref={rowRef} onBlur={onRowBlur} onKeyDown={(e) => { if (isEnterSubmit(e)) save() }} className={rowCls(navy, navy ? '!bg-white/70' : 'bg-amber-50/30')}>
       <td className={cellCls}>
         {/* Entity is a free typing field (find-or-create by code). Dropdown retired:
               <Select value={entityId} onChange={(e) => onEntity(e.target.value)}>

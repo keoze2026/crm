@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { api } from '../api/client'
 import { money, money2, num } from '../lib/format'
 import type { Campaign } from '../types'
+import { isEnterSubmit } from './sheet'
 import { Input, Select, Spinner, cx } from './ui'
 import { CampaignRatesPopover } from './CampaignRatesPopover'
 import { useServerDraft } from '../lib/useServerDraft'
@@ -199,7 +200,7 @@ function DraftCampaignRow({ onActivate, onSaved }: { onActivate: () => void; onS
   }, 0)
 
   return (
-    <tr ref={rowRef} onBlur={onRowBlur} className="bg-amber-50/50 text-[#0f172a]">
+    <tr ref={rowRef} onBlur={onRowBlur} onKeyDown={(e) => { if (isEnterSubmit(e)) save() }} className="bg-amber-50/50 text-[#0f172a]">
       <td className={td}><Input value={code} onChange={(e) => onCode(e.target.value)} placeholder="New code" /></td>
       <td className={td}><Input type="number" min="0" value={answered} onChange={(e) => setAnswered(e.target.value)} placeholder="0" className="text-right" /></td>
       <td className={td}><Input type="number" min="0" value={missed} onChange={(e) => setMissed(e.target.value)} placeholder="0" className="text-right" /></td>

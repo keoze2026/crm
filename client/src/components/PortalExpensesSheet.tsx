@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { api } from '../api/client'
 import { money2 } from '../lib/format'
 import type { PortalExpense } from '../types'
+import { isEnterSubmit } from './sheet'
 import { Input, cx } from './ui'
 import { useServerDraft } from '../lib/useServerDraft'
 
@@ -251,10 +252,8 @@ function AddRow({ month, onChanged }: { month: string; onChanged: () => void }) 
     } catch (err) { alert((err as Error).message) } finally { saving.current = false }
   }
 
-  const onKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter') add() }
-
   return (
-    <tr className="bg-[#eaf5fa] text-[#0f172a]" onKeyDown={onKeyDown}>
+    <tr className="bg-[#eaf5fa] text-[#0f172a]" onKeyDown={(e) => { if (isEnterSubmit(e)) add() }}>
       <td className={cx(idxCell, 'text-slate-400')}>+</td>
       <td className={cellCls}><Input value={name} placeholder="Add provider…" onChange={(e) => setName(e.target.value)} /></td>
       {COMPONENTS.map((c) => (

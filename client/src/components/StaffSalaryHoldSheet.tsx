@@ -4,7 +4,7 @@ import { PerformerBadge } from '../lib/performers'
 import { SALARY_HOLD_STATUSES, salaryHoldStatus } from '../lib/staff'
 import type { StaffMember, StaffSalaryHold } from '../types'
 import {
-  addBtnCls, addRowCls, cellCls, dateFieldCls, fieldCls, headCls, idxCell, removeBtnCls, rowCls, tableCls, theadCls,
+  addBtnCls, addRowCls, cellCls, dateFieldCls, fieldCls, headCls, idxCell, removeBtnCls, rowCls, tableCls, theadCls, isEnterSubmit,
 } from './sheet'
 import { PlusIcon, TrashIcon } from './sheetIcons'
 import { EmptyState, cx } from './ui'
@@ -265,7 +265,7 @@ function AddRow({ month, staff, onChanged }: { month: string; staff: StaffMember
   }
 
   return (
-    <tr className={addRowCls} onKeyDown={(e) => { if (e.key === 'Enter') add() }}>
+    <tr className={addRowCls} onKeyDown={(e) => { if (isEnterSubmit(e)) add() }}>
       <td className={cx(idxCell, 'text-slate-400')}>+</td>
       <Cells draft={draft} onDraft={setDraft} staff={staff} />
       <td className="p-0">

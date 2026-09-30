@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from 'react'
 import { cx } from './ui'
 
 /**
@@ -64,3 +65,16 @@ const stroke = {
 }
 
 export const sheetStroke = stroke
+
+/**
+ * True when this Enter should complete the add row it lands in, the same as clicking
+ * its plus. It leaves alone a focused button (Enter already clicks it, so this would
+ * add twice), a text area (Enter is a new line there) and any key a field inside has
+ * already handled with preventDefault, such as a picker's own "add a name" box.
+ */
+export const isEnterSubmit = (e: KeyboardEvent): boolean => {
+  if (e.key !== 'Enter' || e.defaultPrevented || e.nativeEvent.isComposing) return false
+  if ((e.target as HTMLElement).closest('button, textarea')) return false
+  e.preventDefault()
+  return true
+}

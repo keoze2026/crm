@@ -9,7 +9,7 @@ import type { QueueAssignment, QueueBoard, QueueCode, StaffMember } from '../typ
 import QueueChips, { type Chip } from './QueueChips'
 import {
   addBtnCls, addRowCls, cellCls, fieldCls, headCls, idxCell, removeBtnCls, rowCls, sheetStroke,
-  tableCls, theadCls,
+  tableCls, theadCls, isEnterSubmit,
 } from './sheet'
 import { Spinner, cx } from './ui'
 import { useServerDraft } from '../lib/useServerDraft'
@@ -205,7 +205,7 @@ function AddRow({ board, free, codes, onChanged }: {
   }
 
   return (
-    <tr className={addRowCls}>
+    <tr className={addRowCls} onKeyDown={(e) => { if (isEnterSubmit(e)) add() }}>
       <td className={cx(idxCell, 'text-slate-400')}>+</td>
       <td className={cellCls}>
         <select

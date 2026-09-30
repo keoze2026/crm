@@ -199,7 +199,7 @@ export default function NamePicker({
               value={draft}
               placeholder="Add a name…"
               onChange={(e) => { setDraft(e.target.value); setError(null) }}
-              onKeyDown={(e) => { if (e.key === 'Enter') add() }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
               className={inputCls}
             />
             <button

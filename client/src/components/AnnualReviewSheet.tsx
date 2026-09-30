@@ -44,7 +44,7 @@ import type { AnnualReviewSheet as AnnualSheetState } from '../types'
 import NoteCell from './NoteCell'
 import {
   addBtnCls, addRowCls, cellCls, fieldCls, headCls, idxCell, removeBtnCls, rowCls,
-  tableCls, theadCls,
+  tableCls, theadCls, isEnterSubmit,
 } from './sheet'
 import { PlusIcon, TrashIcon } from './sheetIcons'
 import { PerformerEndCard } from './TopPerformerSheet'
@@ -417,7 +417,7 @@ export default function AnnualReviewSheet({
               />
             ))}
             {/* Somebody the period's reviews produced no row for. */}
-            <tr className={addRowCls} onKeyDown={(e) => { if (e.key === 'Enter') addRow() }}>
+            <tr className={addRowCls} onKeyDown={(e) => { if (isEnterSubmit(e)) addRow() }}>
               <td className={cx(idxCell, 'text-slate-400')}>+</td>
               <td className={cellCls} colSpan={COLUMNS.length}>
                 <input
