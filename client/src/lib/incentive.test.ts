@@ -20,6 +20,7 @@ import {
   type TickId,
   toWire,
   withLowMark,
+  withTopMark,
 } from './incentive'
 import { emptyLoginTally } from './staff'
 
@@ -99,7 +100,7 @@ const day = (staff_id: number, login_at: string | null, logout_at: string | null
   ({ staff_id, login_at, logout_at })
 
 /** A ranked row with a given score, for pickPerformers. */
-function row(id: number, met: number, total = 10, low: Pick<RankedRow, 'underLow' | 'lowMark'> = { underLow: false, lowMark: null }): RankedRow {
+function row(id: number, met: number, total = 10, marks: Partial<Pick<RankedRow, 'underLow' | 'lowMark' | 'topMark'>> = {}): RankedRow {
   return {
     candidate: candidate({ member: member({ id, name: `P${id}` }) }),
     verdicts: {} as RankedRow['verdicts'],
@@ -107,7 +108,10 @@ function row(id: number, met: number, total = 10, low: Pick<RankedRow, 'underLow
     total,
     allMet: met === total,
     rank: 0,
-    ...low,
+    underLow: false,
+    lowMark: null,
+    topMark: false,
+    ...marks,
   }
 }
 const ids = (rows: RankedRow[]) => rows.map((r) => r.candidate.member.id)
@@ -444,34 +448,37 @@ describe('pickPerformers', () => {
     expect(pickPerformers([])).toEqual({ top: [], low: [], lowByRules: [], listed: [], topPct: 0, lowPct: 0 })
   })
 
-  it('names the top scorer and the bottom scorer when there is a spread', () => {
-    const rows = [row(1, 10), row(2, 9), row(3, 5), row(4, 2)]
-    const p = pickPerformers(rows)
-    expect(p.top.map((r) => r.candidate.member.id)).toEqual([1])
-    expect(p.listed.map((r) => r.candidate.member.id)).toEqual([1, 2])
-    expect(p.low.map((r) => r.candidate.member.id)).toEqual([4])
-    expect(p.topPct).toBe(100)
+  it('names nobody top unless a manager marks them, however they scored', () => {
+    const p = pickPerformers([row(1, 10), row(2, 9), row(3, 5), row(4, 2)])
+    expect(p.top).toEqual([])
+    expect(p.topPct).toBe(0)
+    expect(ids(p.listed)).toEqual([1, 2])
+    expect(ids(p.low)).toEqual([4])
     expect(p.lowPct).toBe(20)
   })
 
-  it('lists exactly 80% as a top performer', () => {
+  it('names whoever is marked top, at any score, and several when several are marked', () => {
+    const p = pickPerformers([row(1, 10), row(2, 6, 10, { topMark: true }), row(3, 7, 10, { topMark: true }), row(4, 2)])
+    expect(ids(p.top)).toEqual([2, 3])
+    expect(p.topPct).toBe(70)
+    expect(ids(p.low)).toEqual([4])
+  })
+
+  it('lists exactly 80% as in the running', () => {
     const p = pickPerformers([row(1, 8), row(2, 7)])
-    expect(p.top.map((r) => r.candidate.member.id)).toEqual([1])
-    expect(p.topPct).toBe(80)
-  })
-
-  it('names every person tied at either end', () => {
-    const p = pickPerformers([row(1, 9), row(2, 9), row(3, 3), row(4, 3)])
-    expect(p.top.map((r) => r.candidate.member.id)).toEqual([1, 2])
-    expect(p.low.map((r) => r.candidate.member.id)).toEqual([3, 4])
-  })
-
-  it('names no top when nobody clears the bar, but still names the bottom', () => {
-    const p = pickPerformers([row(1, 7), row(2, 2)])
+    expect(ids(p.listed)).toEqual([1])
     expect(p.top).toEqual([])
+  })
+
+  it('names every person tied at the bottom', () => {
+    const p = pickPerformers([row(1, 9), row(2, 9), row(3, 3), row(4, 3)])
+    expect(ids(p.low)).toEqual([3, 4])
+  })
+
+  it('still names the bottom when nobody clears the bar', () => {
+    const p = pickPerformers([row(1, 7), row(2, 2)])
     expect(p.listed).toEqual([])
-    expect(p.topPct).toBe(0)
-    expect(p.low.map((r) => r.candidate.member.id)).toEqual([2])
+    expect(ids(p.low)).toEqual([2])
   })
 
   it('counts a reviewed 0% as genuinely last', () => {
@@ -508,7 +515,7 @@ describe('pickPerformers', () => {
   })
 
   it('lets a manager mark anyone Low, whatever their figures', () => {
-    const p = pickPerformers([row(1, 10), row(2, 9, 10, { underLow: false, lowMark: true }), row(3, 5)])
+    const p = pickPerformers([row(1, 10), row(2, 9, 10, { lowMark: true }), row(3, 5)])
     expect(ids(p.low)).toEqual([2, 3])
     expect(ids(p.lowByRules)).toEqual([3])
   })
@@ -519,12 +526,20 @@ describe('pickPerformers', () => {
     expect(ids(p.lowByRules)).toEqual([2])
   })
 
-  it('never crowns someone who is Low, and passes the crown to the next best', () => {
-    const p = pickPerformers([row(1, 10, 10, { underLow: false, lowMark: true }), row(2, 9), row(3, 2)])
-    expect(ids(p.low)).toEqual([1, 3])
+  it('never badges a marked top performer Low, and names the next lowest instead', () => {
+    const p = pickPerformers([row(1, 9), row(2, 2, 10, { underLow: true, topMark: true }), row(3, 4)])
     expect(ids(p.top)).toEqual([2])
-    expect(ids(p.listed)).toEqual([2])
-    expect(p.topPct).toBe(90)
+    expect(ids(p.low)).toEqual([3])
+    expect(ids(p.lowByRules)).toEqual([3])
+    expect(p.lowPct).toBe(40)
+  })
+
+  it('keeps one person out of both even when both marks arrive at once', () => {
+    const [r] = rankCandidates([candidate({ member: member({ id: 1, name: 'A' }) })], DEFAULT_SETTINGS, { 1: ['low', 'top'] })
+    expect([r.topMark, r.lowMark]).toEqual([true, null])
+    const p = pickPerformers([r, row(2, 9)])
+    expect(ids(p.top)).toEqual([1])
+    expect(p.low).toEqual([])
   })
 
   it('reads the threshold and the marks from the ranking', () => {
@@ -538,6 +553,17 @@ describe('pickPerformers', () => {
     // A mark is not a criterion: it never adds to the score.
     expect(by[2].met).toBe(rankCandidates([edge], DEFAULT_SETTINGS, {})[0].met)
     expect(rankCandidates([edge], { ...DEFAULT_SETTINGS, lowPerformance: 41 }, {})[0].underLow).toBe(true)
+  })
+})
+
+describe('withTopMark', () => {
+  it('marks someone top, setting any Low mark aside', () => {
+    expect(withTopMark(['written', 'low'], true)).toEqual(['written', 'top'])
+    expect(withTopMark(['not-low'], true)).toEqual(['top'])
+  })
+
+  it('unmarks them, handing Low back to the rules', () => {
+    expect(withTopMark(['top', 'written'], false)).toEqual(['written'])
   })
 })
 
@@ -606,7 +632,7 @@ describe('fromWire / toWire', () => {
 
   it('round-trips through the wire unchanged', () => {
     const settings: IncentiveSettings = { additional: ['learning', 'goals'], minPerformance: 72, lowPerformance: 45 }
-    const ticks = { 4: ['behaviour', 'written'] as CriterionId[], 9: ['feedback', 'low'] as TickId[] }
+    const ticks = { 4: ['behaviour', 'written'] as CriterionId[], 9: ['feedback', 'low'] as TickId[], 11: ['top'] as TickId[] }
     expect(fromWire({ month: '2026-08-01', ...toWire(settings, ticks) })).toEqual({ settings, ticks })
   })
 })

@@ -76,6 +76,7 @@ interface RowSpec {
   met?: number
   total?: number
   allMet?: boolean
+  top?: boolean
 }
 
 /** A month's ranked row, built directly: accumulate only reads the member, the %, met/total and allMet. */
@@ -99,6 +100,9 @@ const ranked = (m: StaffMember, spec: RowSpec = {}): RankedRow => {
     total,
     allMet: spec.allMet ?? met === total,
     rank: 0,
+    underLow: false,
+    lowMark: null,
+    topMark: spec.top ?? false,
   }
 }
 
@@ -352,13 +356,14 @@ describe('accumulate', () => {
 
   it('tallies the monthly top, lowest and incentive months', () => {
     const slices: MonthSlice[] = [
-      { month: '2026-01', rows: [ranked(alice, { met: 8 }), ranked(bob, { met: 4 })] },
-      { month: '2026-02', rows: [ranked(alice, { met: 8 }), ranked(bob, { met: 2 })] },
-      { month: '2026-03', rows: [ranked(alice, { met: 4 }), ranked(bob, { met: 4 })] },
+      { month: '2026-01', rows: [ranked(alice, { met: 8, top: true }), ranked(bob, { met: 4 })] },
+      { month: '2026-02', rows: [ranked(alice, { met: 8, top: true }), ranked(bob, { met: 2 })] },
+      // Eligible again, but nobody was marked top this month.
+      { month: '2026-03', rows: [ranked(alice, { met: 8 }), ranked(bob, { met: 4 })] },
     ]
     const byName = new Map(accumulate(slices).map((t) => [t.name, t]))
-    expect(byName.get('Alice')).toMatchObject({ topMonths: 2, lowMonths: 0, eligibleMonths: 2 })
-    expect(byName.get('Bob')).toMatchObject({ topMonths: 0, lowMonths: 2, eligibleMonths: 0 })
+    expect(byName.get('Alice')).toMatchObject({ topMonths: 2, lowMonths: 0, eligibleMonths: 3 })
+    expect(byName.get('Bob')).toMatchObject({ topMonths: 0, lowMonths: 3, eligibleMonths: 0 })
   })
 
   it('appends added rows at the end, in order, as manual rows with nothing behind them', () => {

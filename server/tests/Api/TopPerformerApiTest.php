@@ -140,14 +140,18 @@ final class TopPerformerApiTest extends ApiTestCase
         $this->assertStatus(200, $this->put('/top-performer?month=2026-08', ['settings' => ['low_performance' => 100]]));
     }
 
-    public function testLowMarksAreKeptWithTheTicks(): void
+    public function testTopAndLowMarksAreKeptWithTheTicks(): void
     {
         $alice = (string) self::staff('Alice');
         $bob   = (string) self::staff('Bob');
+        $cy    = (string) self::staff('Cy');
 
-        $r = $this->put('/top-performer?month=2026-08', ['ticks' => [$alice => ['low'], $bob => ['written', 'not-low']]]);
+        $r = $this->put('/top-performer?month=2026-08', ['ticks' => [$alice => ['low'], $bob => ['written', 'not-low'], $cy => ['top']]]);
         $this->assertStatus(200, $r);
-        $this->assertSame([$alice => ['low'], $bob => ['not-low', 'written']], $this->get('/top-performer?month=2026-08')['json']['ticks']);
+        $this->assertSame(
+            [$alice => ['low'], $bob => ['not-low', 'written'], $cy => ['top']],
+            $this->get('/top-performer?month=2026-08')['json']['ticks'],
+        );
     }
 
     public function testAManagersLowMarkSurvivesAnotherManagersSave(): void

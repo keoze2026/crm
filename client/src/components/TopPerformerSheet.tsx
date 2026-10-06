@@ -5,9 +5,10 @@
 // analysis, the attendance sheet (full days; on-time logins) and the performance review —
 // and show their evidence on hover; the rest are ticks the manager gives. Criteria 8–12
 // are optional and switched on above the list. The list is ranked by criteria met, with
-// the data as tie-breaks, and whoever meets every criterion in play carries the incentive
-// mark. Ticks and the month's settings are kept on the server, so every manager sees the
-// same confirmations; the sheet autosaves a moment after each change.
+// the data as tie-breaks; whoever meets every criterion in play is Eligible, and the month's
+// top performer is whoever the manager marks — nobody gets that badge automatically. Ticks,
+// marks and the month's settings are kept on the server, so every manager sees the same
+// confirmations; the sheet autosaves a moment after each change.
 //
 // The list is a div grid rather than a <table>: the app's global table rules give every
 // cell the Excel-like density the sheets want, and this is a leaderboard, not a sheet —
@@ -21,7 +22,6 @@ import { PerformerBadge, usePerformerReload } from '../lib/performers'
 import { merge3 } from '../lib/merge'
 import {
   CRITERIA,
-  TOP_PERFORMER_PCT,
   activeCriteria,
   buildCandidates,
   criterion,
@@ -31,6 +31,7 @@ import {
   scorePct,
   toWire,
   withLowMark,
+  withTopMark,
   type AttendanceDayLite,
   type Criterion,
   type CriterionId,
@@ -145,11 +146,44 @@ function StatusPill({ row }: { row: RankedRow }) {
   )
 }
 
+const MARK_BUTTON = 'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap transition-colors'
+const MARK_BLOCKED = 'cursor-not-allowed border-slate-100 bg-white text-slate-300'
+
+/**
+ * The Top badge as a switch — the only way anyone gets it. It can't be set on somebody
+ * wearing Low (clear that first), so one person is never both.
+ */
+function TopToggle({ row, low, name, onToggle }: { row: RankedRow; low: boolean; name: string; onToggle: () => void }) {
+  const on = row.topMark
+  const blocked = !on && low
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={`${name}: Top performer`}
+      disabled={blocked}
+      title={on ? 'Top performer of the month — tap to unmark' : blocked ? `${name} is Low — clear Low first` : `Mark ${name} top performer of the month`}
+      onClick={onToggle}
+      className={cx(
+        MARK_BUTTON,
+        on ? 'border-emerald-600 bg-emerald-600 text-white'
+          : blocked ? MARK_BLOCKED
+          : 'border-slate-200 bg-white text-slate-400 hover:border-emerald-500 hover:text-emerald-600',
+      )}
+    >
+      <IconCrown size={10} />
+      {on ? 'Top' : 'Mark top'}
+    </button>
+  )
+}
+
 /**
  * The Low badge as a switch. It shows what the rules say — performance under the month's
  * threshold, or the month's lowest score — until a manager flips it: a solid red "Low" is
  * their mark, a navy "Not low" their clearing, the same navy-means-yours the verdict pills
- * use. Flipping it back to what the rules say hands it back to them.
+ * use. Flipping it back to what the rules say hands it back to them. A marked top performer
+ * can't be marked Low (unmark Top first), and the rules leave them out.
  */
 function LowToggle({ row, byRules, threshold, name, onToggle }: {
   row: RankedRow
@@ -160,9 +194,11 @@ function LowToggle({ row, byRules, threshold, name, onToggle }: {
 }) {
   const low = row.lowMark ?? byRules
   const manual = row.lowMark !== null
+  const blocked = row.topMark
   const pct = row.candidate.performance?.percentage
   const why = row.underLow ? `performance ${pct}% is under ${threshold}%` : byRules ? 'the lowest score of the month' : null
-  const title = row.lowMark === true ? `Marked Low by you${why ? ` (the rules agree: ${why})` : ''} — tap to clear`
+  const title = blocked ? `${name} is marked Top — unmark Top first`
+    : row.lowMark === true ? `Marked Low by you${why ? ` (the rules agree: ${why})` : ''} — tap to clear`
     : row.lowMark === false ? `Cleared by you — the rules say Low: ${why} — tap to mark Low again`
     : low ? `Low: ${why} — tap to clear`
     : `Not Low — tap to mark ${name} Low whatever the percentage`
@@ -172,11 +208,13 @@ function LowToggle({ row, byRules, threshold, name, onToggle }: {
       role="switch"
       aria-checked={low}
       aria-label={`${name}: Low performer`}
+      disabled={blocked}
       title={title}
       onClick={onToggle}
       className={cx(
-        'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap transition-colors',
-        low && manual ? 'border-rose-600 bg-rose-600 text-white'
+        MARK_BUTTON,
+        blocked ? MARK_BLOCKED
+          : low && manual ? 'border-rose-600 bg-rose-600 text-white'
           : low ? 'border-transparent bg-rose-50 text-rose-700 hover:border-rose-400'
           : manual ? 'border-brand bg-white text-brand'
           : 'border-slate-200 bg-white text-slate-400 hover:border-rose-400 hover:text-rose-600',
@@ -246,10 +284,9 @@ function FoldPanel({ id, title, meta, children }: { id: string; title: string; m
 // ─── Scorecards ───────────────────────────────────────────────────────────────
 //
 // The month's two answers in one glance, beside the card title where the header otherwise
-// sat empty under the month picker. The Top Performers list is everyone scoring 80% or
-// more of the criteria in play; the green card names the highest scorer on it — or
-// everyone tied for that score — and the red card, its mirror, names the lowest scorer of
-// the month. A name and a score, nothing else; the evidence is the ranking below.
+// sat empty under the month picker. The green card names whoever the manager marked top
+// performer; the red card, its mirror, everyone wearing the Low badge. A name and a score,
+// nothing else; the evidence is the ranking below.
 //
 // Both cards read the same rules the app-wide badges do (lib/incentive.ts · pickPerformers),
 // so the Review tab and the badges worn beside staff names can never name different people.
@@ -339,16 +376,17 @@ export function PerformerEndCard({ end, people, title, empty, periodLabel, tied 
 const asEndPerson = (r: RankedRow, pct: number): EndPerson =>
   ({ key: r.candidate.member.id, name: r.candidate.member.name, pct })
 
-/** The month's incentive: whoever scores highest, provided they clear the bar. */
+/** The month's incentive: whoever the manager marked top performer, each with their score. */
 export function TopPerformerHeadline({ rows, monthLabel }: { rows: RankedRow[]; monthLabel: string }) {
-  const { top, topPct } = pickPerformers(rows)
+  const { top } = pickPerformers(rows)
   return (
     <PerformerEndCard
       end="top"
-      people={top.map((r) => asEndPerson(r, topPct))}
+      people={top.map((r) => asEndPerson(r, scorePct(r)))}
       title="Top performer"
-      empty={`No one at ${TOP_PERFORMER_PCT}% yet`}
+      empty="No one marked yet"
       periodLabel={monthLabel}
+      tied={false}
     />
   )
 }
@@ -507,11 +545,18 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
 
   // Who the rules alone badge Low, so a flip can tell a mark from handing it back.
   const lowByRules = useMemo(() => new Set(pickPerformers(rows).lowByRules.map((r) => r.candidate.member.id)), [rows])
+  const isLow = (r: RankedRow) => r.lowMark ?? lowByRules.has(r.candidate.member.id)
+  // One person is never both: Low can't be set on a marked top performer, nor Top on
+  // somebody Low (the switches are disabled too; these guard a stale click).
   const flipLow = (r: RankedRow) => {
+    if (r.topMark) return
     const id = r.candidate.member.id
-    const byRules = lowByRules.has(id)
-    const low = r.lowMark ?? byRules
-    setTicks((t) => ({ ...t, [id]: withLowMark(t[id] ?? [], !low, byRules) }))
+    setTicks((t) => ({ ...t, [id]: withLowMark(t[id] ?? [], !isLow(r), lowByRules.has(id)) }))
+  }
+  const flipTop = (r: RankedRow) => {
+    if (!r.topMark && isLow(r)) return
+    const id = r.candidate.member.id
+    setTicks((t) => ({ ...t, [id]: withTopMark(t[id] ?? [], !r.topMark) }))
   }
 
   /** Header chip: credit one manual criterion to everyone shown — or, if they all have it, take it back. */
@@ -637,7 +682,7 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
           <div className="flex flex-wrap items-center gap-2 border-b border-emerald-100 bg-emerald-50/60 px-4 py-2 text-xs text-emerald-800">
             <span className="text-emerald-600"><IconCrown /></span>
             {winners.length === 1
-              ? <><span className="font-semibold">{winners[0].candidate.member.name}</span> meets all {active.length} criteria — the {monthLabel} incentive.</>
+              ? <><span className="font-semibold">{winners[0].candidate.member.name}</span> meets all {active.length} criteria.</>
               : <><span className="font-semibold">{winners.length} people</span> meet all {active.length} criteria: {winners.map((w) => w.candidate.member.name).join(', ')}.</>}
           </div>
         )}
@@ -686,7 +731,7 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
               </span>
               <span>Score</span>
               <span>Status</span>
-              <span title={`Under ${settings.lowPerformance}% performance, or the month's lowest score — tap to mark or clear by hand`}>Low</span>
+              <span title={`Top: marked by hand only. Low: under ${settings.lowPerformance}% performance, the month's lowest score, or marked by hand. Never both.`}>Top · Low</span>
             </div>
 
             {/* Rows */}
@@ -706,7 +751,7 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
                     <li key={m.id} className={cx('grid items-center gap-x-2 px-3 py-2.5 transition-colors hover:bg-slate-50/80', cols, r.allMet && 'bg-emerald-50/40')}>
                       {/* Rank */}
                       <span className={cx('inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold', r.allMet ? 'bg-emerald-600 text-white' : first ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600')}>
-                        {first && r.allMet ? <IconCrown /> : r.rank}
+                        {r.topMark ? <IconCrown /> : r.rank}
                       </span>
                       {/* Person */}
                       <span className="min-w-0 leading-tight">
@@ -742,8 +787,9 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
                       </span>
                       {/* Status */}
                       <span><StatusPill row={r} /></span>
-                      {/* Low badge, markable by hand */}
-                      <span>
+                      {/* The two badges, marked by hand — one at a time */}
+                      <span className="flex flex-col items-start gap-1">
+                        <TopToggle row={r} low={isLow(r)} name={m.name} onToggle={() => flipTop(r)} />
                         <LowToggle row={r} byRules={lowByRules.has(m.id)} threshold={settings.lowPerformance} name={m.name} onToggle={() => flipLow(r)} />
                       </span>
                     </li>

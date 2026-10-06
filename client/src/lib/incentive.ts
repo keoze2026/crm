@@ -11,7 +11,8 @@
  * are confirmed by the manager per person.
  *
  * Criteria 1–7 always apply. 8–12 are the "if applicable" ones the manager switches on for
- * a month. Somebody who meets every criterion in play gets the incentive mark.
+ * a month. Somebody who meets every criterion in play is Eligible; the month's top performer
+ * is whoever a manager marks (see pickPerformers).
  *
  * Pure data + rules; no React. The sheet owns the ticks and the settings.
  */
@@ -81,10 +82,13 @@ export const DEFAULT_SETTINGS: IncentiveSettings = {
  */
 export type LowMark = 'low' | 'not-low'
 
-/** What a person's ticks hold: the criteria confirmed by hand, and at most one Low mark. */
-export type TickId = CriterionId | LowMark
+/** A manager's pick for the month's top performer, kept among the person's ticks. */
+export type TopMark = 'top'
 
-/** Manual ticks: which criteria each person (by staff id) has been credited with, and any Low mark. */
+/** What a person's ticks hold: the criteria confirmed by hand, and a Top or a Low mark. */
+export type TickId = CriterionId | LowMark | TopMark
+
+/** Manual ticks: which criteria each person (by staff id) has been credited with, and any mark. */
 export type ManualTicks = Record<number, TickId[]>
 
 /** The criteria in play for these settings, in the client's order. */
@@ -262,13 +266,15 @@ export interface RankedRow {
   /** Criteria met, out of the ones in play. */
   met: number
   total: number
-  /** Every criterion in play is met — the incentive mark. */
+  /** Every criterion in play is met — Eligible for the incentive (a manager still picks the winner). */
   allMet: boolean
   rank: number
   /** Their performance % on the Review page is under the month's Low performer threshold. */
   underLow: boolean
   /** A manager's Low mark: true = marked Low, false = cleared of it, null = left to the rules. */
   lowMark: boolean | null
+  /** A manager picked them as a top performer of the month — the only way to get the badge. */
+  topMark: boolean
 }
 
 /**
@@ -283,10 +289,14 @@ export function rankCandidates(candidates: Candidate[], settings: IncentiveSetti
     const verdicts = Object.fromEntries(CRITERIA.map((c) => [c.id, judge(candidate, c.id, settings, own)])) as Record<CriterionId, Verdict>
     const met = active.filter((c) => verdicts[c.id].met).length
     const pct = candidate.performance?.percentage
+    // One person is never both: a Top mark sets any Low mark aside (the sheet won't set
+    // both, but two managers marking at once could).
+    const topMark = own.includes('top')
     return {
       candidate, verdicts, met, total: active.length, allMet: met === active.length, rank: 0,
       underLow: pct != null && pct < settings.lowPerformance,
-      lowMark: own.includes('low') ? true : own.includes('not-low') ? false : null,
+      lowMark: topMark ? null : own.includes('low') ? true : own.includes('not-low') ? false : null,
+      topMark,
     }
   })
   const onTimeShare = (c: Candidate) => (c.logins.judged ? c.logins.onTime / c.logins.judged : 0)
@@ -310,7 +320,8 @@ export function rankCandidates(candidates: Candidate[], settings: IncentiveSetti
 // dropping anything the client no longer recognises.
 
 const isAdditional = (id: string): id is CriterionId => CRITERIA.some((c) => c.id === id && c.group === 'additional')
-const isTickId = (id: string): id is TickId => id === 'low' || id === 'not-low' || CRITERIA.some((c) => c.id === id)
+const isTickId = (id: string): id is TickId =>
+  id === 'top' || id === 'low' || id === 'not-low' || CRITERIA.some((c) => c.id === id)
 
 export function fromWire(state: TopPerformerState | null | undefined): { settings: IncentiveSettings; ticks: ManualTicks } {
   if (!state) return { settings: DEFAULT_SETTINGS, ticks: {} }
@@ -348,6 +359,15 @@ export function withLowMark(own: TickId[], low: boolean, byRules: boolean): Tick
   return low === byRules ? rest : [...rest, low ? 'low' : 'not-low']
 }
 
+/**
+ * Someone's ticks after a manager marks them top performer (`top`) or unmarks them. A Low
+ * mark can't stand beside a Top one, so marking drops it; unmarking hands Low back to the rules.
+ */
+export function withTopMark(own: TickId[], top: boolean): TickId[] {
+  const rest = own.filter((x) => x !== 'top' && x !== 'low' && x !== 'not-low')
+  return top ? [...rest, 'top'] : rest
+}
+
 // ─── Who is top, who is bottom ────────────────────────────────────────────────
 //
 // The month's two names, decided from the same ranking the sheet shows, so the Review tab,
@@ -356,56 +376,58 @@ export function withLowMark(own: TickId[], low: boolean, byRules: boolean): Tick
 /** What the month's incentive is worth — the green badge says so. */
 export const INCENTIVE_USD = 200
 
-/** The score that puts someone on the Top Performers list. */
+/** The score that puts someone in the running for top performer, and the bar the lowest-score rule uses. */
 export const TOP_PERFORMER_PCT = 80
 
 /** A person's score as a whole percentage of the criteria in play. */
 export const scorePct = (r: RankedRow) => Math.round((r.met / Math.max(1, r.total)) * 100)
 
 export interface PerformerPicks {
-  /** Everyone tied at the best score, provided it reaches TOP_PERFORMER_PCT. */
+  /** Everyone a manager has marked top performer (RankedRow.topMark) — nobody else. */
   top: RankedRow[]
   /** Everyone wearing the Low badge — the rules' answer, or a manager's mark over it (see below). */
   low: RankedRow[]
   /** Who the rules alone would badge Low, before any manager's mark. */
   lowByRules: RankedRow[]
-  /** Everyone at or above TOP_PERFORMER_PCT and not Low, the Top Performers list itself. */
+  /** Everyone at or above TOP_PERFORMER_PCT and not Low — who the scores put in the running. */
   listed: RankedRow[]
+  /** The best score among the marked top performers. */
   topPct: number
-  /** The month's worst score. */
+  /** The worst score among everyone not marked top. */
   lowPct: number
 }
 
 /**
  * The month's ends.
  *
- * Low is decided first. By the rules, a person is Low when their performance % on the
- * Review page is under the month's threshold (IncentiveSettings.lowPerformance), or when
- * they are the month's lowest scorer, zero included — a reviewed person at 0% is genuinely
- * last, not "unmarked", because only reviewed people are in `rows` to begin with (see
- * buildCandidates; that is what keeps the not-yet-reviewed out of this). The lowest scorer
- * is only named when naming them says something: at least two people to compare, somebody
- * who scored better, and a score under the bar — a month where everyone scored the same
- * doesn't pin a red badge on whoever happens to sort last. A manager's mark beats the
- * rules either way (RankedRow.lowMark): marked Low whatever the percentage, or cleared of it.
+ * Top is a manager's choice and nothing else: whoever is marked top performer, however
+ * they scored. Nobody gets the badge automatically.
  *
- * Top is then the highest scorer among everybody else (or the people tied with them), once
- * they clear the 80% bar — so nobody wears both badges.
+ * Low leaves the marked top performers out, so one person never wears both. By the rules,
+ * a person is Low when their performance % on the Review page is under the month's
+ * threshold (IncentiveSettings.lowPerformance), or when they are the month's lowest scorer,
+ * zero included — a reviewed person at 0% is genuinely last, not "unmarked", because only
+ * reviewed people are in `rows` to begin with (see buildCandidates; that is what keeps the
+ * not-yet-reviewed out of this). The lowest scorer is only named when naming them says
+ * something: at least two people to compare, somebody who scored better, and a score under
+ * the bar — a month where everyone scored the same doesn't pin a red badge on whoever
+ * happens to sort last. A manager's mark beats the rules either way (RankedRow.lowMark):
+ * marked Low whatever the percentage, or cleared of it.
  */
 export function pickPerformers(rows: RankedRow[]): PerformerPicks {
-  const lowPct = rows.length ? Math.min(...rows.map(scorePct)) : 0
+  const top = rows.filter((r) => r.topMark)
+  const pool = rows.filter((r) => !r.topMark)
+  const lowPct = pool.length ? Math.min(...pool.map(scorePct)) : 0
   const best = rows.length ? Math.max(...rows.map(scorePct)) : 0
   const spread = rows.length > 1 && lowPct < best && lowPct < TOP_PERFORMER_PCT
-  const lowByRules = rows.filter((r) => r.underLow || (spread && scorePct(r) === lowPct))
-  const low = rows.filter((r) => r.lowMark ?? lowByRules.includes(r))
-  const listed = rows.filter((r) => !low.includes(r) && scorePct(r) >= TOP_PERFORMER_PCT)
-  const topPct = listed.length ? Math.max(...listed.map(scorePct)) : 0
+  const lowByRules = pool.filter((r) => r.underLow || (spread && scorePct(r) === lowPct))
+  const low = pool.filter((r) => r.lowMark ?? lowByRules.includes(r))
   return {
-    top: listed.filter((r) => scorePct(r) === topPct),
+    top,
     low,
     lowByRules,
-    listed,
-    topPct,
+    listed: rows.filter((r) => !low.includes(r) && scorePct(r) >= TOP_PERFORMER_PCT),
+    topPct: top.length ? Math.max(...top.map(scorePct)) : 0,
     lowPct,
   }
 }

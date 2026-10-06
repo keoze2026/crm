@@ -18,7 +18,7 @@ use PDOException;
  * a manager per person, and it is THOSE confirmations — plus the month's settings (which
  * optional criteria apply, the performance % target, the performance % under which someone
  * is a Low performer) — that this endpoint keeps, so every manager sees the same ticks from
- * any browser. A manager's own Low marks travel with the ticks, as the ids in MARKS.
+ * any browser. A manager's Top and Low marks travel with the ticks, as the ids in MARKS.
  *
  *   GET /top-performer?month=YYYY-MM   the month's settings and ticks
  *   PUT /top-performer?month=YYYY-MM   replace them (the whole month's state, in one go —
@@ -42,10 +42,11 @@ final class TopPerformerController
     /** The "if applicable" criteria — the only ones a month can switch on or off. */
     private const ADDITIONAL = ['learning', 'goals', 'collaboration', 'innovation', 'feedback'];
     /**
-     * A manager's word on the Low badge, kept among the person's ticks: 'low' marks them a
-     * Low performer whatever their percentage, 'not-low' clears them of it.
+     * A manager's marks, kept among the person's ticks: 'top' picks them as the month's top
+     * performer (the only way to get that badge), 'low' marks them a Low performer whatever
+     * their percentage, 'not-low' clears them of it.
      */
-    private const MARKS = ['low', 'not-low'];
+    private const MARKS = ['top', 'low', 'not-low'];
 
     private const DEFAULT_ADDITIONAL = ['goals'];
     private const DEFAULT_MIN_PERFORMANCE = 80;

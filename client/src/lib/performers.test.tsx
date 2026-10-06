@@ -47,8 +47,10 @@ const member = (id: number, name: string, userId: string | null = null): StaffMe
   expected_login: null, expected_logout: null, sort_order: id, ...stamps,
 })
 const roster = [member(1, 'Anna', 'u-anna'), member(2, 'Ben', 'u-ben'), member(3, '  Cy Low ', 'u-cy')]
-/** Criteria met out of 8, by staff id: Anna tops at 100%, Cy sits lowest at 25%. */
+/** Criteria met out of 8, by staff id: Anna at 100%, Cy sits lowest at 25%. */
 const score: Record<number, number> = { 1: 8, 2: 6, 3: 2 }
+/** Who a manager has marked top performer — Anna. */
+const topMarks = new Set<number>([1])
 
 let root: Root | null = null
 let container: HTMLDivElement
@@ -92,7 +94,10 @@ beforeEach(() => {
   m.buildCandidates.mockImplementation((staff: StaffMember[]) => staff.map((s) => ({ member: s }) as Candidate))
   m.rankCandidates.mockImplementation((candidates: Candidate[]) => candidates.map((candidate, i): RankedRow => {
     const met = score[candidate.member.id] ?? 0
-    return { candidate, verdicts: {} as RankedRow['verdicts'], met, total: 8, allMet: met === 8, rank: i + 1 }
+    return {
+      candidate, verdicts: {} as RankedRow['verdicts'], met, total: 8, allMet: met === 8, rank: i + 1,
+      underLow: false, lowMark: null, topMark: topMarks.has(candidate.member.id),
+    }
   }))
 })
 
@@ -261,7 +266,7 @@ describe('PerformerProvider', () => {
     await flush()
     expect(m.api.topPerformer).toHaveBeenCalledTimes(1)
 
-    score[2] = 8
+    topMarks.add(2)
     act(() => { out.current?.reload() })
     await flush()
     expect(m.api.topPerformer).toHaveBeenCalledTimes(2)
@@ -270,7 +275,7 @@ describe('PerformerProvider', () => {
     act(() => { reloaderRef.current?.('2026-08') })
     await flush()
     expect(m.api.topPerformer).toHaveBeenCalledTimes(3)
-    score[2] = 6
+    topMarks.delete(2)
   })
 })
 

@@ -208,7 +208,8 @@ describe('annual reviews sheet', () => {
 describe('Top Performer + Annual Reviews logic over real server data', () => {
   /**
    * Two reviewed months (July, August 2026) for two people:
-   *  Ada — Excellent / Good Standing, on time every day, every manual criterion ticked → 8/8
+   *  Ada — Excellent / Good Standing, on time every day, every manual criterion ticked → 8/8,
+   *        and marked top performer by the manager (nobody is top otherwise)
    *  Ben — Average 60–70% / Low Performer, no attendance, a Half Day on leaves      → 0/8
    */
   async function seed(): Promise<{ ada: number, ben: number }> {
@@ -223,7 +224,7 @@ describe('Top Performer + Annual Reviews logic over real server data', () => {
       await api.createReviewEntry({ kind: 'performance', month, person_name: 'Ben Stone', rating: 'Average', percentage: benPct })
       await api.createReviewEntry({ kind: 'behaviour', month, person_name: 'Ben Stone', rating: 'Low Performer' })
       await api.createStaffAttendance({ staff_id: ada, work_date: `${month}-06`, login_at: '08:58', logout_at: '17:05', break_min: 30, status: 'present' })
-      await api.saveTopPerformer(month, toWire(DEFAULT_SETTINGS, { [ada]: manual }))
+      await api.saveTopPerformer(month, toWire(DEFAULT_SETTINGS, { [ada]: [...manual, 'top'] }))
     }
     await api.createStaffLeave({ staff_id: ben, leave_date: '2026-08-12', half_day: 'Approved' })
     return { ada, ben }
