@@ -14,7 +14,7 @@ import type {
   AttendanceBreakRecord, AttendanceDay, AttendanceOnBreak,
   StaffAttendanceRow, StaffMember,
 } from '../types'
-import StaffAttendanceSheet from '../components/StaffAttendanceSheet'
+import StaffAttendanceSheet, { StatusTag } from '../components/StaffAttendanceSheet'
 import { buildStaffAttendancePdf } from '../lib/sheetPdf'
 import { PageHeader } from '../components/Layout'
 import { Button, CardHeader, Modal, PageLoader, SegmentedTabs, Spinner, cx } from '../components/ui'
@@ -22,7 +22,7 @@ import { BRAND } from '../lib/theme'
 import type { Range } from '../components/DateRange'
 import { fileDateRange } from '../lib/format'
 import {
-  ORG_TZ, clockLabel, earlyBy, gapLabel, impliedStatus, lateBy, loginTallies, monthRange,
+  ORG_TZ, clockLabel, earlyBy, gapLabel, impliedStatus, lateBy, leaveIndex, loginTallies, monthRange,
   netHours, orgToday, punctuality, tallyPunctuality,
   type Punctuality,
 } from '../lib/staff'
@@ -189,8 +189,11 @@ const earlyMinutes = (r: AttendanceDay): number => r.early_min ?? 0
  * person with no schedule at all can read "Late in" in the summaries while the day sheet,
  * which never falls back, leaves the same day unmarked. Setting their expected hours on
  * Staff Management is what makes the two tabs agree.
+ *
+ * A day on leave gets no verdict at all — not "on time", because nothing was expected of it.
  */
 function dayFlag(r: AttendanceDay): Punctuality | null {
+  if (r.on_leave) return null
   return punctuality(
     r.login_at == null ? null : lateMinutes(r),
     r.logout_at == null || r.expected_logout == null ? null : earlyMinutes(r),
@@ -296,6 +299,7 @@ function BreakDetailModal({ row, onClose }: { row: AttendanceDay; onClose: () =>
 
 /** Status derived from raw timestamps — works for /days rows that lack present/still_in. */
 function DayStatus({ row }: { row: AttendanceDay }) {
+  if (row.on_leave) return <StatusTag status="leave" />
   if (row.login_at == null) return <span className="text-slate-400 text-xs">—</span>
   if (row.logout_at == null) return <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-brand">No logout</span>
   return <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Checked out</span>
@@ -485,6 +489,8 @@ interface DayView {
   /** The status on record, or the one the clock times imply where none is stored. */
   status: string
   statusSet: boolean
+  /** On leave this day — on the Leaves sheet, or with the status set to "leave". */
+  onLeave: boolean
   lateMin: number | null
   earlyMin: number | null
   flag: Punctuality | null
@@ -537,14 +543,24 @@ function RosterView() {
   const monthRows = useMemo(() => monthReq.data?.rows ?? [], [monthReq.data])
   const monthTallies = useMemo(() => loginTallies(people, monthRows), [people, monthRows])
 
+  // Who is on leave on the day on screen — the people with no row as much as those with
+  // one, so nobody on leave is read as absent or late.
+  const onLeaveToday = useMemo(() => {
+    const leave = leaveIndex(sheetReq.data?.from === date ? sheetReq.data.leave_days : [])
+    return new Set(people.filter((p) => leave.staff(p.id, date)).map((p) => p.id))
+  }, [sheetReq.data, date, people])
+
   const days: DayView[] = useMemo(() => {
     const byStaff = new Map(sheetRows.map((r) => [r.staff_id, r]))
     return people.map((person) => {
       const row = byStaff.get(person.id) ?? null
       const login = row?.login_at ?? null
       const logout = row?.logout_at ?? null
-      const lateMin = lateBy(login, person.expected_login)
-      const earlyMin = earlyBy(logout, person.expected_logout)
+      const covered = onLeaveToday.has(person.id)
+      const status = row?.status.trim() ? row.status.trim() : impliedStatus(login, logout, covered)
+      const onLeave = covered || status === 'leave'
+      const lateMin = onLeave ? null : lateBy(login, person.expected_login)
+      const earlyMin = onLeave ? null : earlyBy(logout, person.expected_logout)
       return {
         person,
         row,
@@ -552,15 +568,16 @@ function RosterView() {
         login,
         logout,
         breakMin: row?.break_min ?? 0,
-        status: row?.status.trim() ? row.status.trim() : impliedStatus(login, logout),
+        status,
         statusSet: Boolean(row?.status.trim()),
+        onLeave,
         lateMin,
         earlyMin,
         flag: punctuality(lateMin, earlyMin),
         hours: netHours(login ?? '', logout ?? '', row?.break_min ?? 0),
       }
     })
-  }, [people, sheetRows, botByStaff])
+  }, [people, sheetRows, botByStaff, onLeaveToday])
 
   const q = search.trim().toLowerCase()
   const shown = useMemo(
@@ -575,6 +592,7 @@ function RosterView() {
     const worked = days.filter((d) => d.hours != null && d.logout)
     return {
       present: days.filter((d) => AT_WORK.includes(d.status)).length,
+      onLeave: days.filter((d) => d.onLeave).length,
       stillIn: days.filter((d) => d.status === 'still in').length,
       avgHours: worked.length
         ? (worked.reduce((s, d) => s + (d.hours ?? 0), 0) / worked.length).toFixed(1)
@@ -606,7 +624,7 @@ function RosterView() {
   const dateLabel = fullDate(date)
   const monthName = monthLabel(month)
   const exportPdf = () => buildStaffAttendancePdf(
-    people, sheetRows, dateLabel, monthTallies, monthName,
+    people, sheetRows, dateLabel, monthTallies, monthName, onLeaveToday,
   ).save(`Attendance_${date}.pdf`)
 
   return (
@@ -650,7 +668,11 @@ function RosterView() {
 
       {/* Metric cards */}
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <MetricCard label="At work" value={metrics.present} sub={`of ${people.length} staff`} />
+        <MetricCard
+          label="At work"
+          value={metrics.present}
+          sub={`of ${people.length} staff${metrics.onLeave > 0 ? ` · ${metrics.onLeave} on leave` : ''}`}
+        />
         <MetricCard
           label="Late logins"
           value={<span className={lateLogins.length > 0 ? 'text-rose-600' : undefined}>{lateLogins.length}</span>}
@@ -731,6 +753,7 @@ function RosterView() {
             staff={shown.map((d) => d.person)}
             monthTallies={monthTallies}
             monthLabel={monthName}
+            onLeave={onLeaveToday}
             bot={botByStaff}
             online={online}
             breakAllowanceMin={allowance}
@@ -796,7 +819,14 @@ interface StaffStat {
   /** Days that carried at least one mark, out of the days that could be judged. */
   flaggedDays: number
   judgedDays: number
-  attendanceRate: number   // 0..1 of operational days
+  /**
+   * Operational days this person was on leave and didn't log in — taken OUT of what they
+   * were expected to attend, so a leave never reads as a run of missed days.
+   */
+  leaveDays: number
+  /** Operational days less those leave days: the denominator of the attendance rate. */
+  expectedDays: number
+  attendanceRate: number   // 0..1 of expectedDays
   completionRate: number   // 0..1 of present days that logged out
   lastDay: string | null
   rows: AttendanceDay[]
@@ -832,10 +862,9 @@ function StaffSummaryView() {
 
   const rows = useMemo(() => daysReq.data?.rows ?? [], [daysReq.data])
 
-  const operationalDays = useMemo(
-    () => new Set(rows.map((r) => r.work_date)).size,
-    [rows],
-  )
+  const operationalDates = useMemo(() => [...new Set(rows.map((r) => r.work_date))], [rows])
+  const operationalDays = operationalDates.length
+  const leave = useMemo(() => leaveIndex(daysReq.data?.leave_days), [daysReq.data])
 
   const stats = useMemo<StaffStat[]>(() => {
     const byUser = new Map<string, AttendanceDay[]>()
@@ -861,6 +890,11 @@ function StaffSummaryView() {
       const totalBreakMin = userRows.reduce((s, r) => s + (r.break_min ?? 0), 0)
       const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
       const meta = dir.get(id)
+      // A day on leave with no login isn't a missed day: it comes off what they were
+      // expected to attend. One they logged in on anyway still counts as a day present.
+      const presentDates = new Set(present.map((r) => r.work_date))
+      const leaveDays = operationalDates.filter((d) => leave.user(id, d) && !presentDates.has(d)).length
+      const expectedDays = operationalDays - leaveDays
       // Every day gets the same verdict the day sheet gives it, so the month's counts are
       // the days a supervisor already saw flagged.
       const flags = tallyPunctuality(userRows.map(dayFlag))
@@ -894,14 +928,16 @@ function StaffSummaryView() {
         onTimeDays: flags.onTime,
         flaggedDays: flags.flagged,
         judgedDays: flags.judged,
-        attendanceRate: operationalDays ? present.length / operationalDays : 0,
+        leaveDays,
+        expectedDays,
+        attendanceRate: expectedDays ? present.length / expectedDays : 0,
         completionRate: present.length ? complete.length / present.length : 0,
         lastDay: userRows.length ? userRows[userRows.length - 1].work_date : null,
         rows: userRows,
       })
     }
     return out
-  }, [rows, staffReq.data, operationalDays])
+  }, [rows, staffReq.data, operationalDates, operationalDays, leave])
 
   const filtered = useMemo(() => {
     const data = stats.filter((s) =>
@@ -1153,8 +1189,12 @@ function StaffSummaryView() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 text-center text-xs tabular-nums text-slate-700">
-                    {s.daysPresent}<span className="text-slate-400">/{operationalDays}</span>
+                  <td
+                    className="px-3 py-2.5 text-center text-xs tabular-nums text-slate-700"
+                    title={s.leaveDays > 0 ? `${s.leaveDays} day${s.leaveDays === 1 ? '' : 's'} on leave not counted` : undefined}
+                  >
+                    {s.daysPresent}<span className="text-slate-400">/{s.expectedDays}</span>
+                    {s.leaveDays > 0 && <span className="ml-1 text-[10px] font-semibold text-violet-600">+{s.leaveDays} leave</span>}
                   </td>
                   <td className="px-3 py-2.5 text-center">
                     <AttendancePill rate={s.attendanceRate} />
@@ -1184,7 +1224,7 @@ function StaffSummaryView() {
       </div>
 
       {selected && (
-        <StaffDetailModal stat={selected} operationalDays={operationalDays} periodLabel={monthLabel(month)} onClose={() => setSelected(null)} />
+        <StaffDetailModal stat={selected} periodLabel={monthLabel(month)} onClose={() => setSelected(null)} />
       )}
     </div>
     </PerformerScope>
@@ -1245,7 +1285,7 @@ function DetailStat({ label, value }: { label: string; value: ReactNode; accent?
   )
 }
 
-function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { stat: StaffStat; operationalDays: number; periodLabel: string; onClose: () => void }) {
+function StaffDetailModal({ stat, periodLabel, onClose }: { stat: StaffStat; periodLabel: string; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
@@ -1289,7 +1329,7 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
         <div className="px-5 py-4">
           {/* Stat grid */}
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            <DetailStat label="Days present" value={<>{stat.daysPresent}<span className="text-sm text-slate-400">/{operationalDays}</span></>} />
+            <DetailStat label="Days present" value={<>{stat.daysPresent}<span className="text-sm text-slate-400">/{stat.expectedDays}</span></>} />
             <DetailStat label="Total hours" value={fmtHours(stat.totalHours)} />
             <DetailStat label="Avg hrs/day" value={fmtHours(stat.avgHoursPerDay)} />
             <DetailStat label="Net hours" value={fmtHours(stat.netHours)} />
@@ -1322,6 +1362,9 @@ function StaffDetailModal({ stat, operationalDays, periodLabel, onClose }: { sta
           {/* Secondary line */}
           <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
             <span>Attendance <span className="font-semibold text-slate-700">{Math.round(stat.attendanceRate * 100)}%</span></span>
+            {stat.leaveDays > 0 && (
+              <span>On leave <span className="font-semibold text-violet-700">{stat.leaveDays} day{stat.leaveDays === 1 ? '' : 's'}</span> <span className="text-slate-400">(not counted)</span></span>
+            )}
             <span>Off schedule <span className={cx('font-semibold', stat.bothDays > 0 ? 'text-rose-600' : stat.flaggedDays > 0 ? 'text-brand' : 'text-slate-700')}>{stat.flaggedDays} of {stat.judgedDays} day{stat.judgedDays === 1 ? '' : 's'}</span></span>
             <span>Completion <span className="font-semibold text-slate-700">{Math.round(stat.completionRate * 100)}%</span></span>
             <span>Avg break <span className="font-semibold text-slate-700">{stat.avgBreakMin != null ? `${Math.round(stat.avgBreakMin)}m/day` : '—'}</span></span>
@@ -1757,7 +1800,9 @@ function BreakReportsView() {
                           <ScheduleTime at={r.login_at} off={lateMinutes(r)} word="late" expected={r.expected_login} />
                         </td>
                         <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums">
-                          {r.login_at == null
+                          {r.on_leave
+                            ? <span className="text-violet-600">On leave</span>
+                            : r.login_at == null
                             ? <span className="text-slate-300">—</span>
                             : isLateLogin(r)
                               ? <span className="font-bold text-rose-600">{gapLabel(lateMinutes(r))}</span>

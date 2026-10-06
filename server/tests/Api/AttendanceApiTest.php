@@ -528,6 +528,126 @@ final class AttendanceApiTest extends ApiTestCase
         $this->assertSame(20, (int) $rows['Sched Eight']['late_min']);
     }
 
+    // ─── Leave ─────────────────────────────────────────────────────────────────
+
+    /** A Leaves sheet row — an approved sick leave unless $extra says otherwise. */
+    private static function leaveRow(array $staff, string $date, array $extra = []): array
+    {
+        return self::insert('staff_leaves', $extra + ['staff_id' => $staff['id'], 'leave_date' => $date, 'sick_leave' => 'Approved']);
+    }
+
+    /** Leave days from /attendance/days for May, as [staff id => dates]. */
+    private function leaveDaysByStaff(): array
+    {
+        $by = [];
+        foreach ($this->get('/attendance/days?from=2026-05-01&to=2026-05-31')['json']['leave_days'] as $d) {
+            $by[$d['staff_id']][] = $d['work_date'];
+        }
+        return $by;
+    }
+
+    public function testALoginOnALeaveDayIsNeverJudgedLateOrEarly(): void
+    {
+        // 09:12–16:50 against 09:00–17:00: 12 minutes late in and 10 early out, but on leave.
+        $s = self::seedAlice();
+        self::leaveRow($s, self::DAY);
+
+        $row = $this->roster()['rows'][0];
+        $this->assertTrue($row['on_leave']);
+        $this->assertNull($row['late_min']);
+        $this->assertNull($row['early_min']);
+        $this->assertSame('present', $row['status'], 'the login is still shown, just not marked');
+
+        $late = $this->get('/attendance/exceptions?type=late&from=2026-05-01&to=2026-05-31');
+        $this->assertSame([], $late['json']['rows']);
+    }
+
+    public function testAMissingLogoutOnALeaveDayIsNotAnException(): void
+    {
+        $s = self::linkedStaff('Stray', 1, ['expected_login' => '09:00']);
+        self::botDay(1, self::DAY, '14:00', null);
+        self::leaveRow($s, self::DAY);
+
+        $r = $this->get('/attendance/exceptions?type=missing_logout&from=2026-05-01&to=2026-05-31');
+        $this->assertSame([], $r['json']['rows']);
+    }
+
+    public function testRosterListsWhoIsOnLeaveEvenWithNoDayRecorded(): void
+    {
+        self::seedAlice();
+        $bob  = self::linkedStaff('Bob', 1002);
+        $cara = self::staffRow('Cara');
+        self::leaveRow($bob, '2026-05-01', ['expected_return' => '2026-05-06']);
+        self::leaveRow($cara, self::DAY, ['sick_leave' => '', 'break_leave' => 'Pending']);
+
+        $json = $this->roster();
+        $this->assertSame(['Alice'], array_column($json['rows'], 'staff_name'));
+        $this->assertSame([
+            ['staff_id' => (int) $bob['id'], 'user_id' => '1002', 'work_date' => self::DAY],
+            ['staff_id' => (int) $cara['id'], 'user_id' => 'staff-' . $cara['id'], 'work_date' => self::DAY],
+        ], $json['leave_days']);
+    }
+
+    public function testALeaveRunsFromItsDateToTheDayBeforeTheReturn(): void
+    {
+        $early   = self::staffRow('Back Early');
+        $due     = self::staffRow('Not Back Yet');
+        $over    = self::staffRow('Overstayed');
+        $single  = self::staffRow('One Day');
+        $clipped = self::staffRow('From April');
+        self::leaveRow($early, '2026-05-04', ['expected_return' => '2026-05-08', 'actual_return' => '2026-05-06']);
+        self::leaveRow($due, '2026-05-04', ['expected_return' => '2026-05-07']);
+        self::leaveRow($over, '2026-05-04', ['expected_return' => '2026-05-05', 'actual_return' => '2026-05-07']);
+        self::leaveRow($single, '2026-05-04');
+        self::leaveRow($clipped, '2026-04-29', ['expected_return' => '2026-05-03']);
+
+        $by = $this->leaveDaysByStaff();
+        $this->assertSame(['2026-05-04', '2026-05-05'], $by[$early['id']], 'an early return ends the leave');
+        $this->assertSame(['2026-05-04', '2026-05-05', '2026-05-06'], $by[$due['id']], 'no return yet: up to the due date');
+        $this->assertSame(['2026-05-04', '2026-05-05', '2026-05-06'], $by[$over['id']], 'the recorded return wins');
+        $this->assertSame(['2026-05-04'], $by[$single['id']]);
+        $this->assertSame(['2026-05-01', '2026-05-02'], $by[$clipped['id']], 'clipped to the range asked for');
+    }
+
+    public function testRefusedLeavesAndPartDayMarkersAreNotLeave(): void
+    {
+        $s = self::seedAlice();
+        self::leaveRow($s, self::DAY, ['sick_leave' => ' not  Approved ']);
+        self::leaveRow($s, self::DAY, ['sick_leave' => '', 'half_day' => 'Approved']);
+        self::leaveRow($s, self::DAY, ['sick_leave' => '', 'late_login' => 'Approved', 'aob' => 'traffic']);
+
+        $json = $this->roster();
+        $this->assertFalse($json['rows'][0]['on_leave']);
+        $this->assertSame(12, $json['rows'][0]['late_min']);
+        $this->assertSame([], $json['leave_days']);
+    }
+
+    public function testADayKeyedInAsLeaveIsNotJudged(): void
+    {
+        $s = self::seedAlice();
+        self::insert('staff_attendance', [
+            'staff_id' => $s['id'], 'work_date' => self::DAY, 'login_at' => '11:00', 'status' => 'Leave',
+        ]);
+
+        $row = $this->roster()['rows'][0];
+        $this->assertTrue($row['on_leave']);
+        $this->assertNull($row['late_min']);
+        $this->assertFalse($row['present']);
+    }
+
+    public function testAnEmptyDayOnLeaveReadsLeaveNotAbsent(): void
+    {
+        $away = self::linkedStaff('Away', 1);
+        self::linkedStaff('Gone', 2);
+        self::botDay(1, self::DAY, null, null);
+        self::botDay(2, self::DAY, null, null);
+        self::leaveRow($away, self::DAY);
+
+        $status = array_column($this->roster()['rows'], 'status', 'staff_name');
+        $this->assertSame('leave', $status['Away']);
+        $this->assertSame('absent', $status['Gone']);
+    }
+
     public function testLateReturnListsBreaksBackPastTheGraceWorstFirst(): void
     {
         self::seedAlice();

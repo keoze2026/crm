@@ -122,6 +122,8 @@ export interface AttendanceDayLite {
   staff_id: number
   login_at: string | null
   logout_at: string | null
+  /** On leave that day — its login and logout are never judged late or early. */
+  on_leave?: boolean
 }
 
 /**
@@ -165,13 +167,15 @@ export function buildCandidates(
     .map((m) => {
       const own = days.get(m.id) ?? []
       const present = own.filter((d) => d.login_at)
-      const outs = own.map((d) => earlyBy(d.logout_at, m.expected_logout)).filter((x): x is number => x !== null)
+      // A day on leave is not held against Timely Login or Punctuality, whatever its clock says.
+      const judged = own.filter((d) => !d.on_leave)
+      const outs = judged.map((d) => earlyBy(d.logout_at, m.expected_logout)).filter((x): x is number => x !== null)
       const marks = leaveRows.get(m.id) ?? []
       return {
         member: m,
         behaviour: find(behaviour, m),
         performance: find(performance, m),
-        logins: tallyLogins(present.map((d) => d.login_at), m.expected_login),
+        logins: tallyLogins(judged.filter((d) => d.login_at).map((d) => d.login_at), m.expected_login),
         earlyOuts: outs.filter((x) => x > 0).length,
         judgedOuts: outs.length,
         presentDays: present.length,

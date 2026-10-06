@@ -16,6 +16,7 @@ import type {
   AttendanceStaff,
   AttendanceRoster,
   AttendanceDay,
+  LeaveDay,
   AttendanceBreaks,
   AttendanceOnBreak,
   AttendanceExceptions,
@@ -210,7 +211,7 @@ export const api = {
   attendanceOnBreak: () =>
     request<AttendanceOnBreak[]>('/attendance/on-break'),
   attendanceDays: (params: { from?: string; to?: string; user_id?: string }) =>
-    request<{ timezone: string; breakAllowanceMin: number; rows: AttendanceDay[] }>(`/attendance/days${qs(params)}`),
+    request<{ timezone: string; breakAllowanceMin: number; rows: AttendanceDay[]; leave_days: LeaveDay[] }>(`/attendance/days${qs(params)}`),
   attendanceSummary: (params: { from?: string; to?: string }) =>
     request<{ user_id: string; staff_name: string | null; days_present: number; days_complete: number; total_hours: number; first_day: string; last_day: string }[]>(`/attendance/summary${qs(params)}`),
   attendanceBreaks: (userId: string, date: string) =>

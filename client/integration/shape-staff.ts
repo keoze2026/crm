@@ -14,6 +14,7 @@ import type {
   Department,
   EnrollInfo,
   EnrollLink,
+  LeaveDay,
   ManagedUser,
   ReviewDepartment,
   ReviewEntry,
@@ -227,6 +228,13 @@ export const StaffAttendanceRowSpec = obj<StaffAttendanceRow>({
   break_min: 'int',
   status: 'string',
   note: 'string',
+  on_leave: 'boolean',
+})
+
+export const LeaveDaySpec = obj<LeaveDay>({
+  staff_id: 'int',
+  user_id: 'string',
+  work_date: 'date',
 })
 
 export const StaffAttendancePageSpec = obj<StaffAttendancePage>({
@@ -235,6 +243,7 @@ export const StaffAttendancePageSpec = obj<StaffAttendancePage>({
   to: 'date',
   fetched: 'boolean',
   rows: arrayOf(StaffAttendanceRowSpec),
+  leave_days: arrayOf(LeaveDaySpec),
 })
 
 export const StaffLeaveSpec = obj<StaffLeave>({
@@ -305,6 +314,7 @@ export const AttendanceDaySpec = obj<AttendanceDay>({
   completed: 'boolean',
   status: 'string',
   status_set: 'boolean',
+  on_leave: 'boolean',
   edited: 'boolean',
   bot_seen: 'boolean',
   staff_id: nullable('int'),
@@ -330,6 +340,7 @@ export const AttendanceRosterSpec = obj<AttendanceRoster>({
   breakAllowanceMin: 'int',
   date: 'date',
   rows: arrayOf(AttendanceDaySpec),
+  leave_days: arrayOf(LeaveDaySpec),
 })
 
 export const AttendanceOnBreakSpec = obj<AttendanceOnBreak>({

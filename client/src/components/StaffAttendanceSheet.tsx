@@ -41,6 +41,10 @@ import { useServerDraft } from '../lib/useServerDraft'
  * the column honest against the counts above it: a row nobody has touched says "absent",
  * not "present", and someone still at their desk says "still in".
  *
+ * Somebody on leave that day (on the Leaves sheet, or with the status set to "leave") is
+ * never marked: an empty row reads "leave" rather than "absent", and no login on it is
+ * called late — nor logout early — however it was recorded.
+ *
  * The Late column is the one figure here that is NOT about the day on screen: it is how
  * many times that person has logged in late so far this month. A single late morning is
  * rarely the point — the sixth one is — and reading it off a day sheet otherwise means
@@ -51,7 +55,7 @@ import { useServerDraft } from '../lib/useServerDraft'
  * and Name cells, so the sheet carries the whole day rather than half of it.
  */
 export default function StaffAttendanceSheet({
-  date, rows, staff, monthTallies, monthLabel, bot, online, breakAllowanceMin = 60,
+  date, rows, staff, monthTallies, monthLabel, onLeave, bot, online, breakAllowanceMin = 60,
   onBreakDetail, onChanged,
 }: {
   /** The day being shown, "YYYY-MM-DD". */
@@ -62,6 +66,8 @@ export default function StaffAttendanceSheet({
   monthTallies: Map<number, LoginTally>
   /** That month, worded — for the column heading and its tooltips. */
   monthLabel: string
+  /** Staff ids on leave on this day, per the Leaves sheet. */
+  onLeave?: Set<number>
   /** The bot's own record of the same day, by staff id — breaks, returns, its account. */
   bot?: Map<number, AttendanceDay>
   /** The bot accounts checked in right now. */
@@ -118,6 +124,7 @@ export default function StaffAttendanceSheet({
                 row={byStaff.get(person.id) ?? null}
                 date={date}
                 monthTally={monthTallies.get(person.id) ?? emptyLoginTally()}
+                leaveCovered={onLeave?.has(person.id) ?? false}
                 monthLabel={monthLabel}
                 bot={bot?.get(person.id) ?? null}
                 online={online}
@@ -219,7 +226,7 @@ const draftOf = (row: StaffAttendanceRow | null): Draft => row === null ? { ...B
  * hand-keyed day, or nothing at all — and in every case it is edited the same way.
  */
 function DayRow({
-  index, person, row, date, monthTally, monthLabel, bot, online, breakAllowanceMin,
+  index, person, row, date, monthTally, monthLabel, leaveCovered, bot, online, breakAllowanceMin,
   onBreakDetail, onChanged,
 }: {
   index: number
@@ -230,6 +237,8 @@ function DayRow({
   /** This person's late / on-time logins across the whole month — see the Late column. */
   monthTally: LoginTally
   monthLabel: string
+  /** The Leaves sheet has this person on leave this day. */
+  leaveCovered: boolean
   /** The bot's own record of this day, for the things only it knows. */
   bot: AttendanceDay | null
   online?: Set<string>
@@ -242,19 +251,20 @@ function DayRow({
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
 
-  // Hours and the schedule marks all follow the clock times as they are typed, so a
-  // correction can be seen before it saves.
-  const hours = netHours(draft.login_at, draft.logout_at, Number(draft.break_min || 0))
-  const late = lateBy(draft.login_at || null, person.expected_login)
-  const early = earlyBy(draft.logout_at || null, person.expected_logout)
-  const flag = punctuality(late, early)
-
   // The status on show: the one stored for this day, or — where none is — the one the
   // clock times imply, which moves with them as the row is typed. Either way it is a real
   // value, so what saves is what was on screen.
   const status = draft.status === ''
-    ? impliedStatus(draft.login_at || null, draft.logout_at || null)
+    ? impliedStatus(draft.login_at || null, draft.logout_at || null, leaveCovered)
     : draft.status
+  const onLeave = leaveCovered || status === 'leave'
+
+  // Hours and the schedule marks all follow the clock times as they are typed, so a
+  // correction can be seen before it saves. A day on leave is never marked.
+  const hours = netHours(draft.login_at, draft.logout_at, Number(draft.break_min || 0))
+  const late = onLeave ? null : lateBy(draft.login_at || null, person.expected_login)
+  const early = onLeave ? null : earlyBy(draft.logout_at || null, person.expected_logout)
+  const flag = punctuality(late, early)
 
   // A day the bot recorded that nobody has touched yet: the revert control has nothing to
   // undo, and a first edit will create the record that replaces it.
@@ -284,7 +294,7 @@ function DayRow({
         // the one that was showing in the cell. The column never records something other
         // than what the person keying it in was looking at.
         status: next.status === ''
-          ? impliedStatus(next.login_at || null, next.logout_at || null)
+          ? impliedStatus(next.login_at || null, next.logout_at || null, leaveCovered)
           : next.status,
       }
       // The whole row is sent every time, so the record that replaces a bot day is complete
@@ -373,7 +383,9 @@ function DayRow({
           value={status}
           onChange={(e) => { setDraft({ ...draft, status: e.target.value }); save({ status: e.target.value }) }}
           title={draft.status === ''
-            ? 'Nothing stored for this day — this is what its clock times mean'
+            ? leaveCovered
+              ? 'On leave per the Leaves sheet — not counted as absent or late'
+              : 'Nothing stored for this day — this is what its clock times mean'
             : `Stored for this day${overridden ? ", replacing the bot's own record" : ''}`}
           className={cx(
             fieldCls, 'border font-bold uppercase tracking-wide', statusTone(status),

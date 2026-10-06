@@ -223,6 +223,15 @@ describe('buildCandidates', () => {
     expect(c.lateMarks).toBe(2)
   })
 
+  it('does not hold a day on leave against the logins or the logouts', () => {
+    const staff = [member({ id: 1 })]
+    const attendance = [day(1, '09:00', '17:00'), { ...day(1, '13:30', '14:00'), on_leave: true }]
+    const [c] = buildCandidates(staff, attendance, [], [review({ rating: 'Good' })], [])
+    expect(c.logins).toEqual({ late: 0, onTime: 1, judged: 1, lateMin: 0, worstLateMin: 0 })
+    expect(c.earlyOuts).toBe(0)
+    expect(c.judgedOuts).toBe(1)
+  })
+
   it('judges no logins or logouts for somebody without a schedule', () => {
     const staff = [member({ expected_login: null, expected_logout: null })]
     const [c] = buildCandidates(staff, [day(1, '11:00', '12:00')], [], [review({ rating: 'Good' })], [])

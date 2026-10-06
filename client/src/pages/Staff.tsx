@@ -212,6 +212,7 @@ export default function Staff() {
             departments={depts}
             today={orgDay}
             todayRows={todayAttendance.data?.rows ?? []}
+            todayLeave={todayAttendance.data?.leave_days ?? []}
             todayLoading={todayAttendance.loading}
             ranked={overviewRanked}
             rankedLoading={topAttendance.loading || topPerformance.loading || topBehaviour.loading || leaves.loading}

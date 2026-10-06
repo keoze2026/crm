@@ -4,7 +4,7 @@
  * lookup table.
  */
 
-import type { StaffMember, StaffStatus } from '../types'
+import type { LeaveDay, StaffMember, StaffStatus } from '../types'
 
 /** The SALARY cell, worded as the client's sheet words it. */
 export const SALARY_STATUSES = ['Received', 'Pending', 'Not Paid', 'On Hold']
@@ -113,6 +113,47 @@ function dayNumber(iso: string): number | null {
   return Math.round(Date.UTC(y, m - 1, d) / 86_400_000)
 }
 
+/** The inverse of dayNumber(). */
+const isoOfDay = (n: number): string => new Date(n * 86_400_000).toISOString().slice(0, 10)
+
+/** A leave marker that doesn't make the row a leave: blank, or a refusal. */
+const NOT_A_LEAVE = /^\s*(not\s*approved)?\s*$/i
+
+/** The days a Leaves row covers, first and last inclusive. */
+export interface LeaveSpan {
+  first: string
+  last: string
+  days: number
+}
+
+/**
+ * Which days a Leaves row excuses on the attendance pages — so a leave of several days
+ * says so on its row, and one with no return date says it covers only its own day.
+ *
+ * The same rule as App\Leaves on the server, which is what the attendance pages actually
+ * read: a Sick or Break leave that isn't "Not Approved", from its date up to the day before
+ * the actual return, or until one is recorded, the expected return. Null for a row that isn't
+ * a leave (Half Day, Late Login, a refusal). Worked out from the cells on display, like
+ * returnVerdict(), so it moves while the row is typed.
+ */
+export function leaveSpan(l: {
+  leave_date: string
+  sick_leave: string
+  break_leave: string
+  expected_return: string | null
+  actual_return: string | null
+}): LeaveSpan | null {
+  if (NOT_A_LEAVE.test(l.sick_leave) && NOT_A_LEAVE.test(l.break_leave)) return null
+  const start = dayNumber(l.leave_date)
+  if (start === null) return null
+  const back = l.actual_return || l.expected_return
+  const end = Math.max((back ? dayNumber(back) : null) ?? start + 1, start + 1)
+  return { first: l.leave_date, last: isoOfDay(end - 1), days: end - start }
+}
+
+/** "7 days" / "1 day" — the caption a leave's row carries; the dates go in its tooltip. */
+export const leaveSpanLabel = (s: LeaveSpan): string => plural(s.days, 'day')
+
 const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`
 
 /**
@@ -134,9 +175,37 @@ export const ATTENDANCE_STATUSES = ['present', 'absent', 'half day', 'leave', 'h
  * This is only ever a reading of an empty row — the moment a status is stored, that is
  * what shows. It exists so the Status column agrees with the scorecards above it: a sheet
  * that says "5 of 15 in" cannot have fifteen rows reading "present".
+ *
+ * Somebody on leave that day with no login reads "leave": not logging in is the point of a
+ * leave, not an absence.
  */
-export const impliedStatus = (login: string | null, logout: string | null): string =>
-  !login ? 'absent' : !logout ? 'still in' : 'present'
+export const impliedStatus = (login: string | null, logout: string | null, onLeave = false): string =>
+  !login ? (onLeave ? 'leave' : 'absent') : !logout ? 'still in' : 'present'
+
+/**
+ * Who was on leave on which day, from the `leave_days` an attendance response carries —
+ * for the views that list people with NO attendance row, who would otherwise read as
+ * absent. Asked by roster id, or by the attendance identity the day rows are keyed by (the
+ * bot account, or the "staff-12" stand-in). The server decides what counts as a leave day
+ * (App\Leaves), so every page excuses the same days.
+ */
+export interface LeaveIndex {
+  staff: (staffId: number | null | undefined, date: string) => boolean
+  user: (userId: string, date: string) => boolean
+}
+
+export function leaveIndex(days: LeaveDay[] | null | undefined): LeaveIndex {
+  const byStaff = new Set<string>()
+  const byUser = new Set<string>()
+  for (const d of days ?? []) {
+    byStaff.add(`${d.staff_id}|${d.work_date}`)
+    byUser.add(`${d.user_id}|${d.work_date}`)
+  }
+  return {
+    staff: (staffId, date) => staffId != null && byStaff.has(`${staffId}|${date}`),
+    user: (userId, date) => byUser.has(`${userId}|${date}`),
+  }
+}
 
 // ─── The organisation's clock ─────────────────────────────────────────────────
 
@@ -389,12 +458,14 @@ export function tallyLogins(logins: (string | null)[], expectedLogin: string | n
  * Every person's login tally over a run of days, keyed by staff id — the month-wise count
  * the attendance sheets carry in their own column. Everyone on the roster gets an entry,
  * including the people with no days at all, so a table can read it without a fallback.
+ * A day on leave is left out: a login on one is never late.
  */
 export function loginTallies(
-  staff: StaffMember[], rows: { staff_id: number; login_at: string | null }[],
+  staff: StaffMember[], rows: { staff_id: number; login_at: string | null; on_leave?: boolean }[],
 ): Map<number, LoginTally> {
   const byStaff = new Map<number, (string | null)[]>()
   for (const r of rows) {
+    if (r.on_leave) continue
     const arr = byStaff.get(r.staff_id) ?? []
     arr.push(r.login_at)
     byStaff.set(r.staff_id, arr)

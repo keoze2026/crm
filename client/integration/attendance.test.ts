@@ -4,11 +4,11 @@ import {
   aggregateBreaks, isLateLogin, loginLateMinutes, tallyByMonth,
 } from '../src/lib/attendanceReports'
 import { lateBy, earlyBy, orgToday as clientOrgToday } from '../src/lib/staff'
-import type { AttendanceDay } from '../src/types'
+import type { AttendanceDay, LeaveDay } from '../src/types'
 import { BOT_TABLES, seedBotBreak, seedBotDay, seedBotStaff } from './bot-staff'
 import { orgToday, resetTables, sql, useServer, type Server } from './harness'
 import {
-  AttendanceBreaksSpec, AttendanceDaySpec, AttendanceOnBreakSpec, AttendanceRosterSpec, AttendanceStaffSpec,
+  AttendanceBreaksSpec, AttendanceDaySpec, AttendanceOnBreakSpec, AttendanceRosterSpec, AttendanceStaffSpec, LeaveDaySpec,
   arrayOf, expectShape, lastStatus, nullable, obj, optional, rejectionOf, type Spec,
 } from './shape-staff'
 
@@ -112,8 +112,8 @@ describe('/attendance/days + report logic', () => {
   it('answers the declared shape and aggregates sanely in lib/attendanceReports', async () => {
     seedBotDay(8001, '2026-07-31', '2026-07-31 09:30:00-04', '2026-07-31 17:00:00-04', 'Rae Stone')
     const res = await api.attendanceDays({ from: '2026-07-01', to: '2026-08-31' })
-    expectShape(res, obj<{ timezone: string, breakAllowanceMin: number, rows: AttendanceDay[] }>({
-      timezone: 'string', breakAllowanceMin: 'int', rows: arrayOf(AttendanceDaySpec),
+    expectShape(res, obj<{ timezone: string, breakAllowanceMin: number, rows: AttendanceDay[], leave_days: LeaveDay[] }>({
+      timezone: 'string', breakAllowanceMin: 'int', rows: arrayOf(AttendanceDaySpec), leave_days: arrayOf(LeaveDaySpec),
     }))
     expect(res.rows.map((r) => [r.work_date, r.staff_name])).toEqual([
       [DAY, 'Rae Stone'], [DAY, 'Sam Tate'], [DAY, 'Tess Uma'], ['2026-07-31', 'Rae Stone'],

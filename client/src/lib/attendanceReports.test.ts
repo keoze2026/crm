@@ -86,6 +86,7 @@ function day(over: Partial<AttendanceDay> = {}): AttendanceDay {
     completed: false,
     status: 'absent',
     status_set: false,
+    on_leave: false,
     edited: false,
     bot_seen: true,
     staff_id: null,
@@ -161,6 +162,11 @@ describe('loginLateMinutes', () => {
 
   it('returns null for an unparseable timestamp rather than throwing', () => {
     expect(loginLateMinutes(day({ login_at: 'not-a-date' }))).toBeNull()
+  })
+
+  it('never judges a day on leave, even by the 9:00 fallback', () => {
+    expect(loginLateMinutes(day({ login_at: '2026-06-01T18:00:00Z', on_leave: true }))).toBeNull()
+    expect(isLateLogin(day({ login_at: '2026-06-01T18:00:00Z', on_leave: true }))).toBe(false)
   })
 })
 

@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Database;
 use App\Http;
+use App\Leaves;
 
 /**
  * Staff Management — the roster every other sheet picks its names from.
@@ -302,7 +303,8 @@ final class StaffController
                     to_char(m.login_at, 'HH24:MI')  AS login_at,
                     to_char(m.logout_at, 'HH24:MI') AS logout_at,
                     COALESCE(m.break_min, 0)::int AS break_min,
-                    m.status, m.note
+                    m.status, m.note,
+                    " . $this->onLeave('m.status', 'm.work_date') . " AS on_leave
                FROM staff_attendance m
                JOIN staff s ON s.id = m.staff_id
               WHERE m.work_date BETWEEN :from_m AND :to_m{$whereM}";
@@ -351,12 +353,20 @@ final class StaffController
             $out[] = $row;
         }
 
+        // Who was on leave on which day, row or no row: the sheet lists the whole roster, and
+        // somebody on leave with nothing recorded must read "leave", not "absent".
+        $leaveDays = Leaves::days($from, $to);
+        if ($staffId > 0) {
+            $leaveDays = array_values(array_filter($leaveDays, static fn (array $l): bool => $l['staff_id'] === $staffId));
+        }
+
         Http::json([
-            'timezone' => self::TZ,
-            'from'     => $from,
-            'to'       => $to,
-            'fetched'  => $this->attendanceAvailable(),
-            'rows'     => $out,
+            'timezone'   => self::TZ,
+            'from'       => $from,
+            'to'         => $to,
+            'fetched'    => $this->attendanceAvailable(),
+            'rows'       => $out,
+            'leave_days' => $leaveDays,
         ]);
     }
 
@@ -861,7 +871,8 @@ final class StaffController
                     to_char(m.login_at, 'HH24:MI')  AS login_at,
                     to_char(m.logout_at, 'HH24:MI') AS logout_at,
                     COALESCE(m.break_min, 0)::int AS break_min,
-                    m.status, m.note
+                    m.status, m.note,
+                    " . $this->onLeave('m.status', 'm.work_date') . " AS on_leave
                FROM staff_attendance m
                JOIN staff s ON s.id = m.staff_id
               WHERE m.id = :id"
@@ -893,7 +904,8 @@ final class StaffController
      */
     private function fetchedDaySelect(): string
     {
-        $tz = self::TZ;
+        $tz    = self::TZ;
+        $leave = Leaves::covers('s.id', 'd.work_date');
         return "
             SELECT o.id, 'fetched' AS source, (o.id IS NOT NULL) AS edited,
                    s.id AS staff_id, s.name AS staff_name,
@@ -905,10 +917,11 @@ final class StaffController
                    -- A correction that leaves the break blank falls back to the bot's total.
                    COALESCE(o.break_min, b.break_min, 0)::int AS break_min,
                    CASE WHEN o.id IS NOT NULL THEN o.status
-                        WHEN d.login_at IS NULL  THEN 'absent'
+                        WHEN d.login_at IS NULL  THEN CASE WHEN {$leave} THEN 'leave' ELSE 'absent' END
                         WHEN d.logout_at IS NULL THEN 'still in'
                         ELSE 'present' END AS status,
-                   COALESCE(o.note, '') AS note
+                   COALESCE(o.note, '') AS note,
+                   " . $this->onLeave('o.status', 'd.work_date') . " AS on_leave
               FROM attendance_days d
               JOIN staff s ON s.attendance_user_id = d.user_id::text
          LEFT JOIN (
@@ -916,6 +929,16 @@ final class StaffController
                      FROM attendance_breaks GROUP BY user_id, work_date
               ) b ON b.user_id = d.user_id AND b.work_date = d.work_date
          LEFT JOIN staff_attendance o ON o.staff_id = s.id AND o.work_date = d.work_date";
+    }
+
+    /**
+     * SQL: the day was a leave — on the Leaves sheet, or with its status set to "leave".
+     * The same rule the Attendance page judges by (see App\Leaves), so a leave day is
+     * never counted as a late or missed login on either page.
+     */
+    private function onLeave(string $status, string $date): string
+    {
+        return "(lower(btrim(COALESCE({$status}, ''))) = 'leave' OR " . Leaves::covers('s.id', $date) . ')';
     }
 
     private function leaveById(int $id): array
@@ -1175,6 +1198,7 @@ final class StaffController
         $row['staff_id']  = (int) $row['staff_id'];
         $row['break_min'] = (int) $row['break_min'];
         $row['edited']    = (bool) ($row['edited'] ?? false);
+        $row['on_leave']  = (bool) ($row['on_leave'] ?? false);
         return $row;
     }
 

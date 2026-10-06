@@ -79,11 +79,13 @@ function minutesEST(iso: string | null): number | null {
  * How late the login was, in minutes, against the hours kept for that person on the Staff
  * page — falling back to the flat 9:00 AM this app has always used where none are set.
  *
- * null means there was nothing to judge: no login recorded at all. 0 means on time, and
- * that is worth saying out loud, which is why it is not folded in with null.
+ * null means there was nothing to judge: no login recorded at all, or a day on leave —
+ * which is checked here because the 9:00 fallback would otherwise mark a stray login on one.
+ * 0 means on time, and that is worth saying out loud, which is why it is not folded in
+ * with null.
  */
 export function loginLateMinutes(r: AttendanceDay): number | null {
-  if (r.login_at == null) return null
+  if (r.login_at == null || r.on_leave) return null
   if (r.late_min != null) return r.late_min
   const m = minutesEST(r.login_at)
   return m == null ? null : Math.max(0, m - TARGET_LOGIN_MIN)
@@ -482,7 +484,7 @@ function renderUserSection(doc: jsPDF, stat: BreakStat, startY: number): void {
   const body: RowInput[] = stat.rows.map((r) => [
     formatDmy(r.work_date),
     fmtClockEST(r.login_at),
-    (lateOf(r) ?? 0) > 0 ? fmtHm(lateOf(r) as number) : r.login_at ? 'On time' : '—',
+    r.on_leave ? 'On leave' : (lateOf(r) ?? 0) > 0 ? fmtHm(lateOf(r) as number) : r.login_at ? 'On time' : '—',
     fmtClockEST(r.logout_at),
     hoursCell(r.hours),
     `${r.break_min ?? 0}m`,
@@ -525,7 +527,7 @@ function renderUserSection(doc: jsPDF, stat: BreakStat, startY: number): void {
         d.cell.styles.textColor = RED
         d.cell.styles.fontStyle = 'bold'
         d.cell.styles.fillColor = ROSE
-      } else if (d.column.index === 2 && row.login_at != null) {
+      } else if (d.column.index === 2 && row.login_at != null && !row.on_leave) {
         d.cell.styles.textColor = GREEN
       }
       if (d.column.index === 7 && (row.over_break_min ?? 0) > 0) {

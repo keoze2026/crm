@@ -57,7 +57,61 @@ final class StaffAttendanceApiTest extends ApiTestCase
             'break_min'  => 45,
             'status'     => 'present',
             'note'       => '',
+            'on_leave'   => false,
         ], $json['rows'][0]);
+        $this->assertSame([], $json['leave_days']);
+    }
+
+    // ─── Leave ─────────────────────────────────────────────────────────────────
+
+    public function testADayOnTheLeavesSheetIsFlaggedAndAnEmptyBotDayReadsLeave(): void
+    {
+        $s = self::linkedStaff('Away', 2);
+        self::botDay(2, self::DAY, null, null);
+        self::insert('staff_leaves', [
+            'staff_id' => $s['id'], 'leave_date' => self::DAY, 'sick_leave' => 'Approved', 'expected_return' => '2026-05-06',
+        ]);
+
+        $json = $this->sheet();
+        $this->assertSame('leave', $json['rows'][0]['status']);
+        $this->assertTrue($json['rows'][0]['on_leave']);
+        // Both days of the leave, though only one has a row: the sheet lists the whole roster.
+        $this->assertSame(
+            [[(int) $s['id'], '2', '2026-05-04'], [(int) $s['id'], '2', '2026-05-05']],
+            array_map(fn ($d) => [$d['staff_id'], $d['user_id'], $d['work_date']], $json['leave_days'])
+        );
+    }
+
+    public function testOneRowCoversAWholeMultiWeekLeaveIntoTheNextMonth(): void
+    {
+        // Off from 20 April, due back 12 May: every May day before the 12th is excused, and
+        // a day sheet for one of them shows it although the row is dated in April.
+        $s = self::linkedStaff('Away', 2);
+        self::insert('staff_leaves', [
+            'staff_id' => $s['id'], 'leave_date' => '2026-04-20', 'sick_leave' => 'Approved', 'expected_return' => '2026-05-12',
+        ]);
+
+        $may = array_column($this->sheet()['leave_days'], 'work_date');
+        $this->assertCount(11, $may);
+        $this->assertSame('2026-05-01', $may[0]);
+        $this->assertSame('2026-05-11', $may[10]);
+
+        $one = $this->get('/staff-attendance?from=2026-05-07&to=2026-05-07')['json']['leave_days'];
+        $this->assertSame([[(int) $s['id'], '2026-05-07']], array_map(fn ($d) => [$d['staff_id'], $d['work_date']], $one));
+        $this->assertSame([], $this->get('/staff-attendance?from=2026-05-12&to=2026-05-12')['json']['leave_days'], 'back on the 12th');
+    }
+
+    public function testAHandKeyedLeaveStatusFlagsTheRowAndLeaveDaysFollowTheStaffFilter(): void
+    {
+        $a = self::staffRow('Amy');
+        $b = self::staffRow('Bob');
+        self::insert('staff_attendance', ['staff_id' => $a['id'], 'work_date' => self::DAY, 'status' => 'leave']);
+        self::insert('staff_leaves', ['staff_id' => $b['id'], 'leave_date' => self::DAY, 'break_leave' => 'Approved']);
+
+        $json = $this->sheet();
+        $this->assertTrue($json['rows'][0]['on_leave']);
+        $this->assertSame([(int) $b['id']], array_column($json['leave_days'], 'staff_id'), 'only the Leaves sheet lists days');
+        $this->assertSame([], $this->sheet("&staff_id={$a['id']}")['leave_days']);
     }
 
     public function testACorrectionWithABlankBreakFallsBackToTheBotsBreaks(): void

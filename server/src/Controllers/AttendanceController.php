@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Database;
 use App\Http;
+use App\Leaves;
 
 final class AttendanceController
 {
@@ -103,13 +104,29 @@ final class AttendanceController
     /**
      * The status the day carries: the one set by hand, or — where none is — the one the
      * clock times imply, in the same words the attendance sheet uses. It is what makes a
-     * corrected day readable here: "half day" is not something the bot has a word for.
+     * corrected day readable here: "half day" is not something the bot has a word for. A day
+     * with no login that the Leaves sheet covers reads "leave", not "absent".
      */
-    private const STATUS =
-        "COALESCE(d.set_status,
-                  CASE WHEN d.login_at IS NULL THEN 'absent'
+    private static function status(): string
+    {
+        return "COALESCE(d.set_status,
+                  CASE WHEN d.login_at IS NULL
+                       THEN CASE WHEN " . Leaves::covers('d.staff_id', 'd.work_date') . " THEN 'leave' ELSE 'absent' END
                        WHEN d.logout_at IS NULL THEN 'still in'
                        ELSE 'present' END)";
+    }
+
+    /**
+     * Whether the person was on leave that day — on the Leaves sheet, or with the day's
+     * status set to "leave" by hand. A leave day is never judged: no late login, no early
+     * logout, no missing logout, and an empty day reads "leave" rather than "absent". A
+     * stray login on one (a message the bot took for a check-in) is still shown, just not
+     * marked.
+     */
+    private static function onLeave(): string
+    {
+        return "(lower(COALESCE(d.set_status, '')) = 'leave' OR " . Leaves::covers('d.staff_id', 'd.work_date') . ')';
+    }
 
     /**
      * Whether the day counts as a day at work. A status set by hand decides it — that is the
@@ -141,13 +158,14 @@ final class AttendanceController
      * the day is on time, NULL when there is nothing to compare it against.
      *
      * Both are measured against the EFFECTIVE times, so a day corrected on the Staff page
-     * is judged by the corrected figures rather than the bot's original ones.
+     * is judged by the corrected figures rather than the bot's original ones. A leave day
+     * is not judged at all.
      */
     private static function lateMin(): string
     {
         $login = self::LOGIN_AT;
         $tz    = self::TZ;
-        return "CASE WHEN so.expected_login IS NULL OR ({$login}) IS NULL THEN NULL
+        return "CASE WHEN so.expected_login IS NULL OR ({$login}) IS NULL OR " . self::onLeave() . " THEN NULL
                      ELSE GREATEST(0, ROUND(EXTRACT(EPOCH FROM
                           (({$login}) AT TIME ZONE '{$tz}')::time - so.expected_login) / 60.0))::int
                 END";
@@ -157,7 +175,7 @@ final class AttendanceController
     {
         $logout = self::LOGOUT_AT;
         $tz     = self::TZ;
-        return "CASE WHEN so.expected_logout IS NULL OR ({$logout}) IS NULL THEN NULL
+        return "CASE WHEN so.expected_logout IS NULL OR ({$logout}) IS NULL OR " . self::onLeave() . " THEN NULL
                      ELSE GREATEST(0, ROUND(EXTRACT(EPOCH FROM
                           so.expected_logout - (({$logout}) AT TIME ZONE '{$tz}')::time) / 60.0))::int
                 END";
@@ -248,8 +266,9 @@ final class AttendanceController
                     {$logout} AS logout_at, d.logout_stated,
                     " . self::PRESENT . " AS present,
                     ({$login} IS NOT NULL AND {$logout} IS NULL) AS still_in,
-                    " . self::STATUS . " AS status,
+                    " . self::status() . " AS status,
                     (d.set_status IS NOT NULL) AS status_set,
+                    " . self::onLeave() . " AS on_leave,
                     d.edited, d.bot_seen, d.staff_id,
                     ROUND(EXTRACT(EPOCH FROM ({$logout} - {$login})) / 3600.0, 2) AS hours,
                     {$break} AS break_min,
@@ -275,6 +294,8 @@ final class AttendanceController
             'breakAllowanceMin' => self::BREAK_ALLOW,
             'date'              => $date,
             'rows'              => array_map([$this, 'castDay'], $stmt->fetchAll()),
+            // Who is on leave, row or no row — so nobody on leave is listed as absent.
+            'leave_days'        => Leaves::days($date, $date),
         ]);
     }
 
@@ -359,8 +380,9 @@ final class AttendanceController
                     ROUND(EXTRACT(EPOCH FROM ({$logout} - {$login})) / 3600.0 - {$break} / 60.0, 2) AS net_hours,
                     ({$logout} IS NOT NULL) AS completed,
                     " . self::PRESENT . " AS present,
-                    " . self::STATUS . " AS status,
+                    " . self::status() . " AS status,
                     (d.set_status IS NOT NULL) AS status_set,
+                    " . self::onLeave() . " AS on_leave,
                     d.edited, d.bot_seen, d.staff_id,
                     " . self::scheduleColumns() . "
              FROM " . self::DAYS_SOURCE . "
@@ -370,10 +392,17 @@ final class AttendanceController
              ORDER BY d.work_date DESC, d.staff_name"
         );
         $stmt->execute($params);
+        $leaveDays = Leaves::days($from, $to);
+        if ($userId) {
+            $leaveDays = array_values(array_filter($leaveDays, static fn (array $l): bool => $l['user_id'] === (string) $userId));
+        }
         Http::json([
             'timezone'          => self::TZ,
             'breakAllowanceMin' => self::BREAK_ALLOW,
             'rows'              => array_map([$this, 'castDay'], $stmt->fetchAll()),
+            // A leave day with no row at all is not a missed day — the summary's attendance
+            // rate leaves these out of what each person was expected to attend.
+            'leave_days'        => $leaveDays,
         ]);
     }
 
@@ -491,6 +520,7 @@ final class AttendanceController
                                   WHERE {$login} IS NOT NULL AND {$logout} IS NULL
                                     AND d.work_date < (now() AT TIME ZONE '{$tz}')::date
                                     AND d.work_date BETWEEN :from AND :to
+                                    AND NOT " . self::onLeave() . "
                                   ORDER BY d.work_date DESC",
             'over_break'     => "SELECT d.user_id, d.staff_name, d.work_date::text,
                                         {$break} AS break_min,
@@ -506,7 +536,8 @@ final class AttendanceController
                                   ORDER BY over_min DESC",
             // Late is measured against the person's own expected login from the Staff page.
             // Anyone with no schedule set keeps the flat 9:00 this report has always used,
-            // so it never silently empties out as schedules are filled in one by one.
+            // so it never silently empties out as schedules are filled in one by one. Nobody
+            // is late on a day they were on leave.
             'late'           => "SELECT d.user_id, d.staff_name, d.work_date::text,
                                         ({$login} AT TIME ZONE '{$tz}')::time::text AS local_login,
                                         to_char(COALESCE(so.expected_login, TIME '09:00'), 'HH24:MI') AS expected_login,
@@ -518,6 +549,7 @@ final class AttendanceController
                                     AND ({$login} AT TIME ZONE '{$tz}')::time
                                         > COALESCE(so.expected_login, TIME '09:00')
                                     AND d.work_date BETWEEN :from AND :to
+                                    AND NOT " . self::onLeave() . "
                                   ORDER BY d.work_date DESC",
             // Per break, from the returns: back later than stated + grace, still out past it, or
             // never back once the cutoff passed. A break correction on the Staff page changes the
@@ -557,6 +589,7 @@ final class AttendanceController
         $r['completed']      = (bool)($r['completed']  ?? false);
         $r['status']         = $r['status'] ?? '';
         $r['status_set']     = (bool)($r['status_set'] ?? false);
+        $r['on_leave']       = (bool)($r['on_leave']   ?? false);
         $r['edited']         = (bool)($r['edited']     ?? false);
         $r['bot_seen']       = (bool)($r['bot_seen']   ?? true);
         $r['staff_id']       = isset($r['staff_id']) ? (int)$r['staff_id'] : null;

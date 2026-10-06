@@ -177,7 +177,7 @@ describe('staff attendance day sheet', () => {
     expectShape(page, StaffAttendancePageSpec)
     expect(page.rows).toEqual([{
       id: null, source: 'fetched', edited: false, staff_id: id, staff_name: 'Ivy Jones', work_date: '2026-08-04',
-      login_at: '09:07', logout_at: '17:02', break_min: 70, status: 'present', note: '',
+      login_at: '09:07', logout_at: '17:02', break_min: 70, status: 'present', note: '', on_leave: false,
     }])
     expect(impliedStatus(page.rows[0].login_at, page.rows[0].logout_at)).toBe(page.rows[0].status)
 

@@ -5,7 +5,7 @@ import type {
   StaffAttendanceRow, StaffLeave, StaffMember, StaffSalary, StaffSalaryHold,
 } from '../types'
 import {
-  clockLabel, earlyBy, emptyLoginTally, gapLabel, hoursLabel, lateBy, netHours, punctualityOf,
+  clockLabel, earlyBy, emptyLoginTally, gapLabel, hoursLabel, lateBy, leaveSpan, leaveSpanLabel, netHours, punctualityOf,
   returnVerdict, shortDay, staffStatus, sumLoginTallies, tallyPunctuality, type LoginTally,
 } from './staff'
 import { activeCriteria, type IncentiveSettings, type RankedRow } from './incentive'
@@ -330,6 +330,8 @@ export function buildStaffPdf(staff: StaffMember[]): jsPDF {
  * A clock time that missed the hours that person is expected to keep carries how far it
  * missed by, the way the sheet on screen marks it — and the FLAG column carries the same
  * one-word verdict the screen shows, so a printed sheet reads down the same column.
+ *
+ * Somebody on leave that day is printed as "leave" and never marked late or early.
  */
 export function buildStaffAttendancePdf(
   staff: StaffMember[],
@@ -338,13 +340,18 @@ export function buildStaffAttendancePdf(
   /** Each person's late / on-time logins over the month the day falls in, by staff id. */
   monthTallies: Map<number, LoginTally> = new Map(),
   monthLabel = '',
+  /** Staff ids on leave that day, per the Leaves sheet. */
+  onLeave: Set<number> = new Set(),
 ): jsPDF {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
   const byStaff = new Map(rows.map((r) => [r.staff_id, r]))
   const present = rows.filter((r) => r.login_at !== null).length
+  // On leave by the Leaves sheet, or by the day's own status — not judged either way.
+  const excused = (p: StaffMember): boolean => onLeave.has(p.id) || (byStaff.get(p.id)?.on_leave ?? false)
+  const leaveCount = staff.filter(excused).length
   const flags = new Map(staff.map((p) => {
     const row = byStaff.get(p.id)
-    return [p.id, punctualityOf(row?.login_at ?? null, row?.logout_at ?? null, p.expected_login, p.expected_logout)]
+    return [p.id, excused(p) ? null : punctualityOf(row?.login_at ?? null, row?.logout_at ?? null, p.expected_login, p.expected_logout)]
   }))
   const tally = tallyPunctuality([...flags.values()])
 
@@ -352,7 +359,7 @@ export function buildStaffAttendancePdf(
   // line, the LOGIN column's red fill and the list of names under the scorecards.
   const lateToday = new Map(staff.map((p) => {
     const at = byStaff.get(p.id)?.login_at ?? null
-    return [p.id, at === null ? null : lateBy(at, p.expected_login)]
+    return [p.id, at === null || excused(p) ? null : lateBy(at, p.expected_login)]
   }))
   const lateNames = staff
     .filter((p) => (lateToday.get(p.id) ?? 0) > 0)
@@ -365,6 +372,7 @@ export function buildStaffAttendancePdf(
     doc,
     'ATTENDANCE',
     `${dateLabel} · ${present} of ${staff.length} logged in`
+      + (leaveCount > 0 ? ` · ${leaveCount} on leave` : '')
       + (tally.flagged > 0
         ? ` · ${tally.flagged} off schedule${tally.both > 0 ? ` (${tally.both} at both ends)` : ''}`
         : ''),
@@ -427,19 +435,20 @@ export function buildStaffAttendancePdf(
     body: staff.map((person, i) => {
       const row = byStaff.get(person.id) ?? null
       const t = monthTallies.get(person.id) ?? emptyLoginTally()
+      const leave = excused(person)
       return [
         String(i + 1),
         person.name,
         person.departments.map((d) => d.name).join(', '),
-        marks(row?.login_at ?? null, lateBy(row?.login_at ?? null, person.expected_login), 'late'),
-        marks(row?.logout_at ?? null, earlyBy(row?.logout_at ?? null, person.expected_logout), 'early'),
+        marks(row?.login_at ?? null, leave ? null : lateBy(row?.login_at ?? null, person.expected_login), 'late'),
+        marks(row?.logout_at ?? null, leave ? null : earlyBy(row?.logout_at ?? null, person.expected_logout), 'early'),
         t.judged === 0 ? '—' : `${t.late}/${t.judged}`,
         row ? `${row.break_min}m` : '—',
         // The same calculation the sheet shows, from the same clock times, so a printed
         // day always matches the screen it was printed from.
         hoursLabel(row ? netHours(row.login_at ?? '', row.logout_at ?? '', row.break_min) : null),
         flags.get(person.id)?.label ?? '—',
-        row?.status ?? '—',
+        row?.status || (leave ? 'leave' : '—'),
         row === null ? '—' : row.source === 'manual' ? 'Keyed in' : row.edited ? 'Corrected' : 'Fetched',
       ]
     }),
@@ -508,8 +517,10 @@ export function buildLeavesPdf(leaves: StaffLeave[], monthLabel: string): jsPDF 
       const v = returnVerdict(l.expected_return, l.actual_return)
       const expected = [l.expected_return ? shortDay(l.expected_return) : '', v?.id === 'overdue' ? v.label : ''].filter(Boolean).join('\n')
       const actual = [l.actual_return ? shortDay(l.actual_return) : '', v && v.id !== 'overdue' ? v.label : ''].filter(Boolean).join('\n')
+      // A leave prints how many days it covers under its date, as the sheet does.
+      const span = leaveSpan(l)
       return [
-        shortDay(l.leave_date),
+        [shortDay(l.leave_date), span ? leaveSpanLabel(span) : ''].filter(Boolean).join('\n'),
         l.staff_name,
         l.department_name ?? '',
         l.sick_leave,

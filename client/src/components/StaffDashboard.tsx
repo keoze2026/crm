@@ -18,6 +18,9 @@ import {
   clockLabel,
   gapLabel,
   lateBy,
+  leaveIndex,
+  leaveSpan,
+  leaveSpanLabel,
   monthRange,
   netHours,
   orgToday,
@@ -26,6 +29,7 @@ import {
 } from '../lib/staff'
 import { asPercent } from '../lib/review'
 import type {
+  LeaveDay,
   QueueAssignment,
   ReviewDepartment,
   ReviewEntry,
@@ -35,10 +39,12 @@ import type {
   StaffSalary,
 } from '../types'
 
-/** One leave row as a tooltip line: its markers, and how the return went if it had one. */
+/** One leave row as a tooltip line: its markers, how many days it covers, and how the return went. */
 const leaveNote = (l: StaffLeave): string => {
   const back = returnVerdict(l.expected_return, l.actual_return)
+  const span = leaveSpan(l)
   const parts = [
+    span && leaveSpanLabel(span),
     l.sick_leave && `sick ${l.sick_leave}`, l.half_day && `half day ${l.half_day}`,
     l.break_leave && `break ${l.break_leave}`, l.late_login && `late ${l.late_login}`, l.aob,
     back && (back.id === 'overdue' ? `not back, ${back.label}` : `returned ${back.label.toLowerCase()}`),
@@ -90,6 +96,8 @@ function initials(name: string): string {
 interface PersonRow {
   member: StaffMember
   today: StaffAttendanceRow | null
+  /** On leave today — shown as such rather than "Not in", and never late. */
+  onLeaveToday: boolean
   todayLate: number | null
   presentDays: number
   lateDays: number
@@ -104,6 +112,7 @@ interface PersonRow {
 function rollup(
   staff: StaffMember[],
   attendance: StaffAttendanceRow[],
+  leaveDays: LeaveDay[],
   leaves: StaffLeave[],
   performance: ReviewEntry[],
   behaviour: ReviewEntry[],
@@ -120,6 +129,7 @@ function rollup(
     return m
   }
   const att = byStaff(attendance)
+  const onLeave = leaveIndex(leaveDays)
   const lv = byStaff(leaves)
   const perf = byStaff(performance)
   const beh = byStaff(behaviour)
@@ -134,16 +144,19 @@ function rollup(
     const days = att.get(member.id) ?? []
     const expected = member.expected_login ?? DEFAULT_LOGIN
     const present = days.filter((d) => d.login_at)
-    const lateDays = present.filter((d) => (lateBy(d.login_at, expected) ?? 0) > 0).length
+    // A login on a day on leave is never late.
+    const lateDays = present.filter((d) => !d.on_leave && (lateBy(d.login_at, expected) ?? 0) > 0).length
     const hours = present
       .map((d) => (d.login_at && d.logout_at ? netHours(d.login_at, d.logout_at, d.break_min) : null))
       .filter((h): h is number => h != null)
     const todayRow = days.find((d) => d.work_date === today) ?? null
+    const onLeaveToday = onLeave.staff(member.id, today) || (todayRow?.on_leave ?? false)
     const key = member.name.toLowerCase()
     return {
       member,
       today: todayRow,
-      todayLate: todayRow ? lateBy(todayRow.login_at, expected) : null,
+      onLeaveToday,
+      todayLate: todayRow && !onLeaveToday ? lateBy(todayRow.login_at, expected) : null,
       presentDays: present.length,
       lateDays,
       avgHours: hours.length ? hours.reduce((s, h) => s + h, 0) / hours.length : null,
@@ -204,6 +217,7 @@ export function StaffDashboard({ onBack }: { onBack: () => void }) {
     () => rollup(
       staff.data ?? [],
       attendance.data?.rows ?? [],
+      attendance.data?.leave_days ?? [],
       leaves.data ?? [],
       performance.data ?? [],
       behaviour.data ?? [],
@@ -373,6 +387,8 @@ export function StaffDashboard({ onBack }: { onBack: () => void }) {
                           <div className="text-[11px] tabular-nums text-slate-800">{clockLabel(t.login_at)}{t.logout_at ? ` → ${clockLabel(t.logout_at)}` : ''}</div>
                           <div className={cx('text-[10px] font-semibold', late > 0 ? 'text-rose-600' : t.logout_at ? 'text-emerald-600' : 'text-brand')}>{late > 0 ? `${gapLabel(late)} late` : t.logout_at ? 'On time' : 'Still in'}</div>
                         </>
+                      ) : r.onLeaveToday ? (
+                        <span className="rounded-md bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">On leave</span>
                       ) : (
                         <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-600">{t?.status && t.status !== 'absent' ? t.status : 'Not in'}</span>
                       )}

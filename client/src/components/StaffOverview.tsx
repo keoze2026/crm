@@ -12,7 +12,7 @@ import { Spinner, cx } from './ui'
 import { gapLabel, lateBy, staffStatus } from '../lib/staff'
 import { BRAND } from '../lib/theme'
 import type { RankedRow } from '../lib/incentive'
-import type { Department, StaffAttendanceRow, StaffMember } from '../types'
+import type { Department, LeaveDay, StaffAttendanceRow, StaffMember } from '../types'
 
 const NAVY = BRAND
 const DEFAULT_LOGIN = '09:00'
@@ -59,7 +59,7 @@ const IconCheck = () => (
   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="20 6 9 17 4 12" /></svg>
 )
 
-export default function StaffOverview({ staff, departments, today, todayRows, todayLoading, ranked, rankedLoading, monthLabel, onOpenTop, onOpenAttendance, onDepartmentsChanged }: {
+export default function StaffOverview({ staff, departments, today, todayRows, todayLeave = [], todayLoading, ranked, rankedLoading, monthLabel, onOpenTop, onOpenAttendance, onDepartmentsChanged }: {
   staff: StaffMember[]
   departments: Department[]
   /** Re-reads the roster and departments after one is added, renamed or removed. */
@@ -68,6 +68,8 @@ export default function StaffOverview({ staff, departments, today, todayRows, to
   today: string
   /** Today's rows from the Attendance page's day sheet. */
   todayRows: StaffAttendanceRow[]
+  /** Who the Leaves sheet has on leave today — not counted as late or "not in yet". */
+  todayLeave?: LeaveDay[]
   todayLoading: boolean
   /** The Top Performer ranking for the month, or null while it loads / when nothing applies. */
   ranked: RankedRow[] | null
@@ -114,17 +116,23 @@ export default function StaffOverview({ staff, departments, today, todayRows, to
     } catch (err) { setNote((err as Error).message) }
   }
 
+  const byStaff = new Map(todayRows.map((r) => [r.staff_id, r]))
+  // On leave today: by the Leaves sheet, or by today's own status. Somebody on leave is
+  // neither late nor "not in yet" — they aren't expected.
+  const leaveIds = new Set(todayLeave.map((d) => d.staff_id))
+  const leaveToday = (m: StaffMember) => leaveIds.has(m.id) || (byStaff.get(m.id)?.on_leave ?? false)
+
   const active = staff.filter((m) => m.status === 'active')
-  const onLeave = staff.filter((m) => m.status === 'leave')
+  const onLeave = staff.filter((m) => m.status === 'leave' || (m.status === 'active' && leaveToday(m)))
   const inactive = staff.filter((m) => m.status === 'inactive')
 
-  const byStaff = new Map(todayRows.map((r) => [r.staff_id, r]))
   const inToday = active.filter((m) => byStaff.get(m.id)?.login_at)
   const late = inToday
+    .filter((m) => !leaveToday(m))
     .map((m) => ({ m, min: lateBy(byStaff.get(m.id)?.login_at ?? null, m.expected_login ?? DEFAULT_LOGIN) ?? 0 }))
     .filter((x) => x.min > 0)
     .sort((a, b) => b.min - a.min)
-  const notIn = active.filter((m) => !byStaff.get(m.id)?.login_at)
+  const notIn = active.filter((m) => !byStaff.get(m.id)?.login_at && !leaveToday(m))
 
   const tiles = [
     { label: 'Active staff', value: String(active.length), sub: `${staff.length} on roster`, tone: 'text-slate-900' },

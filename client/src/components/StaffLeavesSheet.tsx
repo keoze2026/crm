@@ -1,7 +1,9 @@
 import { useRef, useState } from 'react'
 import { api } from '../api/client'
 import { PerformerBadge } from '../lib/performers'
-import { LEAVE_MARKERS, returnVerdict, type ReturnVerdict } from '../lib/staff'
+import {
+  LEAVE_MARKERS, leaveSpan, leaveSpanLabel, returnVerdict, shortDay, type LeaveSpan, type ReturnVerdict,
+} from '../lib/staff'
 import type { StaffLeave, StaffMember } from '../types'
 import {
   addBtnCls, addRowCls, cellCls, dateFieldCls, fieldCls, headCls, removeBtnCls, rowCls, tableCls, theadCls, isEnterSubmit,
@@ -25,6 +27,11 @@ import { useServerDraft } from '../lib/useServerDraft'
  * by how the return went (`returnVerdict()`): rose for someone back late, sky for early,
  * green for on the day. An expected date that has passed with no actual return yet is
  * amber — "not back". Most rows have neither, and are left alone.
+ *
+ * A Sick or Break leave carries how many days it covers under its DATE ("5 days", the
+ * dates in its tooltip): every one of those days is excused on the Attendance page — not absent, not
+ * late. A leave of several days is one row with its EXPECTED RETURN set; without one it
+ * covers its own day only, and the caption says "1 day" so that is never a surprise.
  */
 
 const MARKERS_ID = 'leave-markers'
@@ -156,6 +163,11 @@ function Cells({
   // they came back.
   const expectedVerdict = verdict?.id === 'overdue' ? verdict : null
   const actualVerdict = verdict && verdict.id !== 'overdue' ? verdict : null
+  const span = leaveSpan({
+    ...draft,
+    expected_return: draft.expected_return || null,
+    actual_return: draft.actual_return || null,
+  })
 
   const setPerson = (id: number | '') => {
     // Moving the row to someone else drops a department they aren't in, defaulting to
@@ -199,6 +211,7 @@ function Cells({
           }}
           className={dateFieldCls}
         />
+        {span && <SpanCaption span={span} />}
       </td>
       <td className={cellCls}>
         <div className="flex items-center gap-1">
@@ -257,6 +270,18 @@ function Cells({
       </td>
       {markerCell('aob')}
     </>
+  )
+}
+
+/** How many days a leave covers, under its date — violet, the colour a leave day wears. */
+function SpanCaption({ span }: { span: LeaveSpan }) {
+  const title = span.days === 1
+    ? `On leave ${shortDay(span.first)} only — set Expected Return to cover more days`
+    : `On leave ${shortDay(span.first)} to ${shortDay(span.last)} — not counted as absent or late`
+  return (
+    <span title={title} className="mt-0.5 inline-block rounded border border-violet-300 bg-violet-50 px-1 text-[10px] font-bold leading-4 text-violet-800">
+      {leaveSpanLabel(span)}
+    </span>
   )
 }
 

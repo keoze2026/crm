@@ -310,6 +310,18 @@ describe('buildStaffAttendancePdf', () => {
     expect(t.head?.[0]).toContain('LATE LOGINS\nTHIS MONTH')
     expect((t.body?.[0] as string[])[5]).toBe('—')
   })
+
+  it('prints people on leave as leave and never marks them late or early', () => {
+    // Eve (9:30 against 8:00) is on the Leaves sheet; Dan has no row but is on leave too.
+    const doc = buildStaffAttendancePdf(staff, rows, 'Tue 1 Sep', tallies, 'September 2026', new Set([4, 5]))
+    const text = allText(doc)
+    expect(text).toContain('Tue 1 Sep · 4 of 5 logged in · 2 on leave · 1 off schedule (1 at both ends)')
+    expect(text).toContain('Late in on Tue 1 Sep: Anna (7m)')
+    const body = table().body as string[][]
+    expect(body[3]).toEqual(['4', 'Dan', '', '—', '—', '—', '—', '—', '—', 'leave', '—'])
+    expect(body[4]).toEqual(['5', 'Eve', '', '9:30 AM', '—', '—', '0m', '—', '—', 'present', 'Fetched'])
+    expect(styleOf(table(), 'body', 4, 3)).toEqual({})
+  })
 })
 
 describe('buildLeavesPdf', () => {
@@ -341,7 +353,9 @@ describe('buildLeavesPdf', () => {
     const doc = buildLeavesPdf(leaves, 'September 2026')
     expect(allText(doc)).toEqual(expect.arrayContaining(['LEAVES', 'September 2026 · 6 rows']))
     const body = table().body as string[][]
-    expect(body[0]).toEqual(['8-Sep', 'P1', 'Billing', 'Approved', '', '', '', '10-Sep', '12-Sep\n2 days late', 'Doctor note'])
+    expect(body[0]).toEqual(['8-Sep\n4 days', 'P1', 'Billing', 'Approved', '', '', '', '10-Sep', '12-Sep\n2 days late', 'Doctor note'])
+    // Only a sick or break leave says how many days it covers.
+    expect(body.slice(1).map((r) => r[0])).toEqual(['8-Sep', '8-Sep', '8-Sep', '8-Sep', '8-Sep'])
     expect(body.map((r) => [r[7], r[8]])).toEqual([
       ['10-Sep', '12-Sep\n2 days late'],
       ['20-Sep\n3 days overdue', ''],

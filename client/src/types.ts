@@ -258,6 +258,12 @@ export interface AttendanceDay {
   status: string
   /** True when that status was set by hand rather than read off the clock times. */
   status_set: boolean
+  /**
+   * The person was on leave this day — on the Leaves sheet, or with the status set to
+   * "leave". A leave day is never judged: `late_min` / `early_min` come back null, and an
+   * empty one reads "leave" rather than "absent".
+   */
+  on_leave: boolean
   /** True when any part of this day was keyed in over the bot's record. */
   edited: boolean
   /** False for a day that exists only as a hand-keyed row — the bot has no record of it. */
@@ -301,6 +307,21 @@ export interface AttendanceRoster {
   breakAllowanceMin: number
   date: string
   rows: AttendanceDay[]
+  /** Everyone on leave that day, whether or not they have a row — see LeaveDay. */
+  leave_days: LeaveDay[]
+}
+
+/**
+ * One day one person was on leave, per the Leaves sheet: a Sick or Break leave that wasn't
+ * "Not Approved", from its date up to the day before they came back (the actual return, or
+ * until one is recorded, the expected one). The server works these out (App\Leaves), so
+ * every page excuses the same days. `user_id` is the attendance identity — the bot account,
+ * or the "staff-12" stand-in for someone without one.
+ */
+export interface LeaveDay {
+  staff_id: number
+  user_id: string
+  work_date: string
 }
 
 export interface AttendanceBreakRecord {
@@ -577,6 +598,8 @@ export interface StaffAttendanceRow {
   break_min: number
   status: string
   note: string
+  /** On leave this day (Leaves sheet, or status "leave") — not judged late, early or absent. */
+  on_leave: boolean
   // Hours are not carried: the page computes them from the clock times it is showing, so
   // the figure moves while a row is being typed. See netHours() in lib/staff.ts.
 }
@@ -588,6 +611,8 @@ export interface StaffAttendancePage {
   /** False where the check-in bot's tables aren't installed — everything is hand-keyed. */
   fetched: boolean
   rows: StaffAttendanceRow[]
+  /** Every day in the range somebody was on leave, including people with no row. */
+  leave_days: LeaveDay[]
 }
 
 /** A row of the Leaves sheet. Every marker is free text ("Approved", a reason). */

@@ -45,7 +45,7 @@ import { ORG_TZ, gapLabel } from '../lib/staff'
 import { BRAND } from '../lib/theme'
 import { useAsync } from '../lib/useAsync'
 import { useOrgToday } from '../lib/useOrgToday'
-import type { AttendanceDay, Summary, TrendPoint } from '../types'
+import type { AttendanceDay, LeaveDay, Summary, TrendPoint } from '../types'
 
 type Granularity = 'day' | '4day' | 'week'
 
@@ -519,11 +519,13 @@ function Avatars({ names, max = 4 }: { names: string[]; max?: number }) {
 
 interface HourGroup { key: number; label: string; rows: AttendanceDay[] }
 
-function TeamTodayCard({ day, onDay, today, roster, staff, loading, error }: {
+function TeamTodayCard({ day, onDay, today, roster, leaveDays, staff, loading, error }: {
   day: string
   onDay: (iso: string) => void
   today: string
   roster: AttendanceDay[]
+  /** Who is on leave that day — never counted absent or "not in yet". */
+  leaveDays: LeaveDay[]
   staff: { user_id: string; staff_name: string | null; username: string | null }[]
   loading: boolean
   error: string | null
@@ -533,15 +535,19 @@ function TeamTodayCard({ day, onDay, today, roster, staff, loading, error }: {
 
   const stats = useMemo(() => {
     const presentIds = new Set(roster.map((r) => r.user_id))
-    const absent = staff.filter((m) => !presentIds.has(m.user_id))
+    const leaveIds = new Set(leaveDays.map((d) => d.user_id))
+    // Somebody on leave isn't missing: they are listed on their own rather than as absent.
+    const absent = staff.filter((m) => !presentIds.has(m.user_id) && !leaveIds.has(m.user_id))
+    const onLeave = staff.filter((m) => !presentIds.has(m.user_id) && leaveIds.has(m.user_id))
     return {
       present: roster.filter((r) => r.present).length,
       stillIn: roster.filter((r) => r.still_in).length,
       onBreak: roster.filter((r) => r.on_break),
       late: roster.filter(isLateLogin),
       absent,
+      onLeave,
     }
-  }, [roster, staff])
+  }, [roster, leaveDays, staff])
 
   // Clock-ins grouped by the hour they happened, in the org's clock — one "event" per hour
   // in the timeline, the way the reference lists meetings against 9 am / 10 am / 11 am.
@@ -635,7 +641,7 @@ function TeamTodayCard({ day, onDay, today, roster, staff, loading, error }: {
           </div>
         ) : error ? (
           <EmptyHint message="Attendance data isn't available right now." />
-        ) : roster.length === 0 && stats.absent.length === 0 ? (
+        ) : roster.length === 0 && stats.absent.length === 0 && stats.onLeave.length === 0 ? (
           <EmptyHint message={isToday ? 'Nobody has clocked in yet today.' : 'No clock-ins were recorded on this day.'} />
         ) : (
           <ol className="relative space-y-2 border-l border-slate-200 pl-3">
@@ -700,6 +706,23 @@ function TeamTodayCard({ day, onDay, today, roster, staff, loading, error }: {
                     <Avatars names={stats.absent.map(labelOf)} />
                     <span className="truncate text-[11px] text-slate-500">
                       {stats.absent.map(labelOf).slice(0, 2).join(', ')}{stats.absent.length > 2 ? ` +${stats.absent.length - 2}` : ''}
+                    </span>
+                  </div>
+                </div>
+              </li>
+            )}
+            {stats.onLeave.length > 0 && (
+              <li className="relative">
+                <span className="absolute -left-4.25 top-3 h-2 w-2 rounded-full bg-violet-400 ring-2 ring-white" />
+                <div className="rounded-lg border border-dashed border-slate-200 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-slate-800">On leave</span>
+                    <span className="rounded-md bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">{stats.onLeave.length}</span>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <Avatars names={stats.onLeave.map(labelOf)} />
+                    <span className="truncate text-[11px] text-slate-500">
+                      {stats.onLeave.map(labelOf).slice(0, 2).join(', ')}{stats.onLeave.length > 2 ? ` +${stats.onLeave.length - 2}` : ''}
                     </span>
                   </div>
                 </div>
@@ -1232,6 +1255,7 @@ function DashboardPage() {
   )
 
   const rosterRows = useMemo(() => roster.data?.rows ?? [], [roster.data])
+  const rosterLeave = useMemo(() => roster.data?.leave_days ?? [], [roster.data])
 
   const blocks = [summary, trends, topBuyers, topCampaigns, topSources]
   const failed = blocks.filter((b) => b.error)
@@ -1461,6 +1485,7 @@ function DashboardPage() {
               onDay={setTeamDay}
               today={today}
               roster={rosterRows}
+              leaveDays={rosterLeave}
               staff={staff.data ?? []}
               loading={roster.loading}
               error={roster.error}

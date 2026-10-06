@@ -10,6 +10,9 @@ import {
   hoursLabel,
   impliedStatus,
   lateBy,
+  leaveIndex,
+  leaveSpan,
+  leaveSpanLabel,
   loginTallies,
   monthRange,
   netHours,
@@ -78,6 +81,75 @@ describe('impliedStatus', () => {
     expect(impliedStatus('09:00', null)).toBe('still in')
     expect(impliedStatus('09:00', '')).toBe('still in')
     expect(impliedStatus('09:00', '17:00')).toBe('present')
+  })
+
+  it('reads an empty day on leave as leave, not absent', () => {
+    expect(impliedStatus(null, null, true)).toBe('leave')
+    expect(impliedStatus('', '', true)).toBe('leave')
+    // A login on a leave day is still what the clock says — it just isn't judged.
+    expect(impliedStatus('14:00', null, true)).toBe('still in')
+    expect(impliedStatus(null, null, false)).toBe('absent')
+  })
+})
+
+describe('leaveSpan', () => {
+  const row = (over: Partial<Parameters<typeof leaveSpan>[0]> = {}) => ({
+    leave_date: '2026-09-01', sick_leave: 'Approved', break_leave: '',
+    expected_return: null, actual_return: null, ...over,
+  })
+
+  it('covers every day up to the day before the expected return', () => {
+    expect(leaveSpan(row({ expected_return: '2026-09-08' }))).toEqual({ first: '2026-09-01', last: '2026-09-07', days: 7 })
+  })
+
+  it('runs across a month end', () => {
+    expect(leaveSpan(row({ leave_date: '2026-08-28', expected_return: '2026-09-03' })))
+      .toEqual({ first: '2026-08-28', last: '2026-09-02', days: 6 })
+  })
+
+  it('ends at the actual return once there is one, early or late', () => {
+    expect(leaveSpan(row({ expected_return: '2026-09-08', actual_return: '2026-09-04' }))?.days).toBe(3)
+    expect(leaveSpan(row({ expected_return: '2026-09-08', actual_return: '2026-09-10' }))?.days).toBe(9)
+  })
+
+  it('covers its own day only with no return date, or a return on or before it', () => {
+    expect(leaveSpan(row())).toEqual({ first: '2026-09-01', last: '2026-09-01', days: 1 })
+    expect(leaveSpan(row({ expected_return: '2026-08-30' }))?.days).toBe(1)
+  })
+
+  it('counts a break leave, and not a refused, half-day or late-login row', () => {
+    expect(leaveSpan(row({ sick_leave: '', break_leave: 'Pending' }))?.days).toBe(1)
+    expect(leaveSpan(row({ sick_leave: ' not  approved ' }))).toBeNull()
+    expect(leaveSpan(row({ sick_leave: '' }))).toBeNull()
+  })
+
+  it('is worded for the row', () => {
+    expect(leaveSpanLabel({ first: '2026-09-01', last: '2026-09-07', days: 7 })).toBe('7 days')
+    expect(leaveSpanLabel({ first: '2026-09-01', last: '2026-09-01', days: 1 })).toBe('1 day')
+  })
+})
+
+describe('leaveIndex', () => {
+  const idx = leaveIndex([
+    { staff_id: 4, user_id: '1001', work_date: '2026-05-04' },
+    { staff_id: 7, user_id: 'staff-7', work_date: '2026-05-05' },
+  ])
+
+  it('answers by roster id and by attendance identity', () => {
+    expect(idx.staff(4, '2026-05-04')).toBe(true)
+    expect(idx.user('1001', '2026-05-04')).toBe(true)
+    expect(idx.user('staff-7', '2026-05-05')).toBe(true)
+  })
+
+  it('is specific to the day, and keeps staff ids apart from bot accounts', () => {
+    expect(idx.staff(4, '2026-05-05')).toBe(false)
+    expect(idx.staff(1001, '2026-05-04')).toBe(false)
+    expect(idx.user('4', '2026-05-04')).toBe(false)
+    expect(idx.staff(null, '2026-05-04')).toBe(false)
+  })
+
+  it('is empty for no data', () => {
+    expect(leaveIndex(undefined).staff(4, '2026-05-04')).toBe(false)
   })
 })
 
@@ -419,6 +491,15 @@ describe('login tallies', () => {
     expect(tallies.get(1)).toEqual({ late: 1, onTime: 1, judged: 2, lateMin: 10, worstLateMin: 10 })
     expect(tallies.get(2)).toEqual({ late: 1, onTime: 0, judged: 1, lateMin: 30, worstLateMin: 30 })
     expect(tallies.get(3)).toEqual(emptyLoginTally())
+  })
+
+  it('leaves a day on leave out of the tally', () => {
+    const staff = [member({ id: 1 })]
+    const tallies = loginTallies(staff, [
+      { staff_id: 1, login_at: '09:00' },
+      { staff_id: 1, login_at: '14:00', on_leave: true },
+    ])
+    expect(tallies.get(1)).toEqual({ late: 0, onTime: 1, judged: 1, lateMin: 0, worstLateMin: 0 })
   })
 
   it('sums tallies, keeping the single worst day', () => {
