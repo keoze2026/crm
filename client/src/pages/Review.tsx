@@ -198,10 +198,7 @@ export default function Review() {
         </Card>
       ) : tab === 'top' ? (
         <Card>
-          <CardHeader
-            title={`Top Performer — ${label}`}
-            subtitle="Who earns the month's incentive, and who trails the month: the criteria, the evidence, and the ranking"
-          />
+          <CardHeader title={`Top Performer — ${label}`} />
           <div className="p-4">
             <TopPerformerSheet
               // Remount on a month change so the ticks and switches read are that month's.

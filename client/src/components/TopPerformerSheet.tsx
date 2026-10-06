@@ -11,12 +11,13 @@
 //
 // The list is a div grid rather than a <table>: the app's global table rules give every
 // cell the Excel-like density the sheets want, and this is a leaderboard, not a sheet —
-// it wants room, labelled pills instead of numbered columns, and chips you can tap.
+// it wants labelled pills instead of numbered columns, and chips you can tap. It is sized
+// to show every column without scrolling in a 1280px-wide window at 100% zoom; narrower
+// than that, the list scrolls sideways rather than squeezing the chips.
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { cx } from './ui'
 import { PerformerBadge, usePerformerReload } from '../lib/performers'
-import { BRAND } from '../lib/theme'
 import { merge3 } from '../lib/merge'
 import {
   CRITERIA,
@@ -47,8 +48,7 @@ const SOURCE_LABEL = {
   manual: 'You confirm this',
 } as const
 
-/** People have no photo — initials, white on the navbar's navy, stand in. */
-const AVATAR = 'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand text-[10px] font-bold text-white'
+/** People have no photo — on the scorecards, their initials stand in. */
 const initials = (name: string) => {
   const w = name.trim().split(/\s+/).filter(Boolean)
   return (w.length >= 2 ? w[0][0] + w[1][0] : name.slice(0, 2)).toUpperCase()
@@ -239,93 +239,6 @@ function FoldPanel({ id, title, meta, children }: { id: string; title: string; m
         </svg>
       </button>
       {open && <div className="border-t border-slate-100 px-4 pb-3 pt-1">{children}</div>}
-    </section>
-  )
-}
-
-// ─── Guide ────────────────────────────────────────────────────────────────────
-//
-// Three steps, the way a pricing page explains itself: a title, one line under it, and
-// three line-drawn icons joined by arrows. White and the navbar's navy only. It can be
-// hidden, and stays hidden across visits — a manager who has read it once has read it.
-
-const NAVY = BRAND
-const GUIDE_KEY = 'top-performer:guide'
-
-const guideIcon = (children: React.ReactNode) => (
-  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-    {children}
-  </svg>
-)
-const GUIDE_STEPS = [
-  {
-    title: 'Pick the month',
-    text: 'Criteria 1, 2, 4 and 9 are checked for you from that month\'s Review, Attendance and Leaves sheets.',
-    icon: guideIcon(<><rect x="3" y="4" width="18" height="17" rx="2.5" /><path d="M16 2v4M8 2v4M3 9.5h18" /><path d="m9 15.5 2 2 4-4" /></>),
-  },
-  {
-    title: 'Confirm the rest',
-    text: 'Tap a criterion beside a person once you have seen it. The list re-ranks itself as you go.',
-    icon: guideIcon(<><rect x="3" y="3" width="18" height="18" rx="2.5" /><path d="m8 12 3 3 5-6" /><path d="M14.5 20.5 13 17l4-1.5z" fill={NAVY} stroke="none" /></>),
-  },
-  {
-    title: 'Find the winner',
-    text: 'Ranked by criteria met. Meet every one in play and they are Eligible for the incentive.',
-    icon: guideIcon(<><path d="M8 4h8v5a4 4 0 0 1-8 0z" /><path d="M8 6H5a1 1 0 0 0-1 1 4 4 0 0 0 4 3M16 6h3a1 1 0 0 1 1 1 4 4 0 0 1-4 3" /><path d="M12 13v4M9 20h6M10 17h4" /></>),
-  },
-]
-
-/** A thin arrow between steps, like the inspiration's — hidden when the steps stack. */
-const GuideArrow = () => (
-  <svg className="hidden w-16 shrink-0 self-start sm:block" style={{ marginTop: 14 }} viewBox="0 0 64 16" fill="none" stroke="#cbd5e1" strokeWidth="1.5" strokeLinecap="round" aria-hidden>
-    <path d="M2 10 C 20 4, 40 4, 58 8" /><path d="m52 4 6 4-5 5" />
-  </svg>
-)
-
-function Guide() {
-  const [open, setOpen] = useState(() => {
-    try { return localStorage.getItem(GUIDE_KEY) !== 'hidden' } catch { return true }
-  })
-  const toggle = () => {
-    const next = !open
-    setOpen(next)
-    try { localStorage.setItem(GUIDE_KEY, next ? 'shown' : 'hidden') } catch { /* storage unavailable */ }
-  }
-
-  if (!open) {
-    return (
-      <div className="flex justify-end">
-        <button type="button" onClick={toggle} className="text-[11px] font-medium text-slate-400 transition-colors hover:text-brand">
-          Show guide
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <section className="relative rounded-xl border border-slate-200 bg-white px-6 py-6 text-center" aria-label="How this tab works">
-      <button
-        type="button"
-        onClick={toggle}
-        className="absolute right-3 top-3 rounded-md px-2 py-1 text-[11px] font-medium text-slate-400 transition-colors hover:bg-slate-50 hover:text-brand"
-      >
-        Hide guide
-      </button>
-      <h4 className="text-base font-bold tracking-tight text-brand">How it works</h4>
-      <p className="mt-0.5 text-xs text-slate-500">Three steps between you and the month's incentive winner</p>
-
-      <ol className="mx-auto mt-5 flex max-w-3xl flex-col items-center gap-4 sm:flex-row sm:items-start sm:justify-center sm:gap-2">
-        {GUIDE_STEPS.map((step, i) => (
-          <React.Fragment key={step.title}>
-            {i > 0 && <GuideArrow />}
-            <li className="flex w-44 flex-col items-center">
-              {step.icon}
-              <span className="mt-2 text-[11px] font-bold uppercase tracking-wide text-brand">{i + 1}. {step.title}</span>
-              <span className="mt-1 text-[11px] leading-snug text-slate-500">{step.text}</span>
-            </li>
-          </React.Fragment>
-        ))}
-      </ol>
     </section>
   )
 }
@@ -618,8 +531,10 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
   const core = CRITERIA.filter((c) => c.group === 'core')
   const additional = CRITERIA.filter((c) => c.group === 'additional')
 
-  // Column template shared by the header and every row.
-  const cols = 'grid-cols-[2.75rem_minmax(14.5rem,1.2fr)_minmax(13rem,1.2fr)_minmax(16rem,1.8fr)_8rem_6.5rem_5.5rem]'
+  // Column template shared by the header and every row. The chip columns share the free
+  // width roughly as their chips do (4 automatic ~460px, 4 manual ~570px), so each wraps
+  // to about three lines at 1280px; their minimums are the widest single chip.
+  const cols = 'grid-cols-[1.75rem_minmax(9.5rem,0.6fr)_minmax(8.5rem,0.8fr)_minmax(10rem,1.05fr)_3.5rem_4.75rem_4.75rem]'
 
   return (
     <div className="space-y-4">
@@ -627,8 +542,11 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
       <PerformerHeadlines rows={rows} monthLabel={monthLabel} />
 
       {/* The Low badge's bar, set per month like the Goal Achievement target below. */}
-      <div className="flex flex-wrap items-center justify-end gap-1.5 text-[11px] text-slate-500">
-        <span>Low performer under:</span>
+      <div
+        className="flex flex-wrap items-center justify-end gap-1.5 text-[11px] text-slate-500"
+        title="The Percentage on the Review page's Performance tab. Mark or clear anyone by hand in the Low column."
+      >
+        <span>Low performer under</span>
         <input
           type="number"
           min={0}
@@ -638,7 +556,7 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
           onChange={(e) => setSettings((s) => ({ ...s, lowPerformance: Math.max(0, Math.min(100, Number(e.target.value) || 0)) }))}
           className="w-14 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-center text-[11px] tabular-nums focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
         />
-        <span>% on the Review page's Performance tab. Mark or clear anyone by hand in the Low column.</span>
+        <span>% performance</span>
       </div>
 
       {/* Headline tiles, like the inspiration's stat cards. */}
@@ -658,8 +576,6 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
           </div>
         ))}
       </div>
-
-      <Guide />
 
       {/* Criteria — the client's list, one line each, foldable. Hover a line for the wording and the rule. */}
       <div className="grid gap-3 lg:grid-cols-2">
@@ -727,13 +643,13 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
         )}
 
         <div className="overflow-x-auto">
-          <div className="min-w-292">
+          <div className="min-w-190">
             {/* Header */}
-            <div className={cx('grid items-center gap-3 px-4 py-2 text-[11px] font-medium text-slate-500', cols)}>
+            <div className={cx('grid items-center gap-x-2 px-3 py-2 text-[11px] font-medium text-slate-500', cols)}>
               <span>#</span>
               <span>Staff</span>
               <span className="flex flex-wrap items-center gap-1">
-                <span className="mr-1">Checked for you <span className="text-slate-400">· tap to confirm by hand</span></span>
+                <span className="mr-1" title="Read from the month's Review, Attendance and Leaves sheets. Tap a pill to confirm it by hand.">Checked for you</span>
                 {dataCriteria.map((c) => {
                   const all = shown.length > 0 && shown.every((r) => r.verdicts[c.id].confirmed)
                   return (
@@ -787,25 +703,22 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
                   const first = r.rank === 1
                   const pct = scorePct(r)
                   return (
-                    <li key={m.id} className={cx('grid items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50/80', cols, r.allMet && 'bg-emerald-50/40')}>
+                    <li key={m.id} className={cx('grid items-center gap-x-2 px-3 py-2.5 transition-colors hover:bg-slate-50/80', cols, r.allMet && 'bg-emerald-50/40')}>
                       {/* Rank */}
-                      <span className={cx('inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold', r.allMet ? 'bg-emerald-600 text-white' : first ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600')}>
+                      <span className={cx('inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold', r.allMet ? 'bg-emerald-600 text-white' : first ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600')}>
                         {first && r.allMet ? <IconCrown /> : r.rank}
                       </span>
                       {/* Person */}
-                      <span className="flex min-w-0 items-center gap-2.5">
-                        <span className={AVATAR}>{initials(m.name)}</span>
-                        <span className="min-w-0 leading-tight">
-                          <span className="flex items-center gap-1.5">
-                            <span className="truncate text-sm font-semibold text-slate-800">{m.name}</span>
-                            <PerformerBadge staffId={m.id} />
-                          </span>
-                          <span className="block truncate text-[11px] text-slate-400">
-                            {m.departments.map((d) => d.name).join(' · ') || 'No department'}
-                            <span className="text-slate-300"> · </span>
-                            {r.candidate.presentDays > 0 ? `${r.candidate.presentDays} day${r.candidate.presentDays > 1 ? 's' : ''} in` : 'no attendance'}
-                            {m.status === 'leave' && <span className="text-slate-300"> · on leave</span>}
-                          </span>
+                      <span className="min-w-0 leading-tight">
+                        <span className="flex min-w-0 items-center gap-1">
+                          <span className="truncate text-sm font-semibold text-slate-800" title={m.name}>{m.name}</span>
+                          <PerformerBadge staffId={m.id} compact />
+                        </span>
+                        <span className="block truncate text-[11px] text-slate-400">
+                          {m.departments.map((d) => d.name).join(' · ') || 'No department'}
+                          <span className="text-slate-300"> · </span>
+                          {r.candidate.presentDays > 0 ? `${r.candidate.presentDays} day${r.candidate.presentDays > 1 ? 's' : ''} in` : 'no attendance'}
+                          {m.status === 'leave' && <span className="text-slate-300"> · on leave</span>}
                         </span>
                       </span>
                       {/* Data-driven verdicts */}
@@ -820,12 +733,12 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
                           <TickChip key={c.id} c={c} name={m.name} on={r.verdicts[c.id].met} onToggle={() => tick(m.id, c.id, !r.verdicts[c.id].met)} />
                         ))}
                       </span>
-                      {/* Score */}
-                      <span className="flex items-center gap-2">
-                        <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+                      {/* Score: the figure, with its bar under it */}
+                      <span className="flex flex-col gap-1">
+                        <span className="text-xs font-semibold tabular-nums text-slate-700">{pct}%</span>
+                        <span className="h-1 overflow-hidden rounded-full bg-slate-100">
                           <span className={cx('block h-full rounded-full', r.allMet ? 'bg-emerald-500' : 'bg-brand')} style={{ width: `${pct}%` }} />
                         </span>
-                        <span className="w-9 text-right text-xs font-semibold tabular-nums text-slate-700">{pct}%</span>
                       </span>
                       {/* Status */}
                       <span><StatusPill row={r} /></span>
@@ -840,13 +753,6 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
             )}
           </div>
         </div>
-
-        <p className="border-t border-slate-100 px-4 py-2.5 text-[11px] text-slate-500">
-          Only people with a Performance or Behaviour rating picked for {monthLabel} are ranked
-          {awaitingReview > 0 && <> — <span className="font-semibold text-amber-700">{awaitingReview} on the roster {awaitingReview === 1 ? 'is' : 'are'} not listed yet</span> because no rating has been chosen for them</>}.
-          Green = met, red = not met, grey "?" = nothing recorded for that month yet. Hover any pill to see exactly what it was read from — and tap one to confirm it by hand when the record is wrong or missing; navy means your word has replaced the data's.
-          Your confirmations and the switches above are saved for {monthLabel} and shared with every manager.
-        </p>
       </div>
     </div>
   )
