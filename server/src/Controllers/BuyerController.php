@@ -83,42 +83,76 @@ final class BuyerController
         $body = Http::body();
         $id   = (int) $params['id'];
         $rate = isset($body['rate']) ? (float) $body['rate'] : null;
-        $pdo  = Database::connection();
+        $code = isset($body['code']) ? trim((string) $body['code']) : null;
+        if ($code === '') {
+            Http::error('Buyer code is required', 422);
+        }
+        $pdo = Database::connection();
 
-        $stmt = $pdo->prepare(
-            'UPDATE buyers SET
-                code = COALESCE(:code, code),
-                name = :name,
-                status = COALESCE(:status, status),
-                notes = COALESCE(:notes, notes),
-                rate = COALESCE(:rate, rate)
-             WHERE id = :id RETURNING *'
-        );
+        $current = $pdo->prepare('SELECT rate FROM buyers WHERE id = :id');
+        $current->execute([':id' => $id]);
+        $oldRate = $current->fetchColumn();
+        if ($oldRate === false) {
+            Http::error('Buyer not found', 404);
+        }
+
+        // A code names one buyer whatever its case: "test" and "TEST" are the same
+        // destination. Renaming onto another buyer's code is refused (409) unless the
+        // caller asks to merge, which moves that buyer's records onto this one — each
+        // record keeps its own date, volumes and rate, so no record or amount is lost —
+        // and only then drops the emptied buyer (deleting it first would cascade them away).
+        $twins = [];
+        if ($code !== null) {
+            $find = $pdo->prepare('SELECT id FROM buyers WHERE LOWER(code) = LOWER(:code) AND id <> :id');
+            $find->execute([':code' => $code, ':id' => $id]);
+            $twins = array_map('intval', $find->fetchAll(PDO::FETCH_COLUMN));
+            if ($twins && empty($body['merge'])) {
+                Http::error('A buyer with that code already exists', 409, ['merge' => true]);
+            }
+        }
+
+        $pdo->beginTransaction();
         try {
+            if ($twins) {
+                $in = implode(',', $twins);
+                $pdo->exec("UPDATE call_records SET buyer_id = {$id}, updated_at = now() WHERE buyer_id IN ({$in})");
+                $pdo->exec("DELETE FROM buyers WHERE id IN ({$in})");
+            }
+
+            $stmt = $pdo->prepare(
+                'UPDATE buyers SET
+                    code = COALESCE(:code, code),
+                    name = :name,
+                    status = COALESCE(:status, status),
+                    notes = COALESCE(:notes, notes),
+                    rate = COALESCE(:rate, rate)
+                 WHERE id = :id RETURNING *'
+            );
             $stmt->execute([
                 ':id'     => $id,
-                ':code'   => $body['code']   ?? null,
+                ':code'   => $code,
                 ':name'   => $body['name']   ?? null,
                 ':status' => $body['status'] ?? null,
                 ':notes'  => $body['notes']  ?? null,
                 ':rate'   => $rate,
             ]);
+            $row = $stmt->fetch();
+
+            // Keep the definite rate in sync across this buyer's Lead records so the
+            // stored total_bill (counted * rate) stays exactly rate * counted. Only an
+            // actual rate change re-prices them: the Monthly Sheet resends the rate with
+            // a rename, which must not overwrite per-record rates (or a merged buyer's).
+            if ($rate !== null && $rate !== (float) $oldRate) {
+                $re = $pdo->prepare('UPDATE call_records SET rate = :r, updated_at = now() WHERE buyer_id = :id');
+                $re->execute([':r' => $rate, ':id' => $id]);
+            }
+            $pdo->commit();
         } catch (\PDOException $e) {
+            $pdo->rollBack();
             if ($e->getCode() !== '23505') {
                 throw $e;
             }
             Http::error('A buyer with that code already exists', 409);
-        }
-        $row = $stmt->fetch();
-        if (!$row) {
-            Http::error('Buyer not found', 404);
-        }
-
-        // Keep the definite rate in sync across this buyer's Lead records so the
-        // stored total_bill (counted * rate) stays exactly rate * counted.
-        if ($rate !== null) {
-            $re = $pdo->prepare('UPDATE call_records SET rate = :r, updated_at = now() WHERE buyer_id = :id');
-            $re->execute([':r' => $rate, ':id' => $id]);
         }
 
         Http::json($this->cast([$row])[0]);

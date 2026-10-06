@@ -105,10 +105,10 @@ final class ReviewCycleWorkflowTest extends ApiTestCase
             if ($month === '2026-08') {
                 $ticks[(string) $cal] = ['behaviour'];
             }
-            $settings = $month === '2026-05' ? ['additional' => ['goals', 'learning'], 'min_performance' => 75] : null;
+            $settings = $month === '2026-05' ? ['additional' => ['goals', 'learning'], 'min_performance' => 75, 'low_performance' => 40] : null;
             $saved[$month] = $this->saveMonth($month, $ticks, $settings);
         }
-        $this->saveMonth('2025-09', [(string) $ann => ['feedback']], ['additional' => ['feedback'], 'min_performance' => 60]);
+        $this->saveMonth('2025-09', [(string) $ann => ['feedback']], ['additional' => ['feedback'], 'min_performance' => 60, 'low_performance' => 40]);
 
         // ── The six-month window equals the months it is made of, one by one ──
         $half = $this->range('2026-03', '2026-08');
@@ -117,8 +117,8 @@ final class ReviewCycleWorkflowTest extends ApiTestCase
             $this->assertEquals($saved[$month], $half[$month], "range and show agree for {$month}");
             $this->assertEquals($this->get("/top-performer?month={$month}", true)['json'], $half[$month]);
         }
-        $this->assertSame(['additional' => ['goals', 'learning'], 'min_performance' => 75], $half['2026-05']['settings']);
-        $this->assertSame(['additional' => ['goals'], 'min_performance' => 80], $half['2026-04']['settings']);
+        $this->assertSame(['additional' => ['goals', 'learning'], 'min_performance' => 75, 'low_performance' => 40], $half['2026-05']['settings']);
+        $this->assertSame(['additional' => ['goals'], 'min_performance' => 80, 'low_performance' => 40], $half['2026-04']['settings']);
 
         // Asking with the ends the other way round is the same window.
         $this->assertEquals($half, $this->range('2026-08', '2026-03'));
@@ -129,7 +129,7 @@ final class ReviewCycleWorkflowTest extends ApiTestCase
         $this->assertSame([(string) $ann => ['feedback']], $year['2025-09']['ticks']);
         foreach (['2025-10', '2025-11', '2025-12', '2026-01', '2026-02'] as $month) {
             $this->assertSame([], $year[$month]['ticks'], $month);
-            $this->assertSame(['additional' => ['goals'], 'min_performance' => 80], $year[$month]['settings']);
+            $this->assertSame(['additional' => ['goals'], 'min_performance' => 80, 'low_performance' => 40], $year[$month]['settings']);
         }
         $this->assertStatus(422, $this->get('/top-performer/range?from=2024-01&to=2026-08', true));
 
@@ -204,7 +204,7 @@ final class ReviewCycleWorkflowTest extends ApiTestCase
             $this->assertArrayNotHasKey((string) $ben, $entry['ticks'], "Ben's ticks are gone from {$key}");
         }
         $this->assertSame(['documentation', 'participation'], $year['2026-06']['ticks'][(string) $ann]);
-        $this->assertSame(['additional' => ['goals', 'learning'], 'min_performance' => 75], $year['2026-05']['settings']);
+        $this->assertSame(['additional' => ['goals', 'learning'], 'min_performance' => 75, 'low_performance' => 40], $year['2026-05']['settings']);
 
         // His review rows stay in every month, unlinked but still named; Ann's are untouched.
         foreach (self::HALF as $month) {

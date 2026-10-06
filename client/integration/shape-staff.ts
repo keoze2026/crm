@@ -402,7 +402,7 @@ export const ReviewEntrySpec = obj<ReviewEntry>({
 
 export const TopPerformerStateSpec = obj<TopPerformerState>({
   month: 'month',
-  settings: { object: { additional: arrayOf('string'), min_performance: 'int' } },
+  settings: { object: { additional: arrayOf('string'), min_performance: 'int', low_performance: 'int' } },
   ticks: recordOf(arrayOf('string')),
 })
 

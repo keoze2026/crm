@@ -194,6 +194,102 @@ final class BuyerApiTest extends ApiTestCase
         $this->assertSame('MINE', self::dbValue('SELECT code FROM buyers WHERE id = ?', [$id]));
     }
 
+    public function testUpdateRequiresANonBlankCode(): void
+    {
+        $id = self::seedBuyer('KEEP');
+
+        $r = $this->put("/buyers/{$id}", ['code' => '   ']);
+        $this->assertStatus(422, $r);
+        $this->assertSame('KEEP', self::dbValue('SELECT code FROM buyers WHERE id = ?', [$id]));
+    }
+
+    public function testUpdateChangesTheCaseOfItsOwnCodeAndKeepsEveryRecord(): void
+    {
+        $id = self::seedBuyer('test', 5.0, 'test');
+        self::seedBuyerRecord($id, '2026-05-04', 10, 5.0);
+        self::seedBuyerRecord($id, '2026-05-05', 3, 5.0);
+
+        $r = $this->put("/buyers/{$id}", ['code' => ' TEST ', 'name' => 'TEST', 'rate' => 5]);
+        $this->assertStatus(200, $r);
+        $this->assertSame('TEST', $r['json']['code']);
+        $this->assertSame(2, (int) self::dbValue('SELECT COUNT(*) FROM call_records WHERE buyer_id = ?', [$id]));
+    }
+
+    public function testUpdateOntoAnotherCaseOfAnExistingCodeAsksToMerge(): void
+    {
+        $upper = self::seedBuyer('TEST', 9.0);
+        $lower = self::seedBuyer('test', 5.0);
+        self::seedBuyerRecord($lower, '2026-05-04', 10, 5.0);
+
+        $r = $this->put("/buyers/{$lower}", ['code' => 'TEST', 'name' => 'TEST']);
+        $this->assertStatus(409, $r);
+        $this->assertTrue($r['json']['merge']);
+        // Nothing moved or went missing.
+        $this->assertSame(2, (int) self::dbValue('SELECT COUNT(*) FROM buyers'));
+        $this->assertSame('test', self::dbValue('SELECT code FROM buyers WHERE id = ?', [$lower]));
+        $this->assertSame(1, (int) self::dbValue('SELECT COUNT(*) FROM call_records WHERE buyer_id = ?', [$lower]));
+        $this->assertSame(0, (int) self::dbValue('SELECT COUNT(*) FROM call_records WHERE buyer_id = ?', [$upper]));
+    }
+
+    public function testMergeMovesEveryRecordOfEachVariantOntoTheRenamedBuyer(): void
+    {
+        $upper = self::seedBuyer('TEST', 9.0);
+        $mixed = self::seedBuyer('Test', 7.0);
+        $lower = self::seedBuyer('test', 5.0, 'test');
+        $other = self::seedBuyer('OTHER', 1.0);
+        $a = self::seedBuyerRecord($upper, '2026-05-04', 4, 9.0, 4, 1, 2);
+        $b = self::seedBuyerRecord($mixed, '2026-05-04', 6, 7.0);
+        $c = self::seedBuyerRecord($lower, '2026-05-05', 10, 5.0);
+        self::seedBuyerRecord($other, '2026-05-05', 1, 1.0);
+
+        // The Monthly Sheet resends the unchanged rate with a rename.
+        $r = $this->put("/buyers/{$lower}", ['code' => 'TEST', 'name' => 'TEST', 'rate' => 5, 'merge' => true]);
+        $this->assertStatus(200, $r);
+        $this->assertSame($lower, (int) $r['json']['id']);
+        $this->assertSame('TEST', $r['json']['code']);
+        $this->assertEquals(5.0, $r['json']['rate']);
+
+        // Every record survives on the one buyer, each with its own volumes and rate.
+        $this->assertSame(2, (int) self::dbValue('SELECT COUNT(*) FROM buyers'));
+        $this->assertSame(4, (int) self::dbValue('SELECT COUNT(*) FROM call_records'));
+        $rows = self::db()->query('SELECT id, buyer_id, counted, rate, total_bill, answered, missed, replacement FROM call_records ORDER BY id')->fetchAll();
+        $byId = array_column($rows, null, 'id');
+        foreach ([$a, $b, $c] as $rec) {
+            $this->assertSame($lower, (int) $byId[$rec['id']]['buyer_id']);
+        }
+        $this->assertEquals(36, $byId[$a['id']]['total_bill']);
+        $this->assertSame(2, (int) $byId[$a['id']]['replacement']);
+        $this->assertEquals(42, $byId[$b['id']]['total_bill']);
+        $this->assertEquals(50, $byId[$c['id']]['total_bill']);
+        $this->assertSame($other, (int) self::dbValue("SELECT buyer_id FROM call_records WHERE counted = 1"));
+
+        $buyers = $this->byCode($this->get('/buyers')['json']);
+        $this->assertSame(['TEST', 'OTHER'], array_keys($buyers));
+        $this->assertEquals(20, $buyers['TEST']['counted']);
+        $this->assertEquals(3, $buyers['TEST']['records']);
+    }
+
+    public function testMergeWithANewRateRepricesEveryMergedRecord(): void
+    {
+        $upper = self::seedBuyer('TEST', 9.0);
+        $lower = self::seedBuyer('test', 5.0);
+        self::seedBuyerRecord($upper, '2026-05-04', 4, 9.0);
+        self::seedBuyerRecord($lower, '2026-05-05', 10, 5.0);
+
+        $r = $this->put("/buyers/{$lower}", ['code' => 'TEST', 'name' => 'TEST', 'rate' => 6, 'merge' => true]);
+        $this->assertStatus(200, $r);
+        $this->assertEquals(84, self::dbValue('SELECT SUM(total_bill) FROM call_records WHERE buyer_id = ?', [$lower]));
+    }
+
+    public function testRenameResendingTheSameRateKeepsPerRecordRates(): void
+    {
+        $id  = self::seedBuyer('OLD', 5.0);
+        $rec = self::seedBuyerRecord($id, '2026-05-04', 10, 4.0);
+
+        $this->assertStatus(200, $this->put("/buyers/{$id}", ['code' => 'NEW', 'name' => 'NEW', 'rate' => 5]));
+        $this->assertEquals(4, self::dbValue('SELECT rate FROM call_records WHERE id = ?', [$rec['id']]));
+    }
+
     public function testDestroyRemovesBuyerAndCascadesItsRecords(): void
     {
         $id    = self::seedBuyer('GONE', 1.0);

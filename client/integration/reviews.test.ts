@@ -5,7 +5,7 @@ import {
   rowKeyOf, standingOf, toWire as annualToWire,
 } from '../src/lib/annualReview'
 import {
-  DEFAULT_SETTINGS, buildCandidates, fromWire, pickPerformers, rankCandidates, toWire, type CriterionId,
+  DEFAULT_SETTINGS, buildCandidates, fromWire, pickPerformers, rankCandidates, toWire, type CriterionId, type TickId,
 } from '../src/lib/incentive'
 import { asPercent } from '../src/lib/review'
 import { monthRange } from '../src/lib/staff'
@@ -115,19 +115,23 @@ describe('top performer', () => {
   it('answers an untouched month with the defaults and ticks as an object, never []', async () => {
     const s = await api.topPerformer('2026-08')
     expectShape(s, TopPerformerStateSpec)
-    expect(s).toEqual({ month: '2026-08-01', settings: { additional: ['goals'], min_performance: 80 }, ticks: {} })
+    expect(s).toEqual({ month: '2026-08-01', settings: { additional: ['goals'], min_performance: 80, low_performance: 40 }, ticks: {} })
     expect(fromWire(s)).toEqual({ settings: DEFAULT_SETTINGS, ticks: {} })
   })
 
   it('round-trips what toWire sends and fromWire reads back', async () => {
     const [ada, ben] = (await api.createStaff(['Ada', 'Ben'])).created
-    const ticks: Record<number, CriterionId[]> = { [ada.id]: ['documentation', 'written'], [ben.id]: [] }
-    const saved = await api.saveTopPerformer('2026-08', toWire({ additional: ['goals', 'learning'], minPerformance: 75 }, ticks))
+    const ticks: Record<number, TickId[]> = { [ada.id]: ['documentation', 'written'], [ben.id]: ['low'] }
+    const saved = await api.saveTopPerformer('2026-08', toWire({ additional: ['goals', 'learning'], minPerformance: 75, lowPerformance: 35 }, ticks))
     expectShape(saved, TopPerformerStateSpec)
-    expect(saved.ticks).toEqual({ [String(ada.id)]: ['documentation', 'written'] })
-    expect(fromWire(saved)).toEqual({ settings: { additional: ['goals', 'learning'], minPerformance: 75 }, ticks: { [ada.id]: ['documentation', 'written'] } })
+    expect(saved.ticks).toEqual({ [String(ada.id)]: ['documentation', 'written'], [String(ben.id)]: ['low'] })
+    expect(fromWire(saved)).toEqual({
+      settings: { additional: ['goals', 'learning'], minPerformance: 75, lowPerformance: 35 },
+      ticks: { [ada.id]: ['documentation', 'written'], [ben.id]: ['low'] },
+    })
     expect(sql('SELECT staff_id::int AS s, criterion FROM top_performer_ticks ORDER BY criterion'))
-      .toEqual([{ s: ada.id, criterion: 'documentation' }, { s: ada.id, criterion: 'written' }])
+      .toEqual([{ s: ada.id, criterion: 'documentation' }, { s: ben.id, criterion: 'low' }, { s: ada.id, criterion: 'written' }])
+    expect(sql('SELECT low_performance FROM top_performer_months')).toEqual([{ low_performance: 35 }])
 
     // Saving replaces the month's whole set.
     const cleared = await api.saveTopPerformer('2026-08', toWire(DEFAULT_SETTINGS, {}))

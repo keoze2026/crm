@@ -87,7 +87,7 @@ function judgeMonth(month: string, data: MonthData, reload: () => void): Perform
   const { top, low } = pickPerformers(data.rows)
   const byId = new Map<number, PerformerStatus>()
   for (const r of low) byId.set(r.candidate.member.id, 'low')
-  // Top wins any overlap, though the two can't both hold with a spread in play.
+  // pickPerformers never puts one person in both.
   for (const r of top) byId.set(r.candidate.member.id, 'top')
   // The attendance pages know people by the bot's user id, and a couple of places have
   // nothing but the printed name — both resolve through the roster.
@@ -228,8 +228,8 @@ const IconDown = ({ size = 10 }: { size?: number }) => (
 )
 
 /**
- * The badge itself: green with the incentive for the month's top performer, red for the
- * month's lowest. It renders nothing for everybody else, so it can be dropped beside any
+ * The badge itself: green with the incentive for the month's top performer, red for its
+ * Low performers. It renders nothing for everybody else, so it can be dropped beside any
  * name without a condition around it. The month is the enclosing PerformerScope's, or
  * the one passed.
  *
@@ -247,7 +247,7 @@ export function PerformerBadge({ staffId, userId, name, month, compact = false, 
   const top = status === 'top'
   const title = top
     ? `Top Performer of the Month — ${monthLabel} · $${incentive} incentive`
-    : `Lowest performer of the month — ${monthLabel}`
+    : `Low performer of the month — ${monthLabel}`
   const tone = top
     ? 'bg-emerald-100 text-emerald-700 ring-emerald-300'
     : 'bg-rose-100 text-rose-700 ring-rose-300'

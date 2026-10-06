@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { api } from '../api/client'
+import { saveBuyer } from '../lib/buyers'
 import { money, money2, num } from '../lib/format'
 import type { Buyer } from '../types'
 import { Input, cx } from './ui'
@@ -101,8 +101,9 @@ function BuyerRow({ index, buyer, onChanged }: { index: number; buyer: Buyer; on
     try {
       // Name doubles as the code, so keep them in sync. Total Leads Bought is never sent
       // — it always auto-derives from the Daily Sheet records for the selected range.
-      await api.updateBuyer(buyer.id, { code: code.trim(), name: code.trim(), rate: rateNum })
-      onChanged()
+      // Renaming onto an existing buyer's code offers to merge them (see lib/buyers).
+      if (await saveBuyer(buyer.id, buyer.code, { code: code.trim(), name: code.trim(), rate: rateNum })) onChanged()
+      else setCode(buyer.code)
     } catch (e) { alert((e as Error).message) } finally { saving.current = false }
   }
   const onRowBlur = () => setTimeout(() => {

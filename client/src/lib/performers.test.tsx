@@ -172,15 +172,15 @@ describe('PerformerProvider', () => {
 
   it('passes the saved settings and ticks through to the ranking', async () => {
     const saved: TopPerformerState = {
-      month: '2026-08-01', settings: { additional: ['learning'], min_performance: 70 }, ticks: { 1: ['documentation'] },
+      month: '2026-08-01', settings: { additional: ['learning'], min_performance: 70, low_performance: 30 }, ticks: { 1: ['documentation', 'low'] },
     }
     m.api.topPerformer.mockResolvedValue(saved)
     mountSettled(<PerformerProvider><Probe month="2026-08" intoRef={{ current: null }} /></PerformerProvider>)
     await flush()
     expect(m.rankCandidates).toHaveBeenCalledWith(
       expect.any(Array),
-      { additional: ['learning'], minPerformance: 70 },
-      { 1: ['documentation'] },
+      { additional: ['learning'], minPerformance: 70, lowPerformance: 30 },
+      { 1: ['documentation', 'low'] },
     )
   })
 
@@ -327,7 +327,7 @@ describe('PerformerBadge', () => {
   it('marks the lowest performer in red', async () => {
     const el = await badge({ name: 'cy low', className: 'ml-1' })
     expect(el?.textContent).toBe('Low performer')
-    expect(el?.getAttribute('aria-label')).toBe('Lowest performer of the month — August 2026')
+    expect(el?.getAttribute('aria-label')).toBe('Low performer of the month — August 2026')
     expect(el?.className).toContain('bg-rose-100')
     expect(el?.className).toContain('ml-1')
   })

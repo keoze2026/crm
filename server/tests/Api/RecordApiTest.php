@@ -67,6 +67,20 @@ final class RecordApiTest extends ApiTestCase
         $this->assertSame(1, (int) self::dbValue('SELECT COUNT(*) FROM buyers'));
     }
 
+    public function testStoreBuyerRecordByCodeInAnotherCaseReusesTheBuyer(): void
+    {
+        $bid = self::seedBuyer('TEST', 9.0);
+
+        $r = $this->post('/records', [
+            'record_type' => 'buyer', 'record_date' => '2026-05-04', 'buyer_code' => 'test', 'counted' => 2,
+        ]);
+        $this->assertStatus(201, $r);
+        $this->assertSame($bid, $r['json']['buyer_id']);
+        $this->assertSame('TEST', $r['json']['buyer_code']);
+        $this->assertEquals(9.0, $r['json']['rate']);
+        $this->assertSame(1, (int) self::dbValue('SELECT COUNT(*) FROM buyers'));
+    }
+
     public function testStoreCampaignRecordStandardizesCodeAndSeedsANewSource(): void
     {
         $existing = self::seedCampaign('C-03');

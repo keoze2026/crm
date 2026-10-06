@@ -800,7 +800,9 @@ export interface VendorLedger {
 export interface TopPerformerState {
   /** First of the month judged, YYYY-MM-DD. */
   month: string
-  settings: { additional: string[]; min_performance: number }
+  /** `low_performance` is the Low performer threshold; a month saved before it existed reads the default. */
+  settings: { additional: string[]; min_performance: number; low_performance?: number }
+  /** Staff id → criterion ids confirmed by hand, plus any Low mark ('low' / 'not-low'). */
   ticks: Record<string, string[]>
 }
 

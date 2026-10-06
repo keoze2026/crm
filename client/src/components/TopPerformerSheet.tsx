@@ -29,6 +29,7 @@ import {
   rankCandidates,
   scorePct,
   toWire,
+  withLowMark,
   type AttendanceDayLite,
   type Criterion,
   type CriterionId,
@@ -141,6 +142,49 @@ function StatusPill({ row }: { row: RankedRow }) {
       <span className={cx('h-1.5 w-1.5 rounded-full', left <= 2 ? 'bg-brand' : 'bg-slate-400')} />
       {left} to go
     </span>
+  )
+}
+
+/**
+ * The Low badge as a switch. It shows what the rules say — performance under the month's
+ * threshold, or the month's lowest score — until a manager flips it: a solid red "Low" is
+ * their mark, a navy "Not low" their clearing, the same navy-means-yours the verdict pills
+ * use. Flipping it back to what the rules say hands it back to them.
+ */
+function LowToggle({ row, byRules, threshold, name, onToggle }: {
+  row: RankedRow
+  byRules: boolean
+  threshold: number
+  name: string
+  onToggle: () => void
+}) {
+  const low = row.lowMark ?? byRules
+  const manual = row.lowMark !== null
+  const pct = row.candidate.performance?.percentage
+  const why = row.underLow ? `performance ${pct}% is under ${threshold}%` : byRules ? 'the lowest score of the month' : null
+  const title = row.lowMark === true ? `Marked Low by you${why ? ` (the rules agree: ${why})` : ''} — tap to clear`
+    : row.lowMark === false ? `Cleared by you — the rules say Low: ${why} — tap to mark Low again`
+    : low ? `Low: ${why} — tap to clear`
+    : `Not Low — tap to mark ${name} Low whatever the percentage`
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={low}
+      aria-label={`${name}: Low performer`}
+      title={title}
+      onClick={onToggle}
+      className={cx(
+        'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap transition-colors',
+        low && manual ? 'border-rose-600 bg-rose-600 text-white'
+          : low ? 'border-transparent bg-rose-50 text-rose-700 hover:border-rose-400'
+          : manual ? 'border-brand bg-white text-brand'
+          : 'border-slate-200 bg-white text-slate-400 hover:border-rose-400 hover:text-rose-600',
+      )}
+    >
+      <IconDownArrow size={10} />
+      {low ? 'Low' : manual ? 'Not low' : 'Mark low'}
+    </button>
   )
 }
 
@@ -334,12 +378,14 @@ export interface EndPerson {
  * half-yearly winner is presented exactly like a monthly one — `periodLabel` is the only
  * thing that differs ("August 2026" against "October 2025 – September 2026").
  */
-export function PerformerEndCard({ end, people, title, empty, periodLabel }: {
+export function PerformerEndCard({ end, people, title, empty, periodLabel, tied = true }: {
   end: 'top' | 'low'
   people: EndPerson[]
   title: string
   empty: string
   periodLabel: string
+  /** Several names are a tie at one score (the default), or simply a list. */
+  tied?: boolean
 }) {
   const any = people.length > 0
   const t = ENDS[end]
@@ -355,7 +401,7 @@ export function PerformerEndCard({ end, people, title, empty, periodLabel }: {
         </span>
         <div className="min-w-0">
           <div className={cx('text-[10px] font-bold uppercase tracking-wider', any ? t.kicker : 'text-slate-400')}>
-            {title}{people.length > 1 ? 's · tied' : ''} · {periodLabel}
+            {title}{people.length > 1 ? (tied ? 's · tied' : 's') : ''} · {periodLabel}
           </div>
           {any ? (
             <ul className="mt-1.5 flex flex-wrap gap-1.5">
@@ -395,18 +441,19 @@ export function TopPerformerHeadline({ rows, monthLabel }: { rows: RankedRow[]; 
 }
 
 /**
- * The other end: whoever scores lowest. It stays empty unless naming somebody says
- * something — a month where everybody scored the same names nobody (see pickPerformers).
+ * The other end: everyone wearing the Low badge — under the month's performance threshold,
+ * the lowest scorer, or marked by a manager (see pickPerformers) — each with their score.
  */
 export function LowPerformerHeadline({ rows, monthLabel }: { rows: RankedRow[]; monthLabel: string }) {
-  const { low, lowPct } = pickPerformers(rows)
+  const { low } = pickPerformers(rows)
   return (
     <PerformerEndCard
       end="low"
-      people={low.map((r) => asEndPerson(r, lowPct))}
-      title="Lowest performer"
+      people={low.map((r) => asEndPerson(r, scorePct(r)))}
+      title="Low performer"
       empty={rows.length > 1 ? 'No one behind the rest' : 'Not enough of a roster to say'}
       periodLabel={monthLabel}
+      tied={false}
     />
   )
 }
@@ -545,6 +592,15 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
     })
   }
 
+  // Who the rules alone badge Low, so a flip can tell a mark from handing it back.
+  const lowByRules = useMemo(() => new Set(pickPerformers(rows).lowByRules.map((r) => r.candidate.member.id)), [rows])
+  const flipLow = (r: RankedRow) => {
+    const id = r.candidate.member.id
+    const byRules = lowByRules.has(id)
+    const low = r.lowMark ?? byRules
+    setTicks((t) => ({ ...t, [id]: withLowMark(t[id] ?? [], !low, byRules) }))
+  }
+
   /** Header chip: credit one manual criterion to everyone shown — or, if they all have it, take it back. */
   const tickAll = (id: CriterionId) => {
     const manual = criterion(id).source === 'manual'
@@ -563,12 +619,27 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
   const additional = CRITERIA.filter((c) => c.group === 'additional')
 
   // Column template shared by the header and every row.
-  const cols = 'grid-cols-[2.75rem_minmax(14.5rem,1.2fr)_minmax(13rem,1.2fr)_minmax(16rem,1.8fr)_8rem_6.5rem]'
+  const cols = 'grid-cols-[2.75rem_minmax(14.5rem,1.2fr)_minmax(13rem,1.2fr)_minmax(16rem,1.8fr)_8rem_6.5rem_5.5rem]'
 
   return (
     <div className="space-y-4">
       {/* The month's two answers, before the tiles that count the rest of the roster. */}
       <PerformerHeadlines rows={rows} monthLabel={monthLabel} />
+
+      {/* The Low badge's bar, set per month like the Goal Achievement target below. */}
+      <div className="flex flex-wrap items-center justify-end gap-1.5 text-[11px] text-slate-500">
+        <span>Low performer under:</span>
+        <input
+          type="number"
+          min={0}
+          max={100}
+          aria-label="Low performer threshold"
+          value={settings.lowPerformance}
+          onChange={(e) => setSettings((s) => ({ ...s, lowPerformance: Math.max(0, Math.min(100, Number(e.target.value) || 0)) }))}
+          className="w-14 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-center text-[11px] tabular-nums focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+        />
+        <span>% on the Review page's Performance tab. Mark or clear anyone by hand in the Low column.</span>
+      </div>
 
       {/* Headline tiles, like the inspiration's stat cards. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -656,7 +727,7 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
         )}
 
         <div className="overflow-x-auto">
-          <div className="min-w-272">
+          <div className="min-w-292">
             {/* Header */}
             <div className={cx('grid items-center gap-3 px-4 py-2 text-[11px] font-medium text-slate-500', cols)}>
               <span>#</span>
@@ -699,6 +770,7 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
               </span>
               <span>Score</span>
               <span>Status</span>
+              <span title={`Under ${settings.lowPerformance}% performance, or the month's lowest score — tap to mark or clear by hand`}>Low</span>
             </div>
 
             {/* Rows */}
@@ -757,6 +829,10 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
                       </span>
                       {/* Status */}
                       <span><StatusPill row={r} /></span>
+                      {/* Low badge, markable by hand */}
+                      <span>
+                        <LowToggle row={r} byRules={lowByRules.has(m.id)} threshold={settings.lowPerformance} name={m.name} onToggle={() => flipLow(r)} />
+                      </span>
                     </li>
                   )
                 })}

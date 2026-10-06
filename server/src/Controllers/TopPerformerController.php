@@ -16,8 +16,9 @@ use PDOException;
  * The tab judges twelve criteria for a month. Four are read from data the CRM already holds
  * (reviews, attendance, leaves) and are never stored here; the other eight are confirmed by
  * a manager per person, and it is THOSE confirmations — plus the month's settings (which
- * optional criteria apply, the performance % target) — that this endpoint keeps, so every
- * manager sees the same ticks from any browser.
+ * optional criteria apply, the performance % target, the performance % under which someone
+ * is a Low performer) — that this endpoint keeps, so every manager sees the same ticks from
+ * any browser. A manager's own Low marks travel with the ticks, as the ids in MARKS.
  *
  *   GET /top-performer?month=YYYY-MM   the month's settings and ticks
  *   PUT /top-performer?month=YYYY-MM   replace them (the whole month's state, in one go —
@@ -40,9 +41,15 @@ final class TopPerformerController
     ];
     /** The "if applicable" criteria — the only ones a month can switch on or off. */
     private const ADDITIONAL = ['learning', 'goals', 'collaboration', 'innovation', 'feedback'];
+    /**
+     * A manager's word on the Low badge, kept among the person's ticks: 'low' marks them a
+     * Low performer whatever their percentage, 'not-low' clears them of it.
+     */
+    private const MARKS = ['low', 'not-low'];
 
     private const DEFAULT_ADDITIONAL = ['goals'];
     private const DEFAULT_MIN_PERFORMANCE = 80;
+    private const DEFAULT_LOW_PERFORMANCE = 40;
 
     /** The longest window /range will answer — twice the longest roll-up the page offers. */
     private const MAX_RANGE_MONTHS = 24;
@@ -79,7 +86,7 @@ final class TopPerformerController
         // Two queries for the whole window rather than two per month.
         $pdo  = Database::connection();
         $stmt = $pdo->prepare(
-            'SELECT to_char(month, \'YYYY-MM-DD\') AS month, additional, min_performance
+            'SELECT *, to_char(month, \'YYYY-MM-DD\') AS month
                FROM top_performer_months WHERE month BETWEEN :from AND :to'
         );
         $stmt->execute([':from' => $from, ':to' => $to]);
@@ -136,17 +143,27 @@ final class TopPerformerController
                 $ticks    = $this->ticks($merged['ticks'] ?? null);
             }
 
-            $stmt = $pdo->prepare(
-                'INSERT INTO top_performer_months (month, additional, min_performance, updated_at)
-                 VALUES (:month, :additional, :min, now())
-                 ON CONFLICT (month) DO UPDATE
-                    SET additional = EXCLUDED.additional, min_performance = EXCLUDED.min_performance, updated_at = now()'
-            );
-            $stmt->execute([
+            $params = [
                 ':month'      => $month,
                 ':additional' => json_encode($settings['additional']),
                 ':min'        => $settings['min_performance'],
-            ]);
+            ];
+            if ($this->hasLowColumn()) {
+                $pdo->prepare(
+                    'INSERT INTO top_performer_months (month, additional, min_performance, low_performance, updated_at)
+                     VALUES (:month, :additional, :min, :low, now())
+                     ON CONFLICT (month) DO UPDATE
+                        SET additional = EXCLUDED.additional, min_performance = EXCLUDED.min_performance,
+                            low_performance = EXCLUDED.low_performance, updated_at = now()'
+                )->execute($params + [':low' => $settings['low_performance']]);
+            } else {
+                $pdo->prepare(
+                    'INSERT INTO top_performer_months (month, additional, min_performance, updated_at)
+                     VALUES (:month, :additional, :min, now())
+                     ON CONFLICT (month) DO UPDATE
+                        SET additional = EXCLUDED.additional, min_performance = EXCLUDED.min_performance, updated_at = now()'
+                )->execute($params);
+            }
 
             // The client sends the month's full set of ticks, so the stored set becomes exactly that.
             $pdo->prepare('DELETE FROM top_performer_ticks WHERE month = :month')->execute([':month' => $month]);
@@ -178,11 +195,11 @@ final class TopPerformerController
 
     // ─── Internals ─────────────────────────────────────────────────────────────
 
-    /** @return array{month:string,settings:array{additional:string[],min_performance:int},ticks:array<string,string[]>} */
+    /** @return array{month:string,settings:array{additional:string[],min_performance:int,low_performance:int},ticks:array<string,string[]>} */
     private function state(string $month): array
     {
         $pdo  = Database::connection();
-        $stmt = $pdo->prepare('SELECT additional, min_performance FROM top_performer_months WHERE month = :month');
+        $stmt = $pdo->prepare('SELECT * FROM top_performer_months WHERE month = :month');
         $stmt->execute([':month' => $month]);
         $row = $stmt->fetch();
 
@@ -203,17 +220,34 @@ final class TopPerformerController
         ];
     }
 
-    /** @return array{additional:string[],min_performance:int} */
+    /** @return array{additional:string[],min_performance:int,low_performance:int} */
     private function defaultSettings(): array
     {
-        return ['additional' => self::DEFAULT_ADDITIONAL, 'min_performance' => self::DEFAULT_MIN_PERFORMANCE];
+        return [
+            'additional'      => self::DEFAULT_ADDITIONAL,
+            'min_performance' => self::DEFAULT_MIN_PERFORMANCE,
+            'low_performance' => self::DEFAULT_LOW_PERFORMANCE,
+        ];
+    }
+
+    /**
+     * Whether migration 034 (the Low performer threshold) is applied. Until it is, a month
+     * reads the default threshold and saves without it, rather than failing outright.
+     */
+    private function hasLowColumn(): bool
+    {
+        static $has = null;
+        return $has ??= (bool) Database::connection()->query(
+            "SELECT 1 FROM information_schema.columns
+              WHERE table_name = 'top_performer_months' AND column_name = 'low_performance'"
+        )->fetchColumn();
     }
 
     /**
      * A `top_performer_months` row as the API shapes it. Unknown criterion ids are left for
      * the client to drop (fromWire), so a month saved by a newer build still reads.
      *
-     * @return array{additional:string[],min_performance:int}
+     * @return array{additional:string[],min_performance:int,low_performance:int}
      */
     private function readSettings(array $row): array
     {
@@ -223,14 +257,15 @@ final class TopPerformerController
                 ? array_values(array_filter($decoded, 'is_string'))
                 : self::DEFAULT_ADDITIONAL,
             'min_performance' => (int) $row['min_performance'],
+            'low_performance' => (int) ($row['low_performance'] ?? self::DEFAULT_LOW_PERFORMANCE),
         ];
     }
 
-    /** @return array{additional:string[],min_performance:int} */
+    /** @return array{additional:string[],min_performance:int,low_performance:int} */
     private function settings(mixed $value): array
     {
         if (!is_array($value)) {
-            return ['additional' => self::DEFAULT_ADDITIONAL, 'min_performance' => self::DEFAULT_MIN_PERFORMANCE];
+            return $this->defaultSettings();
         }
         $additional = [];
         foreach (is_array($value['additional'] ?? null) ? $value['additional'] : [] as $id) {
@@ -243,10 +278,14 @@ final class TopPerformerController
         if (!is_numeric($min) || (int) $min < 0 || (int) $min > 100) {
             Http::error('settings.min_performance must be a whole number from 0 to 100', 422);
         }
-        return ['additional' => array_keys($additional), 'min_performance' => (int) $min];
+        $low = $value['low_performance'] ?? self::DEFAULT_LOW_PERFORMANCE;
+        if (!is_numeric($low) || (int) $low < 0 || (int) $low > 100) {
+            Http::error('settings.low_performance must be a whole number from 0 to 100', 422);
+        }
+        return ['additional' => array_keys($additional), 'min_performance' => (int) $min, 'low_performance' => (int) $low];
     }
 
-    /** @return array<int,string[]> staff id → criterion ids */
+    /** @return array<int,string[]> staff id → criterion ids, and Low marks (see MARKS) */
     private function ticks(mixed $value): array
     {
         if ($value === null) {
@@ -262,7 +301,7 @@ final class TopPerformerController
             }
             $clean = [];
             foreach ($criteria as $criterion) {
-                if (!is_string($criterion) || !in_array($criterion, self::CRITERIA, true)) {
+                if (!is_string($criterion) || !in_array($criterion, [...self::CRITERIA, ...self::MARKS], true)) {
                     Http::error("Unknown criterion in ticks", 422);
                 }
                 $clean[$criterion] = true;

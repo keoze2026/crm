@@ -223,6 +223,15 @@ final class RecordController
         if ($existing = $find->fetchColumn()) {
             return (int) $existing;
         }
+        // A buyer code names one buyer whatever its case, so typing "test" on the Daily
+        // Sheet lands on the existing "TEST" instead of splitting off a new buyer.
+        if ($table === 'buyers') {
+            $find = $pdo->prepare('SELECT id FROM buyers WHERE LOWER(code) = LOWER(:code) ORDER BY id LIMIT 1');
+            $find->execute([':code' => $code]);
+            if ($existing = $find->fetchColumn()) {
+                return (int) $existing;
+            }
+        }
         $ins = $pdo->prepare("INSERT INTO {$table} (code) VALUES (:code) RETURNING id");
         $ins->execute([':code' => $code]);
         return (int) $ins->fetchColumn();

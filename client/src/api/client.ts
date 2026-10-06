@@ -158,7 +158,8 @@ export const api = {
     request<Buyer[]>(`/buyers${qs({ search, ...range })}`),
   createBuyer: (data: Partial<Buyer>) =>
     request<Buyer>('/buyers', { method: 'POST', body: JSON.stringify(data) }),
-  updateBuyer: (id: number, data: Partial<Buyer>) =>
+  /** `merge` folds a buyer already holding the new code into this one (see lib/buyers). */
+  updateBuyer: (id: number, data: Partial<Buyer> & { merge?: boolean }) =>
     request<Buyer>(`/buyers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteBuyer: (id: number) =>
     request<{ deleted: boolean }>(`/buyers/${id}`, { method: 'DELETE' }),

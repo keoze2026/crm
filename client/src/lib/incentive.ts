@@ -59,21 +59,33 @@ export const criterion = (id: CriterionId): Criterion => CRITERIA.find((c) => c.
 
 // ─── Settings & ticks ─────────────────────────────────────────────────────────
 
-/** What the manager has switched on for the month, and the bar for Goal Achievement. */
+/** What the manager has switched on for the month, and the bars for Goal Achievement and Low. */
 export interface IncentiveSettings {
   /** Which of criteria 8–12 are in play. 1–7 always are. */
   additional: CriterionId[]
   /** Performance % that counts as meeting Goal Achievement when the rating alone doesn't. */
   minPerformance: number
+  /** Performance % under which a reviewed person wears the Low badge (see pickPerformers). */
+  lowPerformance: number
 }
 
 export const DEFAULT_SETTINGS: IncentiveSettings = {
   additional: ['goals'],
   minPerformance: 80,
+  lowPerformance: 40,
 }
 
-/** Manual ticks: which manual criteria each person (by staff id) has been credited with. */
-export type ManualTicks = Record<number, CriterionId[]>
+/**
+ * A manager's word on the Low badge, kept among the person's ticks: 'low' marks them a Low
+ * performer whatever their percentage, 'not-low' clears them of it.
+ */
+export type LowMark = 'low' | 'not-low'
+
+/** What a person's ticks hold: the criteria confirmed by hand, and at most one Low mark. */
+export type TickId = CriterionId | LowMark
+
+/** Manual ticks: which criteria each person (by staff id) has been credited with, and any Low mark. */
+export type ManualTicks = Record<number, TickId[]>
 
 /** The criteria in play for these settings, in the client's order. */
 export function activeCriteria(settings: IncentiveSettings): Criterion[] {
@@ -192,7 +204,7 @@ const BAD_BEHAVIOUR = /low performer/i
  * yet typed up. Removing the tick hands the verdict back to the data. The manual criteria
  * are ticks and nothing else.
  */
-export function judge(c: Candidate, id: CriterionId, settings: IncentiveSettings, ticks: CriterionId[]): Verdict {
+export function judge(c: Candidate, id: CriterionId, settings: IncentiveSettings, ticks: TickId[]): Verdict {
   const auto = judgeFromData(c, id, settings)
   if (auto === null) {
     return { met: ticks.includes(id), note: ticks.includes(id) ? 'Confirmed by you' : 'Not confirmed yet' }
@@ -253,6 +265,10 @@ export interface RankedRow {
   /** Every criterion in play is met — the incentive mark. */
   allMet: boolean
   rank: number
+  /** Their performance % on the Review page is under the month's Low performer threshold. */
+  underLow: boolean
+  /** A manager's Low mark: true = marked Low, false = cleared of it, null = left to the rules. */
+  lowMark: boolean | null
 }
 
 /**
@@ -266,7 +282,12 @@ export function rankCandidates(candidates: Candidate[], settings: IncentiveSetti
     const own = ticks[candidate.member.id] ?? []
     const verdicts = Object.fromEntries(CRITERIA.map((c) => [c.id, judge(candidate, c.id, settings, own)])) as Record<CriterionId, Verdict>
     const met = active.filter((c) => verdicts[c.id].met).length
-    return { candidate, verdicts, met, total: active.length, allMet: met === active.length, rank: 0 }
+    const pct = candidate.performance?.percentage
+    return {
+      candidate, verdicts, met, total: active.length, allMet: met === active.length, rank: 0,
+      underLow: pct != null && pct < settings.lowPerformance,
+      lowMark: own.includes('low') ? true : own.includes('not-low') ? false : null,
+    }
   })
   const onTimeShare = (c: Candidate) => (c.logins.judged ? c.logins.onTime / c.logins.judged : 0)
   rows.sort((a, b) =>
@@ -289,19 +310,20 @@ export function rankCandidates(candidates: Candidate[], settings: IncentiveSetti
 // dropping anything the client no longer recognises.
 
 const isAdditional = (id: string): id is CriterionId => CRITERIA.some((c) => c.id === id && c.group === 'additional')
-const isCriterion = (id: string): id is CriterionId => CRITERIA.some((c) => c.id === id)
+const isTickId = (id: string): id is TickId => id === 'low' || id === 'not-low' || CRITERIA.some((c) => c.id === id)
 
 export function fromWire(state: TopPerformerState | null | undefined): { settings: IncentiveSettings; ticks: ManualTicks } {
   if (!state) return { settings: DEFAULT_SETTINGS, ticks: {} }
   const ticks: ManualTicks = {}
   for (const [staffId, ids] of Object.entries(state.ticks ?? {})) {
-    const own = (ids ?? []).filter(isCriterion)
+    const own = (ids ?? []).filter(isTickId)
     if (own.length) ticks[Number(staffId)] = own
   }
   return {
     settings: {
       additional: (state.settings?.additional ?? DEFAULT_SETTINGS.additional).filter(isAdditional),
       minPerformance: typeof state.settings?.min_performance === 'number' ? state.settings.min_performance : DEFAULT_SETTINGS.minPerformance,
+      lowPerformance: typeof state.settings?.low_performance === 'number' ? state.settings.low_performance : DEFAULT_SETTINGS.lowPerformance,
     },
     ticks,
   }
@@ -310,7 +332,20 @@ export function fromWire(state: TopPerformerState | null | undefined): { setting
 export function toWire(settings: IncentiveSettings, ticks: ManualTicks): Pick<TopPerformerState, 'settings' | 'ticks'> {
   const out: Record<string, string[]> = {}
   for (const [staffId, ids] of Object.entries(ticks)) if (ids.length) out[staffId] = ids
-  return { settings: { additional: settings.additional, min_performance: settings.minPerformance }, ticks: out }
+  return {
+    settings: { additional: settings.additional, min_performance: settings.minPerformance, low_performance: settings.lowPerformance },
+    ticks: out,
+  }
+}
+
+/**
+ * Someone's ticks after a manager sets their Low badge to `low`. A mark is kept only while
+ * it disagrees with what the rules say (`byRules`), so flipping the badge back to the rules'
+ * answer removes the mark and hands the badge back to them.
+ */
+export function withLowMark(own: TickId[], low: boolean, byRules: boolean): TickId[] {
+  const rest = own.filter((x) => x !== 'low' && x !== 'not-low')
+  return low === byRules ? rest : [...rest, low ? 'low' : 'not-low']
 }
 
 // ─── Who is top, who is bottom ────────────────────────────────────────────────
@@ -330,35 +365,45 @@ export const scorePct = (r: RankedRow) => Math.round((r.met / Math.max(1, r.tota
 export interface PerformerPicks {
   /** Everyone tied at the best score, provided it reaches TOP_PERFORMER_PCT. */
   top: RankedRow[]
-  /** Everyone tied at the worst score — empty unless there is a real spread (see below). */
+  /** Everyone wearing the Low badge — the rules' answer, or a manager's mark over it (see below). */
   low: RankedRow[]
-  /** Everyone at or above TOP_PERFORMER_PCT, the Top Performers list itself. */
+  /** Who the rules alone would badge Low, before any manager's mark. */
+  lowByRules: RankedRow[]
+  /** Everyone at or above TOP_PERFORMER_PCT and not Low, the Top Performers list itself. */
   listed: RankedRow[]
   topPct: number
+  /** The month's worst score. */
   lowPct: number
 }
 
 /**
  * The month's ends.
  *
- * Top is the highest scorer (or the people tied with them) once they clear the 80% bar —
- * the same rule the headline has always used. Bottom is the lowest scorer, zero included —
- * a reviewed person at 0% is genuinely last, not "unmarked", because only reviewed people
- * are in `rows` to begin with (see buildCandidates; that is what keeps the not-yet-reviewed
- * out of this). It is only named when naming it says something: at least two people to
- * compare, somebody who scored better, and a score under the bar. A month where everyone
- * scored the same names nobody, rather than pinning a red badge on whoever happens to sort
- * last.
+ * Low is decided first. By the rules, a person is Low when their performance % on the
+ * Review page is under the month's threshold (IncentiveSettings.lowPerformance), or when
+ * they are the month's lowest scorer, zero included — a reviewed person at 0% is genuinely
+ * last, not "unmarked", because only reviewed people are in `rows` to begin with (see
+ * buildCandidates; that is what keeps the not-yet-reviewed out of this). The lowest scorer
+ * is only named when naming them says something: at least two people to compare, somebody
+ * who scored better, and a score under the bar — a month where everyone scored the same
+ * doesn't pin a red badge on whoever happens to sort last. A manager's mark beats the
+ * rules either way (RankedRow.lowMark): marked Low whatever the percentage, or cleared of it.
+ *
+ * Top is then the highest scorer among everybody else (or the people tied with them), once
+ * they clear the 80% bar — so nobody wears both badges.
  */
 export function pickPerformers(rows: RankedRow[]): PerformerPicks {
-  const listed = rows.filter((r) => scorePct(r) >= TOP_PERFORMER_PCT)
-  const topPct = listed.length ? Math.max(...listed.map(scorePct)) : 0
   const lowPct = rows.length ? Math.min(...rows.map(scorePct)) : 0
   const best = rows.length ? Math.max(...rows.map(scorePct)) : 0
   const spread = rows.length > 1 && lowPct < best && lowPct < TOP_PERFORMER_PCT
+  const lowByRules = rows.filter((r) => r.underLow || (spread && scorePct(r) === lowPct))
+  const low = rows.filter((r) => r.lowMark ?? lowByRules.includes(r))
+  const listed = rows.filter((r) => !low.includes(r) && scorePct(r) >= TOP_PERFORMER_PCT)
+  const topPct = listed.length ? Math.max(...listed.map(scorePct)) : 0
   return {
     top: listed.filter((r) => scorePct(r) === topPct),
-    low: spread ? rows.filter((r) => scorePct(r) === lowPct) : [],
+    low,
+    lowByRules,
     listed,
     topPct,
     lowPct,

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { api } from '../api/client'
 import { autoReplacement, replacementIsManual, standardizeCampaignCode } from '../lib/bundle'
+import { saveBuyer } from '../lib/buyers'
 import { money2, num } from '../lib/format'
 import type { CallRecord, Campaign, Destination, RecordType } from '../types'
 import { isEnterSubmit } from './sheet'
@@ -214,6 +215,9 @@ function ExistingRow({ record, isBuyer, navy, onChanged, campaign }: {
   const [rate,     setRate]     = useServerDraft(String(record.rate))
   // Camp code is campaign-level (cost side); editing it renames the campaign.
   const [code,     setCode]     = useServerDraft(campaign?.code ?? record.campaign_code ?? '')
+  // Destination is the buyer itself (revenue side); editing it renames the buyer, so
+  // every record of that buyer, on every date, follows.
+  const [buyerCode, setBuyerCode] = useServerDraft(record.buyer_code ?? '')
   const [busy,     setBusy]     = useState(false)
   const rowRef   = useRef<HTMLTableRowElement>(null)
   const saving   = useRef(false)
@@ -269,8 +273,25 @@ function ExistingRow({ record, isBuyer, navy, onChanged, campaign }: {
       onChanged()
     } catch (e) { alert((e as Error).message) }
   }
+  // Renaming onto a destination that already exists (any letter case) offers to merge
+  // the two; declining puts the old code back. Name doubles as the code, as on the
+  // Monthly Sheet.
+  const saveBuyerCode = async () => {
+    if (record.buyer_id == null) return
+    const stored = record.buyer_code ?? ''
+    const raw = buyerCode.trim()
+    if (raw === stored) return
+    if (raw === '') { setBuyerCode(stored); return }
+    try {
+      if (await saveBuyer(record.buyer_id, stored, { code: raw, name: raw })) onChanged()
+      else setBuyerCode(stored)
+    } catch (e) { alert((e as Error).message) }
+  }
   const onRowBlur = () => setTimeout(() => {
-    if (rowRef.current && !rowRef.current.contains(document.activeElement)) { save(); saveCode() }
+    if (rowRef.current && !rowRef.current.contains(document.activeElement)) {
+      save()
+      if (isBuyer) saveBuyerCode(); else saveCode()
+    }
   }, 0)
   const del = async () => {
     if (!confirm('Delete this record?')) return
@@ -289,7 +310,11 @@ function ExistingRow({ record, isBuyer, navy, onChanged, campaign }: {
   return (
     <tr ref={rowRef} onBlur={onRowBlur} className={rowCls(navy)}>
       {isBuyer ? (
-        <td className={cx(cellCls, 'text-center font-medium text-slate-800')}>{record.buyer_code ?? '—'}</td>
+        <td className={cellCls}>
+          {record.buyer_id != null
+            ? <Input value={buyerCode} onChange={(e) => setBuyerCode(e.target.value)} />
+            : <span className="font-medium text-slate-800">{record.buyer_code ?? '—'}</span>}
+        </td>
       ) : (
         <td className={cellCls}>
           {campaign
