@@ -10,7 +10,7 @@ export interface PageDef {
 /**
  * Access-controlled pages, in the order the admin ticks them in the Users editor
  * (dashboard, buyers, campaigns, vendors, portal expenses, queues, review, staff,
- * attendance, users, logs, complete report).
+ * attendance, incentives, users, logs, complete report).
  */
 export const PAGES: PageDef[] = [
   { key: 'dashboard', label: 'Dashboard', path: '/' },
@@ -22,13 +22,14 @@ export const PAGES: PageDef[] = [
   { key: 'reviews', label: 'Review', path: '/review' },
   { key: 'staff', label: 'Staff Management', path: '/staff' },
   { key: 'attendance', label: 'Attendance', path: '/attendance' },
+  { key: 'incentives', label: 'Monthly Incentives', path: '/incentives' },
   { key: 'users', label: 'Users', path: '/users' },
   { key: 'logs', label: 'System Logs', path: '/system-logs' },
   { key: 'complete-report', label: 'Complete Report', path: '/complete-report' },
 ]
 
 /** Pages a non-admin user sees when their permissions have never been customised. */
-export const DEFAULT_USER_PAGES = ['dashboard', 'buyers', 'campaigns', 'vendors', 'portal-expenses', 'queues', 'reviews', 'staff', 'attendance', 'complete-report']
+export const DEFAULT_USER_PAGES = ['dashboard', 'buyers', 'campaigns', 'vendors', 'portal-expenses', 'queues', 'reviews', 'staff', 'attendance', 'incentives', 'complete-report']
 
 /** Pages that only make sense while auth is enabled — hidden entirely when AUTH_ENABLED=false. */
 export const AUTH_ONLY_PAGES = ['users', 'logs']

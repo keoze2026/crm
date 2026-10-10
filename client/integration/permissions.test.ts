@@ -24,8 +24,8 @@ interface Probe {
 
 const PROBES: Probe[] = [
   // Staff Management's roster is shared: Queues, Review, Attendance and the Users page's
-  // "pick from the roster" all read it.
-  { name: 'GET /staff', call: () => api.staff(), required: ['staff', 'queues', 'attendance', 'users'], optional: ['reviews'] },
+  // "pick from the roster" and the Incentives page's staff picker all read it.
+  { name: 'GET /staff', call: () => api.staff(), required: ['staff', 'queues', 'attendance', 'users', 'incentives'], optional: ['reviews'] },
   { name: 'GET /departments', call: () => api.departments(), required: ['staff'] },
   { name: 'GET /staff-attendance', call: () => api.staffAttendance({ from: '2026-08-01', to: '2026-08-31' }), required: ['staff', 'attendance'], optional: ['reviews'] },
   { name: 'GET /staff-leaves', call: () => api.staffLeaves({ from: '2026-08-01', to: '2026-08-31' }), required: ['staff'], optional: ['reviews'] },
@@ -55,13 +55,14 @@ const PROBES: Probe[] = [
   { name: 'GET /analytics/complete-report', call: () => api.completeReport(), required: ['complete-report'] },
   { name: 'GET /vendors', call: () => api.vendors(), required: ['vendors'] },
   { name: 'GET /portal-expenses', call: () => api.portalExpenses('2026-08'), required: ['portal-expenses'] },
+  { name: 'GET /incentives', call: () => api.incentives('2026-08'), required: ['incentives'] },
   { name: 'GET /buyers', call: () => api.buyers(), required: ['buyers'], always: true },
   { name: 'GET /campaigns', call: () => api.campaigns(), required: ['campaigns'], always: true },
   { name: 'GET /records', call: () => api.records({}), required: [], always: true },
 ]
 
 /** The server's gated first path segments (AuthMiddleware::GATED_SEGMENTS). */
-const GATED = /^GET \/(audit-logs|admin|queues|queue-codes|review-departments|review-entries|top-performer|annual-reviews|staff|departments|staff-attendance|staff-leaves|staff-salaries|staff-salary-holds)(\/|$)/
+const GATED = /^GET \/(audit-logs|admin|queues|queue-codes|review-departments|review-entries|top-performer|annual-reviews|staff|departments|staff-attendance|staff-leaves|staff-salaries|staff-salary-holds|incentives)(\/|$)/
 
 let server: Server
 beforeEach(() => {

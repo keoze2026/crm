@@ -18,6 +18,7 @@ import Review from './pages/Review'
 import StaffPage from './pages/Staff'
 import CompleteReportPage from './pages/CompleteReport'
 import Attendance from './pages/Attendance'
+import Incentives from './pages/Incentives'
 import Login from './pages/Login'
 import Enroll from './pages/Enroll'
 import SystemLogs from './pages/SystemLogs'
@@ -48,6 +49,7 @@ const router = createBrowserRouter([
           { path: 'staff', element: <RequirePage page="staff"><StaffPage /></RequirePage> },
           { path: 'complete-report', element: <RequirePage page="complete-report"><CompleteReportPage /></RequirePage> },
           { path: 'attendance', element: <RequirePage page="attendance"><Attendance /></RequirePage> },
+          { path: 'incentives', element: <RequirePage page="incentives"><Incentives /></RequirePage> },
           { path: 'users', element: <RequirePage page="users"><Users /></RequirePage> },
           { path: 'system-logs', element: <RequirePage page="logs"><SystemLogs /></RequirePage> },
         ],

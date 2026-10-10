@@ -49,6 +49,7 @@ final class Audit
         'review-entries'     => 'review-entry',
         'top-performer'      => 'top-performer',
         'annual-reviews'     => 'annual-review',
+        'incentives'         => 'incentive',
     ];
 
     /** @var array{method:string,path:string,body:array<string,mixed>}|null */

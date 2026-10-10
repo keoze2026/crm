@@ -69,6 +69,7 @@ final class AuthMiddleware
         'vendor-payments'    => ['vendors'],
         'portal-expenses'    => ['portal-expenses'],
         'attendance'         => ['attendance'],
+        'incentives'         => ['incentives'],
     ];
 
     /**
@@ -77,12 +78,13 @@ final class AuthMiddleware
      *
      *  - The Staff page's overview previews the month's Top Performer from the review rows.
      *  - The Users page's "pick from the roster" list reads the staff roster.
+     *  - The Incentives page picks the people for each incentive from the roster.
      *
      * @var array<string, array<int, string>>
      */
     private const READ_GRANTS = [
         'review-entries' => ['staff'],
-        'staff'          => ['users'],
+        'staff'          => ['users', 'incentives'],
     ];
 
     public static function guard(string $method, string $path): void

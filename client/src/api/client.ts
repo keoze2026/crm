@@ -36,6 +36,8 @@ import type {
   StaffLeave,
   StaffSalary,
   StaffSalaryHold,
+  Incentive,
+  IncentiveStatus,
   QueueAssignment,
   QueueBoard,
   QueueCode,
@@ -405,6 +407,20 @@ export const api = {
     request<StaffSalaryHold>(`/staff-salary-holds/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteStaffSalaryHold: (id: number) =>
     request<{ deleted: boolean }>(`/staff-salary-holds/${id}`, { method: 'DELETE' }),
+
+  // Monthly Incentives — one row per person per incentive.
+  incentives: (month: string) =>
+    request<Incentive[]>(`/incentives${qs({ month })}`),
+  /** One row for each person in staff_ids, all with the same amount — answers the rows made. */
+  createIncentives: (data: { month: string; staff_ids: number[]; amount: number; status?: IncentiveStatus }) =>
+    request<Incentive[]>('/incentives', { method: 'POST', body: JSON.stringify(data) }),
+  updateIncentive: (id: number, data: { staff_id?: number; amount?: number; status?: IncentiveStatus }) =>
+    request<Incentive>(`/incentives/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteIncentive: (id: number) =>
+    request<{ deleted: boolean }>(`/incentives/${id}`, { method: 'DELETE' }),
+  /** Give `to` the people and amounts `from` has, every one Pending. Answers `to`'s rows. */
+  copyIncentives: (from: string, to: string) =>
+    request<Incentive[]>('/incentives/copy', { method: 'POST', body: JSON.stringify({ from, to }) }),
 
   // Queues — the per-person records. `day` (YYYY-MM-DD) narrows to the records keyed in
   // on one day; omit it for the whole sheet.

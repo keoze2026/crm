@@ -17,10 +17,10 @@ namespace App\Auth;
 final class Pages
 {
     /** Every gateable page key. */
-    public const ALL = ['dashboard', 'buyers', 'campaigns', 'vendors', 'portal-expenses', 'queues', 'reviews', 'staff', 'attendance', 'complete-report', 'users', 'logs'];
+    public const ALL = ['dashboard', 'buyers', 'campaigns', 'vendors', 'portal-expenses', 'queues', 'reviews', 'staff', 'attendance', 'incentives', 'complete-report', 'users', 'logs'];
 
     /** Default pages a freshly created non-admin user can see (admin pages excluded). */
-    public const DEFAULT_USER = ['dashboard', 'buyers', 'campaigns', 'vendors', 'portal-expenses', 'queues', 'reviews', 'staff', 'attendance', 'complete-report'];
+    public const DEFAULT_USER = ['dashboard', 'buyers', 'campaigns', 'vendors', 'portal-expenses', 'queues', 'reviews', 'staff', 'attendance', 'incentives', 'complete-report'];
 
     /** Keep only recognised page keys, in canonical order. */
     public static function sanitize(array $keys): array

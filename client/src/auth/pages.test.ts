@@ -31,7 +31,7 @@ describe('PAGES', () => {
   it('keeps the documented Users-editor order', () => {
     expect(PAGES.map((p) => p.key)).toEqual([
       'dashboard', 'buyers', 'campaigns', 'vendors', 'portal-expenses', 'queues', 'reviews',
-      'staff', 'attendance', 'users', 'logs', 'complete-report',
+      'staff', 'attendance', 'incentives', 'users', 'logs', 'complete-report',
     ])
   })
 

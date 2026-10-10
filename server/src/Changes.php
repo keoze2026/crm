@@ -44,6 +44,7 @@ final class Changes
         'review-entries'     => 'reviews',
         'top-performer'      => 'reviews',
         'annual-reviews'     => 'reviews',
+        'incentives'         => 'incentives',
         'admin'              => 'users',
         'audit-logs'         => 'logs',
     ];

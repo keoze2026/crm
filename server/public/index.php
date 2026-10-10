@@ -16,6 +16,7 @@ use App\Controllers\AuthController;
 use App\Controllers\BuyerController;
 use App\Controllers\CampaignController;
 use App\Controllers\DestinationController;
+use App\Controllers\IncentiveController;
 use App\Controllers\PortalExpenseController;
 use App\Controllers\QueueController;
 use App\Controllers\RecordController;
@@ -174,6 +175,14 @@ $annualReviews = new AnnualReviewController();
 $router->get('/annual-reviews',        fn () => $annualReviews->show());
 $router->put('/annual-reviews',        fn () => $annualReviews->save());
 $router->post('/annual-reviews/reset', fn () => $annualReviews->reset());
+
+// Incentives — each month's incentive amounts and the staff picked for each.
+$incentives = new IncentiveController();
+$router->get('/incentives',         fn () => $incentives->index());
+$router->post('/incentives/copy',   fn () => $incentives->copy());
+$router->post('/incentives',        fn () => $incentives->store());
+$router->put('/incentives/{id}',    fn ($p) => $incentives->update($p));
+$router->delete('/incentives/{id}', fn ($p) => $incentives->destroy($p));
 
 // Vendors (traffic-source payment sheets)
 $vendors = new VendorController();

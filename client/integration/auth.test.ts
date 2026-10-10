@@ -168,7 +168,7 @@ describe('admin: users', () => {
     const pat = list.find((u) => u.email === 'pat@example.com') as ManagedUser
     expect(pat).toMatchObject({
       username: null, totp_enabled: false, enroll_link_active: true, is_active: true, preset_id: null, preset_name: null,
-      permissions: ['dashboard', 'buyers', 'campaigns', 'vendors', 'portal-expenses', 'queues', 'reviews', 'staff', 'attendance', 'complete-report'],
+      permissions: ['dashboard', 'buyers', 'campaigns', 'vendors', 'portal-expenses', 'queues', 'reviews', 'staff', 'attendance', 'incentives', 'complete-report'],
     })
     expect(pat.enroll_expires_at).not.toBeNull()
     const root = list.find((u) => u.id === admin.id) as ManagedUser

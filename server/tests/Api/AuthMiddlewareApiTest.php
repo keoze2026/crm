@@ -132,6 +132,13 @@ final class AuthMiddlewareApiTest extends ApiTestCase
             'attendance → salary-holds'    => [['attendance'], '/staff-salary-holds', false],
             'attendance → departments'     => [['attendance'], '/departments', false],
 
+            // The Incentives page owns /incentives and may read (not write) the roster.
+            'incentives → incentives'      => [['incentives'], '/incentives?month=2026-09', true],
+            'incentives → staff'           => [['incentives'], '/staff', true],
+            'incentives → salaries'        => [['incentives'], '/staff-salaries', false],
+            'staff → incentives'           => [['staff'], '/incentives?month=2026-09', false],
+            'reviews → incentives'         => [['reviews'], '/incentives?month=2026-09', false],
+
             'staff → staff'                => [['staff'], '/staff', true],
             'staff → departments'          => [['staff'], '/departments', true],
             'staff → staff-attendance'     => [['staff'], '/staff-attendance', true],
@@ -186,7 +193,7 @@ final class AuthMiddlewareApiTest extends ApiTestCase
         $paths = ['/audit-logs', '/admin/users', '/admin/access-presets', '/queues', '/queue-codes',
             '/review-departments', '/review-entries', '/top-performer', '/annual-reviews', '/staff',
             '/departments', '/staff-attendance', '/staff-leaves', '/staff-salaries', '/staff-salary-holds',
-            '/analytics/summary', '/vendors', '/portal-expenses', '/attendance/roster'];
+            '/analytics/summary', '/vendors', '/portal-expenses', '/attendance/roster', '/incentives?month=2026-09'];
         return array_combine($paths, array_map(static fn ($p) => [$p], $paths));
     }
 

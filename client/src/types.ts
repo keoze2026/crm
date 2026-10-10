@@ -676,6 +676,25 @@ export interface StaffSalaryHold {
   updated_at: string
 }
 
+// ─── Monthly Incentives (one row per person per incentive) ─────────────────────
+
+/** Stored as the wording shown; the server accepts nothing else. */
+export type IncentiveStatus = 'Pending' | 'Cancelled' | 'Fulfilled'
+
+export interface Incentive {
+  id: number
+  staff_id: number
+  staff_name: string
+  /** First of the month it is for, YYYY-MM-DD. */
+  month: string
+  /** Dollars, with cents. */
+  amount: number
+  status: IncentiveStatus
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
 // ─── Queues (per-person queue records + the queue catalogue) ───────────────────
 
 /** A queue in the Queues catalogue the page ticks. */

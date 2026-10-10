@@ -33,6 +33,7 @@ const NAV: NavItem[] = [
   // { to: '/reports', label: 'Reports', icon: icon(<><path d="M3 3v18h18" /><path d="m7 14 3-3 3 3 5-5" /></>) },
   { to: '/complete-report', label: 'Complete Report', perm: 'complete-report', icon: icon(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M16 13H8M16 17H8M10 9H8" /></>) },
   { to: '/attendance', label: 'Attendance', perm: 'attendance', icon: icon(<><circle cx="12" cy="7" r="4" /><path d="M5.5 21a8.38 8.38 0 0 1 13 0" /><path d="M16 11l1.5 4.5L20 14l1 5" /></>) },
+  { to: '/incentives', label: 'Monthly Incentives', perm: 'incentives', icon: icon(<><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" /><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5" /></>) },
 ]
 
 // Admin/permission pages, appended to NAV and filtered by the viewer's access.

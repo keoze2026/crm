@@ -43,6 +43,7 @@ const READ_AREAS: Record<string, string[]> = {
   'review-entries':     ['reviews', 'staff'],
   'top-performer':      ['reviews', 'staff'],
   'annual-reviews':     ['reviews'],
+  incentives:           ['incentives', 'staff'],
   admin:                ['users', 'staff'],
   // Every write is logged, so the log moves with everything.
   'audit-logs':         ['*'],

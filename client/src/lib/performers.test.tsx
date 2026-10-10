@@ -120,7 +120,7 @@ describe('usePerformers outside the provider', () => {
   it('answers "nobody" for the default month without fetching', () => {
     const out = { current: null as PerformerState | null }
     mount(<Probe intoRef={out} />)
-    expect(out.current).toMatchObject({ month: '2026-08', monthLabel: 'August 2026', rows: [], top: [], low: [], incentive: 200 })
+    expect(out.current).toMatchObject({ month: '2026-08', monthLabel: 'August 2026', rows: [], top: [], low: [] })
     expect(out.current?.statusOf({ staffId: 1, userId: 'u-anna', name: 'Anna' })).toBeNull()
     expect(() => out.current?.reload()).not.toThrow()
     expect(m.api.staff).not.toHaveBeenCalled()
@@ -322,10 +322,10 @@ describe('PerformerBadge', () => {
     return container.querySelector('span')
   }
 
-  it('shows the incentive for the top performer', async () => {
+  it('marks the top performer in green, with no incentive amount', async () => {
     const el = await badge({ staffId: 1 })
-    expect(el?.textContent).toBe('$200 incentive')
-    expect(el?.getAttribute('title')).toBe('Top Performer of the Month — August 2026 · $200 incentive')
+    expect(el?.textContent).toBe('Top performer')
+    expect(el?.getAttribute('title')).toBe('Top Performer of the Month — August 2026')
     expect(el?.className).toContain('bg-emerald-100')
   })
 
@@ -337,8 +337,8 @@ describe('PerformerBadge', () => {
     expect(el?.className).toContain('ml-1')
   })
 
-  it('shortens to the figure alone when compact', async () => {
-    expect((await badge({ userId: 'u-anna', compact: true }))?.textContent).toBe('$200')
+  it('shortens to one word when compact', async () => {
+    expect((await badge({ userId: 'u-anna', compact: true }))?.textContent).toBe('Top')
     act(() => { root?.unmount() })
     root = null
     container.remove()

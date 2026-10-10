@@ -20,7 +20,6 @@ import { useAuth } from '../auth/AuthContext'
 import { currentMonth, formatMonth, shiftMonth } from '../components/MonthSelector'
 import { cx } from '../components/ui'
 import {
-  INCENTIVE_USD,
   buildCandidates,
   fromWire,
   pickPerformers,
@@ -52,7 +51,6 @@ export interface PerformerState {
   rows: RankedRow[]
   top: RankedRow[]
   low: RankedRow[]
-  incentive: number
   statusOf: (ref: PerformerRef) => PerformerStatus | null
   /** Re-read the month after the Top Performer sheet saves, so badges follow a tick. */
   reload: () => void
@@ -105,7 +103,6 @@ function judgeMonth(month: string, data: MonthData, reload: () => void): Perform
     rows: data.rows,
     top,
     low,
-    incentive: INCENTIVE_USD,
     statusOf: ({ staffId, userId, name }: PerformerRef) =>
       (staffId != null ? byId.get(staffId) : undefined)
       ?? (userId ? byUser.get(userId) : undefined)
@@ -228,12 +225,12 @@ const IconDown = ({ size = 10 }: { size?: number }) => (
 )
 
 /**
- * The badge itself: green with the incentive for the month's top performer, red for its
+ * The badge itself: green for the month's top performer, red for its
  * Low performers. It renders nothing for everybody else, so it can be dropped beside any
  * name without a condition around it. The month is the enclosing PerformerScope's, or
  * the one passed.
  *
- * `compact` shortens the wording to the figure alone ("$200" / "Low", the whole sentence on
+ * `compact` shortens the wording to one word ("Top" / "Low", the whole sentence on
  * hover) for sheet cells where the full pill would push the columns about.
  */
 export function PerformerBadge({ staffId, userId, name, month, compact = false, className }: PerformerRef & {
@@ -241,12 +238,12 @@ export function PerformerBadge({ staffId, userId, name, month, compact = false, 
   compact?: boolean
   className?: string
 }) {
-  const { statusOf, monthLabel, incentive } = usePerformers(month)
+  const { statusOf, monthLabel } = usePerformers(month)
   const status = statusOf({ staffId, userId, name })
   if (!status) return null
   const top = status === 'top'
   const title = top
-    ? `Top Performer of the Month — ${monthLabel} · $${incentive} incentive`
+    ? `Top Performer of the Month — ${monthLabel}`
     : `Low performer of the month — ${monthLabel}`
   const tone = top
     ? 'bg-emerald-100 text-emerald-700 ring-emerald-300'
@@ -259,7 +256,7 @@ export function PerformerBadge({ staffId, userId, name, month, compact = false, 
         className={cx('inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full px-1 py-px text-[9px] font-bold leading-none ring-1', tone, className)}
       >
         {top ? <IconCrown size={8} /> : <IconDown size={8} />}
-        {top ? `$${incentive}` : 'Low'}
+        {top ? 'Top' : 'Low'}
       </span>
     )
   }
@@ -274,7 +271,7 @@ export function PerformerBadge({ staffId, userId, name, month, compact = false, 
       )}
     >
       {top ? <IconCrown /> : <IconDown />}
-      {top ? `$${incentive} incentive` : 'Low performer'}
+      {top ? 'Top performer' : 'Low performer'}
     </span>
   )
 }

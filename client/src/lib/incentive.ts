@@ -377,9 +377,6 @@ export function withTopMark(own: TickId[], top: boolean): TickId[] {
 // The month's two names, decided from the same ranking the sheet shows, so the Review tab,
 // the scorecards and the badges worn beside staff names everywhere else can never disagree.
 
-/** What the month's incentive is worth — the green badge says so. */
-export const INCENTIVE_USD = 200
-
 /** The score that puts someone in the running for top performer, and the bar the lowest-score rule uses. */
 export const TOP_PERFORMER_PCT = 80
 
