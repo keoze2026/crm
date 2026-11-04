@@ -259,3 +259,16 @@ table.table-dash .text-right {
 table.table-dash td.p-0 {
   padding: 0;
 }
+/* Controls inside a reading table keep their own utility styling (the Attendance status
+   pill): undo the global cell-editor flattening above for this table only. */
+table.table-dash td :where(input, select, textarea) {
+  padding: revert-layer;
+  border-radius: revert-layer;
+  font-size: revert-layer;
+  line-height: revert-layer;
+  text-align: revert-layer;
+  background-color: revert-layer;
+  border-color: revert-layer;
+  box-shadow: revert-layer;
+  backdrop-filter: revert-layer;
+}

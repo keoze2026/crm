@@ -21,7 +21,9 @@ cp "<repo>/docs/design/principles/tools/"*.mjs .
    and `mobile.png`), run, then **revert the default**:
    `node screenshots.mjs "<repo>/docs/design/principles/images"`
 2. **PDF:** `node build-pdf.mjs "<repo>/docs/design/principles"` from the scratch folder.
-   It reads `index.html` there and writes `docs/design/Dashboard-Design-Principles.pdf`.
+   It reads `index.html` there and writes `docs/design/Dashboard-Design-Principles.pdf`. The
+   script is shared with `../attendance/`: the output name and footer come from the page
+   `<title>`.
 
 Headings use `padding-top`, not `margin-top`: Chromium doubles a PDF bookmark title when a
 heading's top margin is cut at a page break.

@@ -127,8 +127,9 @@ describe('analytics', () => {
     const { b1, b2 } = await seed()
     const buyers = assertShape<TopBuyer[]>(await api.topBuyers({ ...RANGE, limit: 50 }), arrayOf(topBuyerShape))
     expect([...buyers].sort((x, y) => x.code.localeCompare(y.code))).toEqual([
-      { id: b1.id, code: 'B1', name: null, revenue: 80, counted: 8, answered: 10, missed: 2 },
-      { id: b2.id, code: 'B2', name: null, revenue: 80, counted: 4, answered: 6, missed: 2 },
+      // first_date / last_date: the first and last day billed inside the range.
+      { id: b1.id, code: 'B1', name: null, revenue: 80, counted: 8, answered: 10, missed: 2, first_date: '2026-06-01', last_date: '2026-06-02' },
+      { id: b2.id, code: 'B2', name: null, revenue: 80, counted: 4, answered: 6, missed: 2, first_date: '2026-06-03', last_date: '2026-06-03' },
     ])
     expect(buyers.map((b) => b.revenue)).toEqual([80, 80])
     expect((await api.topBuyers({ ...RANGE, metric: 'counted' })).map((b) => b.code)).toEqual(['B1', 'B2'])
@@ -141,6 +142,7 @@ describe('analytics', () => {
 
     const camps = assertShape<TopCampaign[]>(await api.topCampaigns({ ...RANGE, limit: 50 }), arrayOf(topCampaignShape))
     expect(camps.map((c) => [c.code, c.cost, c.counted])).toEqual([['C-01', 30, 6], ['C-02', 20, 5]])
+    expect(camps.map((c) => [c.first_date, c.last_date])).toEqual([['2026-06-01', '2026-06-01'], ['2026-06-02', '2026-06-02']])
 
     const sources = assertShape<TopSource[]>(await api.topSources({ ...RANGE, limit: 20 }), arrayOf(topSourceShape))
     expect(sources).toEqual([{ source: 'Bing', cost: 30, counted: 6 }, { source: 'Yahoo', cost: 20, counted: 5 }])

@@ -78,10 +78,12 @@ export const trendShape = object<TrendPoint>({
 
 export const topBuyerShape = object<TopBuyer>({
   id: int, code: str, name: nullable(str), revenue: num, counted: num, answered: num, missed: num,
+  first_date: nullable(str), last_date: nullable(str),
 })
 
 export const topCampaignShape = object<TopCampaign>({
   id: int, code: str, name: nullable(str), cost: num, counted: num, answered: num, missed: num,
+  first_date: nullable(str), last_date: nullable(str),
 })
 
 export const topSourceShape = object<TopSource>({ source: str, cost: num, counted: num })

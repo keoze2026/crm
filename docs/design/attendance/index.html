@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Attendance Design Principles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm; }
+  :root {
+    --navy: #1f4e8c; --navy-light: #9aaac6; --green: #047857; --red: #dc2626; --amber: #b45309;
+    --ink: #0f172a; --body: #334155; --label: #475569; --muted: #64748b; --line: #e2e8f0; --hair: #f1f5f9; --tile: #f8fafc;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; font-family: 'Inter', system-ui, sans-serif; color: var(--body); font-size: 10.5pt; line-height: 1.55; }
+  h1, h2, h3 { color: var(--ink); line-height: 1.25; margin: 0; }
+  /* Headings use padding, never margin, on top: Chromium doubles a PDF bookmark title when a
+     heading's top margin is cut at a page break. */
+  h2 { font-size: 17pt; font-weight: 700; padding-top: 4mm; margin-bottom: 3mm; letter-spacing: -0.01em; }
+  h3 { font-size: 12pt; font-weight: 650; padding-top: 4mm; margin-bottom: 1.5mm; }
+  /* Keep a heading with what follows it. */
+  h2, h3 { break-after: avoid; page-break-after: avoid; }
+  p { margin: 0 0 2.5mm; }
+  ul, ol { margin: 0 0 3mm; padding-left: 5mm; }
+  li { margin-bottom: 1mm; }
+  code { font-family: 'Cascadia Mono', Consolas, monospace; font-size: 9pt; background: var(--hair); padding: 0 1.2mm; border-radius: 1mm; }
+  .num { display: inline-block; color: var(--navy); font-weight: 700; margin-right: 1.5mm; }
+  section.chapter { break-before: page; }
+  .lead { font-size: 11.5pt; color: var(--label); }
+
+  /* Cover */
+  .cover { height: 250mm; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; }
+  .cover .kicker { font-size: 10pt; font-weight: 600; color: var(--navy); letter-spacing: 0.08em; text-transform: uppercase; }
+  .cover h1 { font-size: 34pt; font-weight: 800; letter-spacing: -0.02em; margin-top: 4mm; }
+  .cover .sub { font-size: 13pt; color: var(--label); margin-top: 4mm; max-width: 140mm; }
+  .cover .shot { height: 150mm; overflow: hidden; border: 1px solid var(--line); border-radius: 3mm; }
+  .cover .shot img { width: 100%; display: block; }
+  .cover .meta { font-size: 9pt; color: var(--muted); display: flex; justify-content: space-between; }
+
+  figure { margin: 3mm 0 5mm; break-inside: avoid; }
+  figure img { display: block; max-width: 100%; border: 1px solid var(--line); border-radius: 2mm; }
+  figcaption { font-size: 8.5pt; color: var(--muted); margin-top: 1.5mm; }
+  .two figure img { max-height: 60mm; width: auto; }
+  .w60 img { max-width: 60%; } .w75 img { max-width: 75%; } .w45 img { max-width: 45%; }
+
+  /* Principle cards */
+  .principle { border: 1px solid var(--line); border-radius: 2.5mm; padding: 4mm 5mm; margin-bottom: 4mm; break-inside: avoid; }
+  .principle h3 { padding-top: 0; font-size: 12pt; }
+  .principle .rule { font-weight: 600; color: var(--ink); }
+  .principle .how { font-size: 9.5pt; color: var(--label); margin: 0; }
+  .principle .how b { color: var(--body); }
+  .do-dont { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; margin-top: 2mm; }
+  .do, .dont { font-size: 9pt; border-radius: 1.5mm; padding: 2mm 3mm; }
+  .do { background: #ecfdf5; color: #065f46; } .dont { background: #fef2f2; color: #991b1b; }
+  .do b, .dont b { display: block; font-size: 7.5pt; letter-spacing: 0.06em; text-transform: uppercase; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin: 2mm 0 5mm; break-inside: auto; }
+  th { text-align: left; font-size: 7.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border-bottom: 1px solid var(--line); padding: 1.8mm 2mm; }
+  td { border-bottom: 1px solid var(--hair); padding: 1.8mm 2mm; vertical-align: top; }
+  tr { break-inside: avoid; }
+  .sw { display: inline-block; width: 4.5mm; height: 4.5mm; border-radius: 1mm; vertical-align: -1mm; margin-right: 2mm; border: 1px solid rgba(15,23,42,0.08); }
+  .mono { font-family: 'Cascadia Mono', Consolas, monospace; font-size: 8.5pt; }
+
+  .type-row { display: flex; align-items: baseline; gap: 6mm; border-bottom: 1px solid var(--hair); padding: 2mm 0; }
+  .type-row .spec { width: 42mm; flex-shrink: 0; font-size: 8.5pt; color: var(--muted); }
+  .type-row .sample { color: var(--ink); }
+
+  .callout { background: var(--tile); border-left: 1mm solid var(--navy); padding: 3mm 4mm; border-radius: 0 2mm 2mm 0; margin: 3mm 0 5mm; font-size: 9.5pt; break-inside: avoid; }
+  .callout.warn { border-left-color: var(--amber); background: #fffbeb; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; align-items: start; }
+  .toc { list-style: none; padding: 0; columns: 2; column-gap: 10mm; }
+  .toc li { break-inside: avoid; padding: 0.5mm 0; border-bottom: 1px solid var(--hair); }
+  .story { counter-reset: s; list-style: none; padding: 0; }
+  .story li { counter-increment: s; padding: 0.8mm 0 0.8mm 9mm; position: relative; border-bottom: 1px solid var(--hair); }
+  .story li::before { content: counter(s); position: absolute; left: 0; top: 1.5mm; width: 6mm; height: 6mm; border-radius: 50%; background: var(--navy); color: #fff; font-size: 8pt; font-weight: 700; text-align: center; line-height: 6mm; }
+  /* The ⋮ button, drawn in a symbol font: Inter renders it as a faint colon. */
+  .dots { font-family: "Segoe UI Symbol", "Segoe UI", sans-serif; font-weight: 700; color: var(--ink); }
+</style>
+</head>
+<body>
+
+<!-- ─── Cover ─────────────────────────────────────────────────────────────── -->
+<div class="cover">
+  <div>
+    <div class="kicker">Platform CRM · Design</div>
+    <h1>Attendance Design Principles</h1>
+    <p class="sub">The rules behind the Attendance day sheet, written down so the page stays one coherent thing as it changes. They are taken from the design mock and applied in the build.</p>
+  </div>
+  <div class="shot"><img src="images/page.png" alt="The Attendance day sheet as built"></div>
+  <div class="meta"><span>Derived from the attendance mock (Attendance.pdf) and the page built to it</span><span>November 2026</span></div>
+</div>
+
+<!-- ─── About ─────────────────────────────────────────────────────────────── -->
+<section class="chapter">
+  <h2>About this document</h2>
+  <p class="lead">The designer's mock of the Attendance page was studied row by row and column by column. Every decision it repeats is written here as a rule: what it says, why it holds, and how the page applies it.</p>
+  <p>It is the companion to <b>Dashboard Design Principles</b>. The foundations there (Inter, the navy accent, flat white panels, sentence-case words, units beside numbers) apply here unchanged and are not repeated. This document covers what is particular to attendance: a table people read many times a day and correct by hand.</p>
+  <p>The screenshots use the local sample data. That data has nobody at work “today”, so the screenshot tool serves 10 Sep 2026 as today <b>inside the headless browser only</b>, with a few rows altered to show each state: still in, a logout after midnight, a break with no login, and someone online with no login. Nothing was written to the database. Section 8 lists where the build departs from the mock.</p>
+
+  <h3>Contents</h3>
+  <ol class="toc">
+    <li><span class="num">1</span> What the page is for</li>
+    <li><span class="num">2</span> Ten principles</li>
+    <li><span class="num">3</span> Colour and status</li>
+    <li><span class="num">4</span> Components</li>
+    <li><span class="num">5</span> Numbers and words</li>
+    <li><span class="num">6</span> States</li>
+    <li><span class="num">7</span> Responsive and accessible</li>
+    <li><span class="num">8</span> Departures from the mock</li>
+  </ol>
+
+  <h2><span class="num">1</span> What the page is for</h2>
+  <p>The check-in bot records who logs in, takes breaks and logs out. It is usually right and sometimes wrong. The Day sheet answers three questions, in this order: <b>who is at work, who isn't, and which records can't be trusted yet?</b> It is also where a wrong record gets fixed.</p>
+  <ol class="story">
+    <li><b>Header.</b> The page, its three views (Day sheet, Staff summary, Staff reports) and the org's clock.</li>
+    <li><b>Six figures.</b> At work, still checked in, late logins, late returns, off schedule, average hours.</li>
+    <li><b>Right now.</b> Who is online, who is on a break, who logged in late, named.</li>
+    <li><b>Filter tabs.</b> All · Still in · Checked out · Absent · Needs review, each with its count.</li>
+    <li><b>The table.</b> One row per person for the whole roster: the day as recorded, marked against their schedule.</li>
+    <li><b>Correct a day.</b> The status pill changes the status in place; the <span class="dots">⋮</span> button opens the day for correction.</li>
+  </ol>
+</section>
+
+<!-- ─── Principles ─────────────────────────────────────────────────────────── -->
+<section class="chapter">
+  <h2><span class="num">2</span> Ten principles</h2>
+
+  <div class="principle">
+    <h3>2.1 Read first, edit on purpose</h3>
+    <p class="rule">Rows read as plain text: clock times, minutes, hours. Editing is one deliberate step away, in a small popover from the <span class="dots">⋮</span> button. The status pill is the only control in the row.</p>
+    <p class="how"><b>Why:</b> the sheet is read dozens of times a day and corrected a few times a week. A grid of time inputs made every glance look like a form, and made a stray click into a stray edit. <b>Applied:</b> <span class="dots">⋮</span> opens a compact popover beside the row with login, logout, break and status, a live preview of hours and flag, the bot's breaks, and “Put back bot's record”. It never covers the sheet.</p>
+    <div class="do-dont"><div class="do"><b>Do</b>“05:40 AM” as text; <span class="dots">⋮</span> to correct</div><div class="dont"><b>Don't</b>A time input in every cell of every row</div></div>
+  </div>
+
+  <div class="principle">
+    <h3>2.2 Flag what needs a second look</h3>
+    <p class="rule">When the bot and the clock times disagree, the row is tinted amber and the Flag column says what is wrong, in words: “Online, no login”, “Break, no login”, “Logout, no login”, “Logout after midnight”.</p>
+    <p class="how"><b>Why:</b> these are the records most likely to be wrong, and the ones that throw off every count above the table. <b>Applied:</b> the “Needs review” tab gathers them, and its count is amber when it isn't zero. A review flag takes the Flag column's place ahead of the punctuality verdict, and the correction popover repeats it at the top.</p>
+  </div>
+
+  <div class="principle">
+    <h3>2.3 Absence is the quiet default</h3>
+    <p class="rule">Somebody who hasn't logged in reads grey: a regular-weight name, dashes, a grey “Absent” pill. Somebody who worked reads dark: a bold name and real times.</p>
+    <p class="how"><b>Why:</b> early in the day most of the roster is absent. If absence were red, the page would be mostly red and nothing would stand out. <b>Applied:</b> the eye finds the people who are in by weight alone, and red stays free for what needs chasing.</p>
+  </div>
+
+  <div class="principle">
+    <h3>2.4 Red is counted against someone; amber is to check</h3>
+    <p class="rule">Red means a fault that counts against a person: a late login, a break over the allowance, a late return from break, late logins this month. Amber means something to look at that isn't a fault: an early logout, a review flag, someone on a break right now.</p>
+    <p class="how"><b>Applied:</b> “7m late” under a login is red, and “23m early” under a logout is amber. In the Flag column, “Late in” is red, “Early out” amber and “Late + early” bold red. Green appears only for on time and, once anyone has logged in, a zero that is genuinely good news.</p>
+  </div>
+
+  <div class="principle">
+    <h3>2.5 Live means today</h3>
+    <p class="rule">Online dots, online chips and the on-break list describe right now, so they only appear when today is on screen.</p>
+    <p class="how"><b>Why:</b> a green “online” dot on last Tuesday's row would be a lie. <b>Applied:</b> on a past day the panel says “Live status shows for today only”, and the name dot is grey for anyone who worked.</p>
+  </div>
+</section>
+
+<section>
+  <div class="principle">
+    <h3>2.6 One list behind every figure</h3>
+    <p class="rule">The six cards, the status panel, the tab counts and the table rows all come from one list of days, built in one function (<code>buildDayViews</code>).</p>
+    <p class="how"><b>Why:</b> a card that says “3 late” above a table showing two late rows destroys trust in both. <b>Applied:</b> the late-login chips are the late rows, worst first. “Needs review 3” is exactly the amber rows.</p>
+  </div>
+
+  <div class="principle">
+    <h3>2.7 Say it in words when nothing happened</h3>
+    <p class="rule">An empty state is a short sentence, not a blank: “Not yet”, “· nobody right now”, “✓ No late logins · 18 on time”, “Everyone back from break on time”, “none yet, nobody has logged in”.</p>
+    <p class="how"><b>Applied:</b> a logout cell for someone still in says “Not yet”, not a dash. A dash is kept for “nothing to show”, such as an absent person's hours.</p>
+  </div>
+
+  <div class="principle">
+    <h3>2.8 Leave is never a fault</h3>
+    <p class="rule">A person on leave (on the Leaves sheet, or with the status set to Leave) is never counted late, early, absent or in need of review.</p>
+    <p class="how"><b>Applied:</b> their row reads “Leave” in violet, their times are not judged, and they are left out of “not in today” and counted separately (“· 1 on leave”).</p>
+  </div>
+
+  <div class="principle">
+    <h3>2.9 Every figure with its denominator</h3>
+    <p class="rule">A count is shown against what it is out of: “18 / 42” at work, “1 / 18” off schedule, “0/3” late logins this month, “Checked-out staff only (1)”.</p>
+    <p class="how"><b>Why:</b> “1 off schedule” means nothing until you know whether 3 or 30 were judged. The denominator is lighter and smaller, so the eye still lands on the count.</p>
+  </div>
+
+  <div class="principle">
+    <h3>2.10 A month in a cell</h3>
+    <p class="rule">The Late · Nov column is the one figure in the row that isn't about the day on screen: late logins so far this month, out of the logins recorded.</p>
+    <p class="how"><b>Why:</b> one late morning is rarely the point; the sixth one is. Reading that off a day sheet would otherwise mean opening thirty of them. <b>Applied:</b> “0/3” in grey, red once any are late, with the minutes lost and the worst one in the tooltip.</p>
+  </div>
+</section>
+
+<!-- ─── Colour & status ───────────────────────────────────────────────────── -->
+<section>
+  <h2><span class="num">3</span> Colour and status</h2>
+  <p>The Dashboard's tokens apply. These are the meanings particular to attendance:</p>
+  <table>
+    <tr><th style="width:30%">Colour</th><th>On this page it means</th></tr>
+    <tr><td><span class="sw" style="background:#1f4e8c"></span>Navy</td><td>Selected (active tab, filter, primary button) and “Still in” (navy text on a navy tint).</td></tr>
+    <tr><td><span class="sw" style="background:#10b981"></span>Online green dot</td><td>Checked in right now, today only.</td></tr>
+    <tr><td><span class="sw" style="background:#047857"></span>Green text</td><td>On time; a good zero (no late logins, no late returns) once anyone has logged in; the “Present” pill.</td></tr>
+    <tr><td><span class="sw" style="background:#dc2626"></span>Red</td><td>Counted against a person: late login, break over the allowance, late return, late logins this month, late + early.</td></tr>
+    <tr><td><span class="sw" style="background:#b45309"></span>Amber</td><td>To check: early logout, review flags and the amber row tint, the “Needs review” count, on a break now.</td></tr>
+    <tr><td><span class="sw" style="background:#7c3aed"></span>Violet</td><td>Leave: an agreed day off, never a fault.</td></tr>
+    <tr><td><span class="sw" style="background:#cbd5e1"></span>Grey</td><td>Absent, holiday, dashes, a worked-but-offline dot. The page's resting state.</td></tr>
+  </table>
+
+  <h3>3.1 The status pill</h3>
+  <p>The stored statuses keep their vocabulary and are written in sentence case. Each is a tinted pill with a chevron. It is a real select, so changing it saves the status for that day. Where nothing is stored, the pill shows what the clock times imply (a login and no logout reads “Still in”), and its tooltip says so.</p>
+  <table>
+    <tr><th>Status</th><th>Pill</th><th>Meaning</th></tr>
+    <tr><td>Still in</td><td><span style="background:rgba(31,78,140,.1);color:#1f4e8c;border-radius:4px;padding:1px 6px;font-weight:600">Still in</span></td><td>Logged in, no logout yet.</td></tr>
+    <tr><td>Present</td><td><span style="background:#ecfdf5;color:#065f46;border-radius:4px;padding:1px 6px;font-weight:600">Present</span></td><td>A day worked.</td></tr>
+    <tr><td>Half day</td><td><span style="background:#fffbeb;color:#92400e;border-radius:4px;padding:1px 6px;font-weight:600">Half day</span></td><td>A partial day.</td></tr>
+    <tr><td>Leave</td><td><span style="background:#f5f3ff;color:#6d28d9;border-radius:4px;padding:1px 6px;font-weight:600">Leave</span></td><td>An agreed day off.</td></tr>
+    <tr><td>Holiday / Absent</td><td><span style="background:#f1f5f9;color:#64748b;border-radius:4px;padding:1px 6px;font-weight:600">Absent</span></td><td>No day worked. Quiet by design (principle 2.3).</td></tr>
+  </table>
+</section>
+
+<!-- ─── Components ────────────────────────────────────────────────────────── -->
+<section class="chapter">
+  <h2><span class="num">4</span> Components</h2>
+  <h3>4.1 Header</h3>
+  <figure><img src="images/header.png" alt="Header"></figure>
+  <ul>
+    <li>Title and a one-line purpose on the left. The three views sit top right as a grey well with a raised white active tab, next to the org's clock (“Wed, 4 Nov · 4:12 PM”), which ticks every 15 seconds.</li>
+  </ul>
+
+  <h3>4.2 Six figures</h3>
+  <figure><img src="images/kpis.png" alt="KPI cards"></figure>
+  <ul>
+    <li>Label, figure (with its denominator in lighter grey), then one line that explains it. Six across on a wide screen, three on a tablet, two on a phone.</li>
+    <li>Late logins and Late returns name their worst case in the explaining line (“worst 51m”, “Corin +30m”). Late returns are added up per person, so two late breaks read “Corin +30m”, not “Corin +15m · Corin +15m”.</li>
+  </ul>
+
+  <h3>4.3 Right now</h3>
+  <figure><img src="images/status.png" alt="Status panel"></figure>
+  <ul>
+    <li>First line: “Online now · N” and a chip per person (grey chip, green dot). Below a hairline: “On a break” chips (amber, red once past the grace) and the late-login chips (red, name plus minutes, worst first). When nobody is late, the line says “✓ No late logins”.</li>
+  </ul>
+</section>
+
+<section class="chapter">
+  <h3>4.4 Filter tabs, toolbar and table</h3>
+  <figure><img src="images/table.png" alt="Day sheet table"><figcaption>Rows 3, 5 and 6 need review: amber tint and an amber flag. Rows 1 and 4 are still in, and row 2 has checked out.</figcaption></figure>
+  <table>
+    <tr><th style="width:22%">Column</th><th>Reads</th></tr>
+    <tr><td>#</td><td>Row number, grey.</td></tr>
+    <tr><td>Name</td><td>Dot (green online, grey worked, none absent) · name, bold if they worked · performer badge.</td></tr>
+    <tr><td>Department</td><td>Hairline chips, wrapping in place.</td></tr>
+    <tr><td>Login / Logout</td><td>“05:40 AM”; “Not yet” while still in; “7m late” in red or “23m early” in amber beneath it.</td></tr>
+    <tr><td>Break</td><td>“30 min · 1” (minutes · breaks). Red with “+30m over” or “back +30m” when it ran over. Click to see each break.</td></tr>
+    <tr><td>Hours</td><td>Net of breaks, one decimal.</td></tr>
+    <tr><td>Late · Nov</td><td>Late logins this month out of logins: “0/3”, red when any were late.</td></tr>
+    <tr><td>Flag</td><td>Review flag (amber chip) first, otherwise On time / Late in / Early out / Late + early.</td></tr>
+    <tr><td>Status · <span class="dots">⋮</span></td><td>The status pill; <span class="dots">⋮</span> opens the day for correction.</td></tr>
+  </table>
+  <ul>
+    <li><b>Tabs</b> are outlined buttons with a count chip. The active tab is solid navy; the “Needs review” count is amber when it isn't zero.</li>
+    <li><b>Toolbar:</b> day picker, search (name or department), Reset, Refresh, and PDF as the one primary button.</li>
+    <li><b>Footer:</b> “Showing 16 of 16 staff” on the left; “Today · still filling” or “Thu, Sep 10 · past day” on the right.</li>
+  </ul>
+</section>
+
+<section>
+  <h3>4.5 Needs review</h3>
+  <figure><img src="images/review.png" alt="Needs review tab"></figure>
+  <p>The tab narrows the sheet to the rows that disagree with themselves. In order of priority:</p>
+  <ul>
+    <li><b>Online, no login:</b> the bot sees them checked in, but no login is recorded for the day.</li>
+    <li><b>Break, no login:</b> a break was recorded before any login.</li>
+    <li><b>Logout, no login.</b></li>
+    <li><b>Logout after midnight:</b> the logout is earlier on the clock than the login. Either the shift ran past midnight or a time was mistyped.</li>
+  </ul>
+</section>
+
+<section class="chapter">
+  <h3>4.6 Correcting a day</h3>
+  <p><span class="dots">⋮</span> opens a small popover hanging from the button. It isn't a full-screen window: the row being corrected and the table around it stay in view.</p>
+  <figure><img src="images/edit.png" alt="Correction popover opening downward"><figcaption>From a row with room below, it slides down from the button, right edges aligned.</figcaption></figure>
+  <figure><img src="images/edit-up.png" alt="Correction popover opening upward"><figcaption>From the last row, near the bottom of the window, it flips and slides up.</figcaption></figure>
+  <ul>
+    <li><b>Placement:</b> under the button, or above it when the space below is too short. It is kept 8px inside the window and follows the button while the page scrolls.</li>
+    <li><b>Motion:</b> a 150ms fade and a 6px slide in the direction it opens, switched off under <code>prefers-reduced-motion</code>.</li>
+    <li><b>Size:</b> 19rem × ~15rem. Name, day and where the record came from; any review flag; then login · logout and break · status in two columns, each with its expected time or allowance beneath.</li>
+    <li><b>Live preview:</b> hours and the flag update as you type; “2 breaks →” opens the bot's breaks.</li>
+    <li><b>Actions:</b> Save is the one navy button and Enter in a field saves. Cancel, Escape, a click outside or the <span class="dots">⋮</span> again all close it without saving. “Put back bot's record” undoes a correction (the bot's own data is never written to); “Clear entry” removes one keyed in by hand.</li>
+  </ul>
+</section>
+
+<!-- ─── Numbers and words ─────────────────────────────────────────────────── -->
+<section class="chapter">
+  <h2><span class="num">5</span> Numbers and words</h2>
+  <table>
+    <tr><th style="width:28%">What</th><th style="width:32%">Format</th><th>Example</th></tr>
+    <tr><td>Clock time</td><td>Two-digit hour, 12-hour clock</td><td>05:40 AM · 12:06 AM</td></tr>
+    <tr><td>Off schedule</td><td>Gap, then “late” or “early”</td><td>7m late · 6h 54m early</td></tr>
+    <tr><td>Break</td><td>Minutes · number of breaks</td><td>30 min · 1</td></tr>
+    <tr><td>Hours</td><td>One decimal, “h”</td><td>15.8h</td></tr>
+    <tr><td>Count with base</td><td>Count / base, base lighter</td><td>18 / 42 · 0/3</td></tr>
+    <tr><td>Header clock</td><td>Weekday, day month · time</td><td>Wed, 4 Nov · 4:12 PM</td></tr>
+    <tr><td>Past day</td><td>Weekday, month day</td><td>Thu, Sep 10 · past day</td></tr>
+    <tr><td>Nothing to show</td><td>Em dash</td><td>—</td></tr>
+  </table>
+  <h3>5.1 Words</h3>
+  <ul>
+    <li>Sentence case: “Day sheet”, “Still checked in”, “Needs review”, “Put back the bot's record”.</li>
+    <li>Flags name the problem, not a code: “Online, no login”, never “ERR_NO_LOGIN”.</li>
+    <li>The month column names its month: “Late · Nov”.</li>
+  </ul>
+
+  <h2><span class="num">6</span> States</h2>
+  <table>
+    <tr><th style="width:24%">State</th><th>Treatment</th></tr>
+    <tr><td>Today, filling in</td><td>Online dots and chips, on-break chips, “Not yet” in logout cells, “Today · still filling” in the footer.</td></tr>
+    <tr><td>Nobody in yet</td><td>Zeros stay neutral, not green; the panel says “none yet, nobody has logged in” and the Late returns card “No breaks yet”.</td></tr>
+    <tr><td>Past day</td><td>No live state: the panel says “Live status shows for today only” and worked rows get a grey dot.</td></tr>
+    <tr><td>Loading / error</td><td>“Loading…” or the error in red, inside the table card; the cards above stay.</td></tr>
+    <tr><td>Empty filter</td><td>“Nobody matches — clear the search or pick another tab.”</td></tr>
+    <tr><td>Refreshing</td><td>The Refresh button reads “Refreshing…” and is disabled until the day is re-read.</td></tr>
+    <tr><td>On leave</td><td>A violet “Leave” pill; never judged, counted or flagged (principle 2.8).</td></tr>
+  </table>
+</section>
+
+<!-- ─── Responsive & accessible ───────────────────────────────────────────── -->
+<section class="chapter">
+  <h2><span class="num">7</span> Responsive and accessible</h2>
+  <div class="two">
+    <div>
+      <h3>7.1 Down to a phone</h3>
+      <ul>
+        <li>The header stacks: title, then the view tabs, then the clock.</li>
+        <li>The cards go from six across to three, then two.</li>
+        <li>The table keeps every column and scrolls sideways inside its own card. The page itself never scrolls sideways; at 390px the page width equals the screen width.</li>
+      </ul>
+      <h3>7.2 Accessibility</h3>
+      <ul>
+        <li>Colour is never the only signal: flags are words with a ⚠, late and early marks say “late” and “early”, and counts carry their labels.</li>
+        <li>Every status pill is a labelled select (“Status for Amara Oduya”). Every <span class="dots">⋮</span> is a button labelled “Correct Amara Oduya's day”.</li>
+        <li>Tabs use <code>role="tab"</code> with <code>aria-selected</code>. The date and search fields carry labels.</li>
+        <li>Text is slate-500 or darker on white; slate-400 is kept for dashes and placeholders.</li>
+      </ul>
+    </div>
+    <figure><img src="images/mobile.png" alt="Attendance on a phone" style="max-width:70%"><figcaption>390px wide, the real empty “today”: neutral zeros and plain sentences.</figcaption></figure>
+  </div>
+</section>
+
+<!-- ─── Departures ────────────────────────────────────────────────────────── -->
+<section class="chapter">
+  <h2><span class="num">8</span> Departures from the mock</h2>
+  <table>
+    <tr><th style="width:30%">Mock</th><th style="width:30%">Build</th><th>Why</th></tr>
+    <tr><td>Status pill “Checked out”</td><td>The stored status, in sentence case (“Present”); the “Checked out” <i>tab</i> counts anyone with a logout</td><td>Statuses are stored values that staff, the Staff Summary and the exports already use. Renaming “present” on one screen would split the vocabulary.</td></tr>
+    <tr><td><span class="dots">⋮</span> with no behaviour shown</td><td><span class="dots">⋮</span> opens a compact correction popover beside the row (section 4.6)</td><td>The old sheet edited every cell inline. That ability had to live somewhere, and principle 2.1 puts it one step away.</td></tr>
+    <tr><td>Only “✓ No late logins” drawn</td><td>Late-login chips, named worst first, when anyone is late; on-break chips</td><td>The old page's late-login panel, folded into the status panel rather than lost.</td></tr>
+    <tr><td>“Logout after midnight” beside “6h 54m early”</td><td>Kept: the flag and the early mark both show</td><td>The early mark compares clock times and doesn't know about overnight shifts. The flag is what tells a person to check, and the mock shows the same pairing.</td></tr>
+    <tr><td>Late logins shown only at zero (green)</td><td>Red when any; neutral before anyone logs in</td><td>Principle 2.4, and a zero is only good news once there was something to judge.</td></tr>
+    <tr><td>Online chips on any day</td><td>Today only</td><td>Principle 2.5: “online” is a fact about right now.</td></tr>
+  </table>
+  <div class="callout warn"><b>To keep this document true:</b> when the Day sheet changes, re-run <code>tools/screenshots.mjs</code> and the shared <code>principles/tools/build-pdf.mjs</code> (see <code>README.md</code>), and update the matching principle in the same change.</div>
+</section>
+
+</body>
+</html>
