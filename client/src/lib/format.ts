@@ -136,3 +136,19 @@ export function daysAgo(n: number): string {
   d.setDate(d.getDate() - n)
   return isoLocal(d)
 }
+/**
+ * A range written out for people: "7 Aug – 4 Nov 2026". The year is written once when both
+ * ends share it, and a single day reads "4 Nov 2026". `withYear: false` drops it entirely
+ * ("7 Aug – 4 Nov") for places that already show the year nearby.
+ */
+export function formatRangeLong(from: string, to: string, withYear = true): string {
+  const f = new Date(from + 'T00:00:00')
+  const t = new Date(to + 'T00:00:00')
+  if (Number.isNaN(f.getTime()) || Number.isNaN(t.getTime())) return from === to ? from : `${from} – ${to}`
+  const dm = (d: Date) => `${d.getDate()} ${d.toLocaleDateString('en-US', { month: 'short' })}`
+  if (!withYear) return from === to ? dm(t) : `${dm(f)} – ${dm(t)}`
+  if (from === to) return `${dm(t)} ${t.getFullYear()}`
+  return f.getFullYear() === t.getFullYear()
+    ? `${dm(f)} – ${dm(t)} ${t.getFullYear()}`
+    : `${dm(f)} ${f.getFullYear()} – ${dm(t)} ${t.getFullYear()}`
+}

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { daysAgo, today } from '../lib/format'
+import { daysAgo, formatRangeLong, today } from '../lib/format'
 import { Button, cx } from './ui'
 
 export interface Range {
@@ -128,9 +128,11 @@ export function DateRangeControl({ value, onChange, tone = 'light' }: {
    * Complete Report, System Logs and Reports — leave it alone. 'dark' is opt-in: a solid
    * navy box for the Dashboard, where the client asked for a dark date control on the
    * otherwise-light header. The calendar popover stays light in both cases — it is a
-   * dense picker and reads better that way.
+   * dense picker and reads better that way. 'field' is a plain white form box with the range
+   * written out ("7 Aug – 4 Nov 2026") and the chevron at the far right — the Dashboard's
+   * filter rail, where it sits among other form fields.
    */
-  tone?: 'light' | 'dark'
+  tone?: 'light' | 'dark' | 'field'
 }) {
   const [open,        setOpen]        = useState(false)
   const [draft,       setDraft]       = useState<Range>(value)
@@ -223,7 +225,9 @@ export function DateRangeControl({ value, onChange, tone = 'light' }: {
     return r.from === draft.from && r.to === draft.to
   })
 
-  const triggerLabel = value.from
+  const triggerLabel = tone === 'field' && value.from
+    ? formatRangeLong(value.from, value.to || value.from)
+    : value.from
     ? value.from === value.to
       ? value.from
       : `${value.from} ~ ${value.to || value.from}`
@@ -300,19 +304,23 @@ export function DateRangeControl({ value, onChange, tone = 'light' }: {
         ref={triggerRef}
         onClick={() => { setDraft(value); setOpen((o) => !o) }}
         className={cx(
-          'flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors',
-          tone === 'dark'
+          'flex items-center gap-2 border font-medium transition-colors',
+          tone === 'field'
+            ? 'w-full rounded-lg border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 hover:border-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/20'
+            : tone === 'dark'
             // Solid navy, matching the sidebar gradient so the two dark surfaces agree.
-            ? 'border-white/10 bg-linear-to-b from-brand to-brand-dark text-slate-100 shadow-md shadow-slate-900/20 hover:from-brand-dark hover:to-brand-dark'
-            : 'glass-input border-white/70 text-slate-700 hover:bg-white/70',
+            ? 'rounded-xl border-white/10 bg-linear-to-b from-brand to-brand-dark px-3 py-1.5 text-sm text-slate-100 shadow-md shadow-slate-900/20 hover:from-brand-dark hover:to-brand-dark'
+            : 'glass-input rounded-xl border-white/70 px-3 py-1.5 text-sm text-slate-700 hover:bg-white/70',
         )}
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
-        </svg>
-        {triggerLabel}
+        {tone !== 'field' && (
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+          </svg>
+        )}
+        <span className={cx(tone === 'field' && 'truncate')}>{triggerLabel}</span>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-          className={cx('transition-transform', open && 'rotate-180')}>
+          className={cx('shrink-0 transition-transform', tone === 'field' && 'ml-auto text-slate-400', open && 'rotate-180')}>
           <polyline points="6 9 12 15 18 9"/>
         </svg>
       </button>

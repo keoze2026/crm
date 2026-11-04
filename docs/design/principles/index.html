@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dashboard Design Principles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm; }
+  :root {
+    --navy: #1f4e8c; --navy-light: #9aaac6; --green: #047857; --red: #dc2626; --amber: #b45309;
+    --ink: #0f172a; --body: #334155; --label: #475569; --muted: #64748b; --line: #e2e8f0; --hair: #f1f5f9; --tile: #f8fafc;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; font-family: 'Inter', system-ui, sans-serif; color: var(--body); font-size: 10.5pt; line-height: 1.55; }
+  h1, h2, h3 { color: var(--ink); line-height: 1.25; margin: 0; }
+  /* Headings use padding, never margin, on top: Chromium doubles a PDF bookmark title when a
+     heading's top margin is cut at a page break. */
+  h2 { font-size: 17pt; font-weight: 700; padding-top: 4mm; margin-bottom: 3mm; letter-spacing: -0.01em; }
+  h3 { font-size: 12pt; font-weight: 650; padding-top: 4mm; margin-bottom: 1.5mm; }
+  /* Keep a heading with what follows it. */
+  h2, h3 { break-after: avoid; page-break-after: avoid; }
+  p { margin: 0 0 2.5mm; }
+  ul, ol { margin: 0 0 3mm; padding-left: 5mm; }
+  li { margin-bottom: 1mm; }
+  code { font-family: 'Cascadia Mono', Consolas, monospace; font-size: 9pt; background: var(--hair); padding: 0 1.2mm; border-radius: 1mm; }
+  .num { display: inline-block; color: var(--navy); font-weight: 700; margin-right: 1.5mm; }
+  section.chapter { break-before: page; }
+  .lead { font-size: 11.5pt; color: var(--label); }
+
+  /* Cover */
+  .cover { height: 250mm; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; }
+  .cover .kicker { font-size: 10pt; font-weight: 600; color: var(--navy); letter-spacing: 0.08em; text-transform: uppercase; }
+  .cover h1 { font-size: 34pt; font-weight: 800; letter-spacing: -0.02em; margin-top: 4mm; }
+  .cover .sub { font-size: 13pt; color: var(--label); margin-top: 4mm; max-width: 140mm; }
+  .cover .shot { height: 150mm; overflow: hidden; border: 1px solid var(--line); border-radius: 3mm; }
+  .cover .shot img { width: 100%; display: block; }
+  .cover .meta { font-size: 9pt; color: var(--muted); display: flex; justify-content: space-between; }
+
+  figure { margin: 3mm 0 5mm; break-inside: avoid; }
+  figure img { display: block; max-width: 100%; border: 1px solid var(--line); border-radius: 2mm; }
+  figcaption { font-size: 8.5pt; color: var(--muted); margin-top: 1.5mm; }
+  .two figure img { max-height: 60mm; width: auto; }
+  .w60 img { max-width: 60%; } .w75 img { max-width: 75%; } .w45 img { max-width: 45%; }
+
+  /* Principle cards */
+  .principle { border: 1px solid var(--line); border-radius: 2.5mm; padding: 4mm 5mm; margin-bottom: 4mm; break-inside: avoid; }
+  .principle h3 { padding-top: 0; font-size: 12pt; }
+  .principle .rule { font-weight: 600; color: var(--ink); }
+  .principle .how { font-size: 9.5pt; color: var(--label); margin: 0; }
+  .principle .how b { color: var(--body); }
+  .do-dont { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; margin-top: 2mm; }
+  .do, .dont { font-size: 9pt; border-radius: 1.5mm; padding: 2mm 3mm; }
+  .do { background: #ecfdf5; color: #065f46; } .dont { background: #fef2f2; color: #991b1b; }
+  .do b, .dont b { display: block; font-size: 7.5pt; letter-spacing: 0.06em; text-transform: uppercase; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin: 2mm 0 5mm; break-inside: auto; }
+  th { text-align: left; font-size: 7.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border-bottom: 1px solid var(--line); padding: 1.8mm 2mm; }
+  td { border-bottom: 1px solid var(--hair); padding: 1.8mm 2mm; vertical-align: top; }
+  tr { break-inside: avoid; }
+  .sw { display: inline-block; width: 4.5mm; height: 4.5mm; border-radius: 1mm; vertical-align: -1mm; margin-right: 2mm; border: 1px solid rgba(15,23,42,0.08); }
+  .mono { font-family: 'Cascadia Mono', Consolas, monospace; font-size: 8.5pt; }
+
+  .type-row { display: flex; align-items: baseline; gap: 6mm; border-bottom: 1px solid var(--hair); padding: 2mm 0; }
+  .type-row .spec { width: 42mm; flex-shrink: 0; font-size: 8.5pt; color: var(--muted); }
+  .type-row .sample { color: var(--ink); }
+
+  .callout { background: var(--tile); border-left: 1mm solid var(--navy); padding: 3mm 4mm; border-radius: 0 2mm 2mm 0; margin: 3mm 0 5mm; font-size: 9.5pt; break-inside: avoid; }
+  .callout.warn { border-left-color: var(--amber); background: #fffbeb; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; align-items: start; }
+  .toc { list-style: none; padding: 0; columns: 2; column-gap: 10mm; }
+  .toc li { break-inside: avoid; padding: 0.5mm 0; border-bottom: 1px solid var(--hair); }
+  .story { counter-reset: s; list-style: none; padding: 0; }
+  .story li { counter-increment: s; padding: 0.8mm 0 0.8mm 9mm; position: relative; border-bottom: 1px solid var(--hair); }
+  .story li::before { content: counter(s); position: absolute; left: 0; top: 1.5mm; width: 6mm; height: 6mm; border-radius: 50%; background: var(--navy); color: #fff; font-size: 8pt; font-weight: 700; text-align: center; line-height: 6mm; }
+</style>
+</head>
+<body>
+
+<!-- ─── Cover ─────────────────────────────────────────────────────────────── -->
+<div class="cover">
+  <div>
+    <div class="kicker">Platform CRM · Design</div>
+    <h1>Dashboard Design Principles</h1>
+    <p class="sub">What the Dashboard design does on purpose, written down as rules, so the page stays one coherent thing as it changes and other pages can borrow from it.</p>
+  </div>
+  <div class="shot"><img src="images/page.png" alt="The Dashboard as built, March 2026 sample data"></div>
+  <div class="meta"><span>Derived from the dashboard mock (Dashboard.pdf) and the page built to it</span><span>November 2026</span></div>
+</div>
+
+<!-- ─── Contents & how to use ──────────────────────────────────────────────── -->
+<section class="chapter">
+  <h2>About this document</h2>
+  <p class="lead">The designer's mock of the Dashboard was studied closely, block by block, and every recurring decision in it was pulled out and named. Each one is written as a rule: what it says, why it holds, and how the page applies it.</p>
+  <p>Check a change to the Dashboard against the principles (section 2) and the formatting rules (section 5); review it line by line against the tokens and component rules (sections 3 and 4). Sections 2, 3 and 5 are not Dashboard-specific, so other pages can borrow them.</p>
+  <p>The screenshots are of the page as built, using the local sample data: March 2026 for the profitable state, and 4 May – 13 June 2026 for the loss state. Section 8 lists where the build departs from the mock, and why.</p>
+
+  <h3>Contents</h3>
+  <ol class="toc">
+    <li><span class="num">1</span> What the page is for</li>
+    <li><span class="num">2</span> Twelve principles</li>
+    <li><span class="num">3</span> Foundations: colour, type, space</li>
+    <li><span class="num">4</span> Components</li>
+    <li><span class="num">5</span> Numbers and words</li>
+    <li><span class="num">6</span> States</li>
+    <li><span class="num">7</span> Responsive and accessible</li>
+    <li><span class="num">8</span> Departures from the mock</li>
+  </ol>
+
+  <h2><span class="num">1</span> What the page is for</h2>
+  <p>The business sits between buyers (money in: billed per Lead) and traffic sources (money out: paid per Lead). The Dashboard answers one question first and everything else after it: <b>are we making money in this period, and why?</b></p>
+  <p>The mock lays the page out as a story read top to bottom, with the controls and the team kept to one side:</p>
+  <ol class="story">
+    <li><b>Headline.</b> Revenue, Expenses, Profit and Counted leads. Is it good, and compared with what?</li>
+    <li><b>When.</b> The chosen metric per day, 4 days or week, with the peak picked out.</li>
+    <li><b>From whom.</b> Buyers ranked by revenue, both ends visible; campaigns by spend; days in date order.</li>
+    <li><b>Where it went.</b> Every billed dollar split into spend, portal expenses and profit.</li>
+    <li><b>Lead quality.</b> What happened to the calls, and what each counted lead earned, cost and kept.</li>
+    <li><b>Beside it, the team.</b> Who is in today, by the hour they clocked in.</li>
+  </ol>
+  <p>The page is read-only and is scanned more often than studied. Every decision below makes a scan reliable: the eye lands on the right figure, and the words next to it are enough to understand it.</p>
+</section>
+
+<!-- ─── Principles ─────────────────────────────────────────────────────────── -->
+<section class="chapter">
+  <h2><span class="num">2</span> Twelve principles</h2>
+  <p class="lead">Each principle is something the mock does deliberately and consistently. Principles 1–6 are about what a number shows; 7–12 are about how the page is put together.</p>
+
+  <div class="principle">
+    <h3>2.1 Exact figures, approximate pictures</h3>
+    <p class="rule">Every money figure is printed in full, cents included. Only chart labels are rounded, and a rounded label says so with “~”.</p>
+    <p class="how"><b>Why:</b> people copy these numbers into messages and reconcile them against the sheets. A rounded headline invites a “which one is right?” conversation. <b>Applied:</b> KPI values, table cells and tiles use the full currency format; bar labels read “~$63K” and the peak “$138.7K”; the tooltip always gives the exact value.</p>
+    <div class="do-dont"><div class="do"><b>Do</b>$403,573.50 in the card · “~$63K” over a bar</div><div class="dont"><b>Don't</b>$403.6K in a card · “$63K” over a bar with no “~”</div></div>
+  </div>
+
+  <div class="principle">
+    <h3>2.2 Every figure explains itself</h3>
+    <p class="rule">A headline number never stands alone. Directly beneath it is one line that says what it is made of or what it means per unit.</p>
+    <p class="how"><b>Applied:</b> Revenue → “$49.71 per counted lead”. Expenses → “Excl. portal $333,959.00 · Portal $26,713.32”. Profit → “10.6% margin”. Counted leads → “8,488 answered · 389 missed”. Ranking tiles and the revenue-flow key follow the same pattern: label, value, then one explaining line.</p>
+  </div>
+
+  <div class="principle">
+    <h3>2.3 Say it in words when there is nothing to compare</h3>
+    <p class="rule">A missing comparison is written as a sentence: “No revenue in previous 90 days”, “No comparable previous period”. It is never shown as “n/a”, an empty pill or 0%.</p>
+    <p class="how"><b>Why:</b> “+∞%” and “n/a” both look like a broken page. A sentence tells the reader the page is working and the history is simply empty. <b>Applied:</b> each KPI card ends, under a hairline, with either that sentence or “Previous 90 days: $X” followed by a change pill. Profit only gets a percentage when the previous period billed something; a profit with no revenue behind it is not a baseline.</p>
+  </div>
+
+  <div class="principle">
+    <h3>2.4 One accent; colour carries meaning, not decoration</h3>
+    <p class="rule">Navy is the only accent. Green means profit and nothing else. Red means bad and nothing else. Everything else is slate.</p>
+    <p class="how"><b>Applied:</b> navy marks what is selected (the active bucket, the chosen day, the primary button) and the data in focus (the peak bar, top-ranked share bars, portal expenses). Green appears only on profit figures and the profit segment. Red appears on a loss, missed calls, late and absent counts, and the bottom of a ranking. A screen with no red on it means nothing needs attention.</p>
+    <div class="do-dont"><div class="do"><b>Do</b>Red “4 ABSENT”; slate “0 LATE”</div><div class="dont"><b>Don't</b>A coloured icon per card, or green for “more leads”</div></div>
+  </div>
+
+  <div class="principle">
+    <h3>2.5 Good or bad follows the meaning, not the arrow</h3>
+    <p class="rule">The ▲/▼ glyph shows which way a number moved. The colour shows whether that movement is good for this metric.</p>
+    <p class="how"><b>Applied:</b> Revenue ▲ is green; Expenses ▲ is red; Expenses ▼ is green. Profit below zero is red whatever its direction. See the full table in section 5.</p>
+  </div>
+
+  <div class="principle">
+    <h3>2.6 Emphasise the one that matters; mute the rest</h3>
+    <p class="rule">In a series, one mark is full strength and the others are a light tint of the same colour.</p>
+    <p class="how"><b>Applied:</b> the peak bar is solid navy and every other bar is navy at 42%. Only the peak's label is bold. In the ranking, the top five share bars are navy and the bottom five are red slivers, so the two ends of the list look different before the numbers are read.</p>
+  </div>
+</section>
+
+<section>
+  <div class="principle">
+    <h3>2.7 Show both ends, fold the middle</h3>
+    <p class="rule">A ranking shows its top five and its bottom five. The rows between them fold into one summary line that can be expanded.</p>
+    <p class="how"><b>Why:</b> the leaders and the stragglers are where decisions get made (who to grow, who to chase or drop); the middle seldom is. <b>Applied:</b> “Ranks 6–47 · 42 more buyers · $188,340.00 combined” sits between the two ends and opens the full list. A search, or a list of ten rows or fewer, shows every row.</p>
+  </div>
+
+  <div class="principle">
+    <h3>2.8 Summarise before detail</h3>
+    <p class="rule">Every dense block opens with a row of small summary tiles. The tiles answer the obvious questions so the detail below doesn't have to.</p>
+    <p class="how"><b>Applied:</b> above the buyer table sit Total billed · Active buyers · Top buyer · Lowest buyer · Top 5 share. The KPI row does the same job for the whole page.</p>
+  </div>
+
+  <div class="principle">
+    <h3>2.9 Parts of a whole, drawn as one bar</h3>
+    <p class="rule">When numbers add up to a whole, show them as segments of one bar with a caption written for a person: “Every $1 billed → $0.83 traffic spend · $0.07 portal · $0.11 profit”.</p>
+    <p class="how"><b>Applied:</b> “Where the revenue went” introduces no new number. It redraws the KPI row as proportions, so margin is seen rather than calculated. A loss is drawn as the stretch of spend that revenue did not cover, as a solid dark-red segment.</p>
+  </div>
+
+  <div class="principle">
+    <h3>2.10 Controls live in one place</h3>
+    <p class="rule">Everything that changes what the whole page shows (period, time bucket, chart metric, refresh, exports) lives in the right rail and nowhere else.</p>
+    <p class="how"><b>Applied:</b> the main column holds data only. Controls local to one block (the table's search and tabs, Lead mix's tabs) sit in that block's header, top right, and affect only that block.</p>
+  </div>
+
+  <div class="principle">
+    <h3>2.11 Flat panels, quiet structure</h3>
+    <p class="rule">Panels are white with a 1px border and no drop shadow. Inside a panel, structure comes from hairlines, grey tiles and spacing, not boxes within boxes.</p>
+    <p class="how"><b>Applied:</b> the only shadows on the page are on the raised active tab and the primary button: the two things that are either pressed or there to be pressed.</p>
+  </div>
+
+  <div class="principle">
+    <h3>2.12 Plain words, units beside numbers</h3>
+    <p class="rule">Labels are in sentence case and use the business's own terms. A unit sits next to its value, smaller and grey: “8,877 leads”, “95.6% of calls”.</p>
+    <p class="how"><b>Applied:</b> “Counted (billable)”, “Answered, not counted”, “Billable rate · of answered”. The domain terms (Revenue, Expenses, Profit, Counted, Answered, Missed) are used exactly as staff say them.</p>
+  </div>
+</section>
+
+<!-- ─── Foundations ───────────────────────────────────────────────────────── -->
+<section class="chapter">
+  <h2><span class="num">3</span> Foundations: colour, type, space</h2>
+
+  <h3>3.1 Colour tokens</h3>
+  <p>Defined as Tailwind classes, plus <code>BRAND</code> in <code>lib/theme.ts</code> and the <code>PROFIT</code>/<code>LOSS</code> constants in <code>pages/Dashboard.tsx</code>. The page background is the app's own; panels are always white.</p>
+  <table>
+    <tr><th style="width:30%">Token</th><th style="width:20%">Value</th><th>Means / used for</th></tr>
+    <tr><td><span class="sw" style="background:#1f4e8c"></span>Navy (brand)</td><td class="mono">#1f4e8c</td><td>The accent: selected bucket and day, primary button, peak bar, top-ranked share bars, portal segment, links.</td></tr>
+    <tr><td><span class="sw" style="background:#9aaac6"></span>Light navy</td><td class="mono">navy @ 42%</td><td>Data that isn't in focus: non-peak bars and the traffic-spend segment.</td></tr>
+    <tr><td><span class="sw" style="background:#047857"></span>Profit green</td><td class="mono">#047857</td><td>Profit only: the value, the profit segment, profit per lead, a ▲ on a good change.</td></tr>
+    <tr><td><span class="sw" style="background:#dc2626"></span>Bad red</td><td class="mono">#dc2626</td><td>Loss, missed, late, absent, the bottom of a ranking, a bad change, error banners.</td></tr>
+    <tr><td><span class="sw" style="background:#b45309"></span>Break amber</td><td class="mono">#b45309</td><td>“On break” only. It is neither good nor bad, so it needs a colour of its own.</td></tr>
+    <tr><td><span class="sw" style="background:#0f172a"></span>Ink</td><td class="mono">slate-900</td><td>Figures and titles.</td></tr>
+    <tr><td><span class="sw" style="background:#334155"></span>Body</td><td class="mono">slate-700</td><td>Row labels and names.</td></tr>
+    <tr><td><span class="sw" style="background:#475569"></span>Label</td><td class="mono">slate-600</td><td>Card labels and field labels.</td></tr>
+    <tr><td><span class="sw" style="background:#64748b"></span>Muted</td><td class="mono">slate-500</td><td>Captions, comparisons, units, column heads. The lightest colour text may use.</td></tr>
+    <tr><td><span class="sw" style="background:#94a3b8"></span>Faint</td><td class="mono">slate-400</td><td>Icons, chevrons and placeholders only. <b>Never text</b>: it fails AA contrast on white.</td></tr>
+    <tr><td><span class="sw" style="background:#e2e8f0"></span>Border</td><td class="mono">slate-200</td><td>Panel edges, control borders, the table head rule.</td></tr>
+    <tr><td><span class="sw" style="background:#f1f5f9"></span>Hairline</td><td class="mono">slate-100</td><td>Row dividers, empty bar tracks, the segmented-control well.</td></tr>
+    <tr><td><span class="sw" style="background:#f8fafc"></span>Tile</td><td class="mono">slate-50</td><td>Summary tiles, the per-lead tiles, the folded-rows line.</td></tr>
+  </table>
+
+  <h3>3.2 Type</h3>
+  <p>Inter, scoped to the Dashboard (the rest of the app is on Poppins). Figures always use tabular numerals, so columns of money line up digit by digit.</p>
+  <div class="type-row"><span class="spec">24 / bold · page title</span><span class="sample" style="font-size:24px;font-weight:700">Dashboard</span></div>
+  <div class="type-row"><span class="spec">26 / bold · KPI figure</span><span class="sample" style="font-size:26px;font-weight:700;font-variant-numeric:tabular-nums">$403,573.50</span></div>
+  <div class="type-row"><span class="spec">24 / bold · chart total</span><span class="sample" style="font-size:24px;font-weight:700">$403,573.50</span></div>
+  <div class="type-row"><span class="spec">14 / semibold · card title</span><span class="sample" style="font-size:14px;font-weight:600">Revenue by buyer</span></div>
+  <div class="type-row"><span class="spec">13 / medium · card label, rows</span><span class="sample" style="font-size:13px;font-weight:500;color:#475569">Counted leads</span></div>
+  <div class="type-row"><span class="spec">12 / regular · captions</span><span class="sample" style="font-size:12px;color:#64748b">Revenue landed on 4 of 90 days · peak $138,698.50 on Sep 29</span></div>
+  <div class="type-row"><span class="spec">11 / regular · meta</span><span class="sample" style="font-size:11px;color:#64748b">No revenue in previous 90 days</span></div>
+  <div class="type-row"><span class="spec">11 / semibold caps · heads</span><span class="sample" style="font-size:11px;font-weight:600;letter-spacing:.05em;color:#64748b">REVENUE &nbsp; SHARE &nbsp; LEADS &nbsp; $ / LEAD</span></div>
+  <div class="type-row"><span class="spec">9 / semibold caps · micro</span><span class="sample" style="font-size:9px;font-weight:600;letter-spacing:.05em;color:#64748b">IN &nbsp; STILL IN &nbsp; BREAK &nbsp; LATE &nbsp; ABSENT</span></div>
+
+  <h3>3.3 Space, shape, depth</h3>
+  <table>
+    <tr><th style="width:30%">Property</th><th>Rule</th></tr>
+    <tr><td>Rhythm</td><td>4px grid. Panels have 16px padding and 16px between them. 12px separates a card's header from its body. Tiles have 8px gaps. Table and list rows have 10px vertical padding.</td></tr>
+    <tr><td>Radius</td><td>12px panels · 8px controls and tiles · 6px segment items · full circles for avatars, day discs and thin bars.</td></tr>
+    <tr><td>Borders</td><td>1px slate-200 around panels and controls; 1px slate-100 between rows.</td></tr>
+    <tr><td>Depth</td><td>None on panels. A small shadow only on the active segment and the primary button.</td></tr>
+    <tr><td>Grid</td><td>Main column plus a 304px right rail on desktop. KPI cards fill columns at least 240px wide: three across at 1440px with the fourth wrapping beneath (as in the mock), and four across on wider screens.</td></tr>
+  </table>
+</section>
+
+<!-- ─── Components ────────────────────────────────────────────────────────── -->
+<section class="chapter">
+  <h2><span class="num">4</span> Components</h2>
+
+  <h3>4.1 KPI card</h3>
+  <figure><img src="images/kpis.png" alt="KPI row"><figcaption>The KPI row in March 2026: three across with the fourth beneath. With no history, each comparison is a sentence.</figcaption></figure>
+  <ul>
+    <li><b>Anatomy, top to bottom:</b> label with an ⓘ definition (shown on hover) · figure · one explaining line · hairline · comparison line. The comparison sits on the card's bottom edge, so it lines up across the row however long the explaining lines are.</li>
+    <li><b>Comparison:</b> “Previous 41 days: $5,496,697.50 ▲ 16.3%”, or a sentence when there is no baseline (2.3). The pill's colour follows the metric's meaning (2.5).</li>
+    <li><b>Negative profit:</b> the figure turns red with a real minus sign, and the explaining line reads “Loss · −2.2% margin”.</li>
+  </ul>
+  <figure class="w45"><img src="images/loss-kpi.png" alt="Profit card in a loss"><figcaption>Profit in the loss state (4 May – 13 Jun 2026 sample).</figcaption></figure>
+
+  <h3>4.2 Chart card</h3>
+  <figure><img src="images/chart.png" alt="Revenue by day"><figcaption>The title names the metric and the bucket. The total sits beneath it, then a caption that counts active buckets and names the peak.</figcaption></figure>
+  <ul>
+    <li><b>Bars, not lines.</b> Only buckets with activity are drawn, and the caption says how many of the range's buckets that is (“landed on 17 of 31 days”). Bars sit close to their labels and nothing on the plot is invented.</li>
+    <li><b>The peak</b> is solid navy with a bold label. Every other bar is light navy. Each bar carries its value while there are 16 or fewer; past that only the peak is labelled and the tooltip does the rest.</li>
+    <li><b>Axis:</b> compact money (“$140K”), solid horizontal gridlines in slate-100, no vertical gridlines. A zero line appears when a bar goes negative, and that bar is red.</li>
+    <li><b>Comparison</b> sits top right, in the same words as the KPI cards.</li>
+    <li>Under Expenses or Profit, the caption adds “before portal expenses” whenever the period carries portal expenses: daily and weekly buckets can't hold a monthly charge.</li>
+  </ul>
+</section>
+
+<section>
+  <h3>4.3 Ranking table</h3>
+  <figure><img src="images/ranking.png" alt="Revenue by buyer"><figcaption>Summary tiles, then the top five, the folded middle and the bottom five. The share bar is drawn against the leader, so the tail visibly shrinks to slivers.</figcaption></figure>
+  <ul>
+    <li><b>Header:</b> title, then “31 active buyers · ranked by revenue · 1 Mar – 31 Mar”. Search and the Buyers / Campaigns / By date tabs sit top right.</li>
+    <li><b>Columns:</b> # · name · money (right-aligned) · share (bar + %) · leads · $ / lead · first–last date. Numbers are right-aligned and tabular; names are left-aligned and bold.</li>
+    <li><b>Ends:</b> navy share bars for the top five, red for the bottom five, slate when every row is shown (a search, an expanded list, or By date).</li>
+    <li><b>By date</b> lists days in calendar order and never folds. Its last column is answered · missed.</li>
+    <li><b>Footer:</b> “Showing top 5 and bottom 5 of 31” on the left, “View all 31 buyers →” on the right.</li>
+  </ul>
+
+  <h3>4.4 Where the revenue went</h3>
+  <figure><img src="images/flow.png" alt="Where the revenue went"><figcaption>Profitable: the green segment is the margin.</figcaption></figure>
+  <figure><img src="images/loss-flow.png" alt="Where the revenue went, loss"><figcaption>Loss: the bar is drawn against total spend, and the stretch revenue did not cover is a solid dark-red segment.</figcaption></figure>
+  <ul>
+    <li>The bar is one row of segments: traffic spend (light navy, labelled with its % of revenue), portal (navy) and profit (green, labelled with the margin).</li>
+    <li>The key is two by two: revenue billed, then each segment (traffic source spend, portal expenses, profit), each with its % of revenue and its amount per counted lead.</li>
+    <li>A label and its value share a line while they fit. A seven-figure value drops beneath its label rather than squeezing it.</li>
+  </ul>
+</section>
+
+<section class="chapter">
+  <div class="two">
+    <div>
+      <h3>4.5 Lead mix</h3>
+      <figure><img src="images/lead-mix.png" alt="Lead mix"></figure>
+      <ul>
+        <li>A thin bar of answered (navy) against missed (red), then labelled rows with the value and its unit on the right.</li>
+        <li>Three tiles close the card: revenue, cost and profit per counted lead. Cost per lead includes portal expenses, so the three always add up.</li>
+        <li>Activity and Sources tabs keep the same row style.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>4.6 Right rail</h3>
+      <figure><img src="images/rail.png" alt="Filters rail"></figure>
+      <ul>
+        <li>Labels above controls; the period written out; the active bucket solid navy in a grey well.</li>
+        <li>Refresh is the one primary button. CSV / Report / Staff share one row and reflow when a permission hides one.</li>
+      </ul>
+      <h3>4.7 Team today</h3>
+      <figure><img src="images/team.png" alt="Team today"></figure>
+      <ul>
+        <li>Attendance as a sentence: “21 of 25 clocked in · 84% attendance”. People on leave never count as absent.</li>
+        <li>Late and Absent turn red only above zero.</li>
+        <li>One row per hour: time (or Break / Absent / Leave), avatars, names, count. Avatars are amber for Break, red for Absent.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Numbers and words ─────────────────────────────────────────────────── -->
+<section class="chapter">
+  <h2><span class="num">5</span> Numbers and words</h2>
+  <h3>5.1 Formatting</h3>
+  <table>
+    <tr><th style="width:28%">What</th><th style="width:30%">Format</th><th>Example</th></tr>
+    <tr><td>Money: figures, tables, tiles</td><td>Full, always two decimals</td><td>$403,573.50 · $69,500.00 · $144.00</td></tr>
+    <tr><td>Money: outflow or loss</td><td>True minus sign (−), not a hyphen</td><td>−$333,959.00 · −$1.09</td></tr>
+    <tr><td>Money: bar label</td><td>Whole thousands with “~”; the peak gets one decimal</td><td>~$63K · $138.7K</td></tr>
+    <tr><td>Money: axis</td><td>Compact</td><td>$0 · $35K · $140K · $1.2M</td></tr>
+    <tr><td>Counts</td><td>Grouped, no decimals</td><td>8,118 leads</td></tr>
+    <tr><td>Shares</td><td>One decimal; two under 0.1%</td><td>17.2% · 0.04%</td></tr>
+    <tr><td>Change</td><td>▲/▼ glyph, one decimal, grouped</td><td>▲ 16.3% · ▼ 214.2%</td></tr>
+    <tr><td>Range</td><td>Day month, year written once</td><td>7 Aug – 4 Nov 2026 (90 days)</td></tr>
+    <tr><td>Axis and table dates</td><td>Month day</td><td>Sep 29 · Mar 15 – Mar 31</td></tr>
+    <tr><td>Time</td><td>12-hour</td><td>Updated 1:16 PM · 9 AM</td></tr>
+    <tr><td>Nothing to show</td><td>Em dash</td><td>—</td></tr>
+  </table>
+
+  <h3>5.2 Good or bad, per metric</h3>
+  <table>
+    <tr><th>Metric</th><th>Up</th><th>Down</th><th>Also red when</th></tr>
+    <tr><td>Revenue</td><td style="color:#047857">good</td><td style="color:#dc2626">bad</td><td>—</td></tr>
+    <tr><td>Expenses</td><td style="color:#dc2626">bad</td><td style="color:#047857">good</td><td>—</td></tr>
+    <tr><td>Profit</td><td style="color:#047857">good</td><td style="color:#dc2626">bad</td><td>Below zero, whatever the direction</td></tr>
+    <tr><td>Counted leads</td><td style="color:#047857">good</td><td style="color:#dc2626">bad</td><td>—</td></tr>
+    <tr><td>Missed / Late / Absent</td><td colspan="2">no change pill</td><td>Any value above zero</td></tr>
+  </table>
+
+  <h3>5.3 Words</h3>
+  <ul>
+    <li>Sentence case everywhere: “Team today”, “Open attendance →”, “Revenue by buyer”.</li>
+    <li>Links that leave the page end in “→” and name where they go: “View all 52 buyers →”.</li>
+    <li>The comparison period is named by its length: “previous 90 days”, “previous day”.</li>
+    <li>Captions are sentences joined with a centre dot (·), not bullets or pipes.</li>
+  </ul>
+</section>
+
+<!-- ─── States ────────────────────────────────────────────────────────────── -->
+<section>
+  <h2><span class="num">6</span> States</h2>
+  <p>The mock shows the page loaded and profitable. The build designs the other states to the same rules:</p>
+  <table>
+    <tr><th style="width:22%">State</th><th>Treatment</th></tr>
+    <tr><td>Loading</td><td>Grey skeletons in the shape of what is coming (a figure bar, four chart bars, table rows). Each block fills in as its own request returns.</td></tr>
+    <tr><td>Refreshing</td><td>The old numbers stay on screen but the block fades to 60%. The header dot turns amber and reads “Refreshing…”, and so does the Refresh button. Stale numbers never pass for fresh ones.</td></tr>
+    <tr><td>Empty</td><td>A small chart glyph and one sentence that says what is missing and what to try: “No revenue was recorded in this period. Try a wider date range.”</td></tr>
+    <tr><td>Partial error</td><td>One red banner at the top of the main column, naming the first failed block and how many others failed, with a Retry button. Every other block keeps working.</td></tr>
+    <tr><td>No comparison</td><td>A sentence in place of the comparison line (principle 2.3).</td></tr>
+    <tr><td>Loss</td><td>Red figure with a real minus; “Loss · −2.2% margin”; a solid dark-red shortfall segment on the revenue bar; red profit per lead.</td></tr>
+    <tr><td>No attendance access</td><td>Team today is replaced by a Lead quality card (answer rate and answered against missed), so the rail never shows a hole.</td></tr>
+  </table>
+  <div class="callout">Motion is limited to fades and the view slide, and every animation, including skeleton pulses and the refresh spinner, switches off under <code>prefers-reduced-motion</code>.</div>
+</section>
+
+<!-- ─── Responsive & accessible ───────────────────────────────────────────── -->
+<section class="chapter">
+  <h2><span class="num">7</span> Responsive and accessible</h2>
+  <div class="two">
+    <div>
+      <h3>7.1 Down to a phone</h3>
+      <ul>
+        <li>Below 1024px the rail dissolves: its controls move to the top of the page and Team today moves to the bottom.</li>
+        <li>KPI cards stack one per row. Summary tiles go 2 → 3 → 5 across as space allows.</li>
+        <li>The ranking table keeps every column and scrolls sideways inside its own card. The page itself never scrolls sideways; at 390px the page width equals the screen width.</li>
+        <li>The chart keeps its height. Its x-axis skips labels instead of overlapping them.</li>
+      </ul>
+      <h3>7.2 Accessibility</h3>
+      <ul>
+        <li>Text is slate-500 or darker on white (at least 4.7:1). Slate-400 is kept for icons and placeholders.</li>
+        <li>Colour is never the only signal: changes carry ▲/▼, losses a minus sign, red counts a label (LATE, ABSENT), and the two ends of a ranking their rank numbers.</li>
+        <li>Tabs use <code>role="tab"</code> with <code>aria-selected</code>; bucket and day buttons use <code>aria-pressed</code>; the composition bars carry an <code>aria-label</code> that reads the split out; a refreshing panel sets <code>aria-busy</code>.</li>
+        <li>Every ⓘ is a focusable button whose label is the definition.</li>
+      </ul>
+    </div>
+    <figure><img src="images/mobile.png" alt="Dashboard on a phone" style="max-width:70%"><figcaption>390px wide: controls first, then the KPI cards.</figcaption></figure>
+  </div>
+</section>
+
+<!-- ─── Departures ────────────────────────────────────────────────────────── -->
+<section class="chapter">
+  <h2><span class="num">8</span> Departures from the mock</h2>
+  <p>The build follows the mock block for block. These are the places it differs, each for a stated reason:</p>
+  <table>
+    <tr><th style="width:30%">Mock</th><th style="width:30%">Build</th><th>Why</th></tr>
+    <tr><td>“[date] – [date]” placeholders</td><td>The first and last day each buyer or campaign was billed in the range</td><td>The analytics API now returns <code>first_date</code> / <code>last_date</code> for top buyers and campaigns.</td></tr>
+    <tr><td>Ranking capped by the API at 50 rows</td><td>Up to 500 rows</td><td>The mock ranks 52 buyers. A cap of 50 would drop the true bottom of the list, which is exactly what the table exists to show.</td></tr>
+    <tr><td>“[$ TRAFFIC]”, “[$ SALARIES]” and a “Traffic + salaries” segment; caption “spend &amp; payroll”</td><td>One traffic source spend entry; no salaries; caption “traffic spend”</td><td>The Dashboard has never included salaries: Profit is revenue − traffic spend − portal expenses. Adding them would change Profit everywhere, so the key shows only what Profit is made of.</td></tr>
+    <tr><td>Table money without cents (“$69,500”) and approximate totals (“~$188,340”, “$214.3K”)</td><td>Full money everywhere outside charts</td><td>House rule: money is never rounded on screen (principle 2.1). Only chart labels are approximate, and they carry “~”.</td></tr>
+    <tr><td>Only the “nothing to compare” sentences are shown</td><td>“Previous 90 days: $X ▲ 12.4%” when a baseline exists</td><td>The mock's sample period had no history. With a baseline, the change is the point of the line.</td></tr>
+    <tr><td>Loss, refreshing, empty, error and phone layouts not drawn</td><td>Designed to the same rules (sections 6 and 7)</td><td>The page must hold real data, which is regularly in a loss.</td></tr>
+    <tr><td>Campaigns, By date, Activity and Sources tabs not drawn</td><td>Same table and row styles as the drawn tabs</td><td>Tabs of one card should look alike.</td></tr>
+  </table>
+  <div class="callout warn"><b>To keep this document true:</b> when the Dashboard changes, re-run <code>tools/screenshots.mjs</code> and <code>tools/build-pdf.mjs</code> (see <code>README.md</code> beside this file) and update the matching principle in the same change.</div>
+</section>
+
+</body>
+</html>

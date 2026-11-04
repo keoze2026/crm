@@ -240,8 +240,13 @@ final class AnalyticsApiTest extends ApiTestCase
         $this->assertEquals(50, $rev[0]['answered']);
         $this->assertEquals(15, $rev[0]['missed']);
         $this->assertEquals(225, $rev[1]['revenue']);
+        // First and last day the buyer was billed inside the range (the Dashboard's date column).
+        $this->assertSame('2026-05-04', $rev[0]['first_date']);
+        $this->assertSame('2026-05-05', $rev[0]['last_date']);
+        $this->assertSame('2026-05-06', $rev[1]['first_date']);
+        $this->assertSame('2026-05-06', $rev[1]['last_date']);
 
-        $ans = $this->get('/analytics/top-buyers?metric=answered&' . self::WEEK)['json'];
+        $ans =$this->get('/analytics/top-buyers?metric=answered&' . self::WEEK)['json'];
         $this->assertSame(['ACME', 'RTG 04'], array_column($ans, 'code'));
 
         $all = $this->get('/analytics/top-buyers?metric=counted')['json'];
@@ -269,6 +274,8 @@ final class AnalyticsApiTest extends ApiTestCase
         $this->assertEquals(['cost' => 130, 'counted' => 30, 'answered' => 55, 'missed' => 5],
             array_intersect_key($rows[0], array_flip(['cost', 'counted', 'answered', 'missed'])));
         $this->assertEquals(50, $rows[1]['cost']);
+        $this->assertSame('2026-05-04', $rows[0]['first_date']);
+        $this->assertSame('2026-05-05', $rows[0]['last_date']);
 
         $all = $this->get('/analytics/top-campaigns?limit=1')['json'];
         $this->assertCount(1, $all);

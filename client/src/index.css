@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
-/* Plus Jakarta Sans — used on the Dashboard page only (applied via an inline font-family
-   on that page's root); the rest of the app stays on Poppins. */
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+/* Inter — used on the Dashboard page only (applied via an inline font-family on that page's
+   root, per the dashboard design in docs/design); the rest of the app stays on Poppins. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 /*
@@ -229,4 +229,33 @@ table.table-airy th {
 }
 table.table-airy th {
   padding-block: 0.7rem;
+}
+
+/*
+ * Dashboard ranking table: a reading table with the dashboard's rhythm — 10px rows,
+ * columns separated by a right gutter only, and the right alignment the money columns ask
+ * for (the global rule above forces every cell left). Same specificity trick.
+ */
+table.table-dash td,
+table.table-dash th {
+  padding-block: 0.625rem;
+  padding-inline: 0 1rem;
+  line-height: 1.35;
+}
+table.table-dash th {
+  padding-block: 0.5rem;
+}
+table.table-dash td:first-child,
+table.table-dash th:first-child {
+  padding-left: 0.25rem;
+}
+table.table-dash td:last-child,
+table.table-dash th:last-child {
+  padding-right: 0.25rem;
+}
+table.table-dash .text-right {
+  text-align: right;
+}
+table.table-dash td.p-0 {
+  padding: 0;
 }

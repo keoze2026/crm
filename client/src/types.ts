@@ -69,6 +69,12 @@ export interface TopBuyer {
   counted: number
   answered: number
   missed: number
+  /**
+   * First and last day the buyer was billed inside the range (YYYY-MM-DD). Optional — an
+   * older API predates them; the Dashboard shows "—" then.
+   */
+  first_date?: string | null
+  last_date?: string | null
 }
 
 export interface TopCampaign {
@@ -79,6 +85,9 @@ export interface TopCampaign {
   counted: number
   answered: number
   missed: number
+  /** First and last day the campaign was paid inside the range. Optional, as on TopBuyer. */
+  first_date?: string | null
+  last_date?: string | null
 }
 
 export interface TopSource {

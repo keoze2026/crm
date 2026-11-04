@@ -130,7 +130,9 @@ final class AnalyticsController
     {
         $metric = in_array(Http::query('metric'), ['revenue', 'counted', 'answered'], true)
             ? Http::query('metric') : 'revenue';
-        $limit = min(50, max(1, (int) Http::query('limit', '10')));
+        // 500: the Dashboard ranks every buyer in the range (top five beside the bottom five),
+        // so the ceiling sits above the realistic buyer count rather than at a "top N" size.
+        $limit = min(500, max(1, (int) Http::query('limit', '10')));
         $orderCol = $metric === 'revenue' ? 'revenue' : $metric;
 
         [$where, $params] = $this->dateWhere('AND');
@@ -139,7 +141,9 @@ final class AnalyticsController
                    COALESCE(SUM(r.total_bill), 0) AS revenue,
                    COALESCE(SUM(r.counted), 0)    AS counted,
                    COALESCE(SUM(r.answered), 0)   AS answered,
-                   COALESCE(SUM(r.missed), 0)     AS missed
+                   COALESCE(SUM(r.missed), 0)     AS missed,
+                   to_char(MIN(r.record_date), 'YYYY-MM-DD') AS first_date,
+                   to_char(MAX(r.record_date), 'YYYY-MM-DD') AS last_date
             FROM call_records r
             JOIN buyers b ON b.id = r.buyer_id
             WHERE r.record_type = 'buyer' {$where}
@@ -155,14 +159,16 @@ final class AnalyticsController
     /** Ranked campaigns (cost side). */
     public function topCampaigns(): void
     {
-        $limit = min(50, max(1, (int) Http::query('limit', '10')));
+        $limit = min(500, max(1, (int) Http::query('limit', '10')));
         [$where, $params] = $this->dateWhere('AND');
         $sql = "
             SELECT c.id, c.code, c.name,
                    COALESCE(SUM(r.total_bill), 0) AS cost,
                    COALESCE(SUM(r.counted), 0)    AS counted,
                    COALESCE(SUM(r.answered), 0)   AS answered,
-                   COALESCE(SUM(r.missed), 0)     AS missed
+                   COALESCE(SUM(r.missed), 0)     AS missed,
+                   to_char(MIN(r.record_date), 'YYYY-MM-DD') AS first_date,
+                   to_char(MAX(r.record_date), 'YYYY-MM-DD') AS last_date
             FROM call_records r
             JOIN campaigns c ON c.id = r.campaign_id
             WHERE r.record_type = 'campaign' {$where}
