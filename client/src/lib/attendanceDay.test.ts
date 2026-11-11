@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AttendanceDay, StaffAttendanceRow, StaffMember } from '../types'
-import { buildDayViews, filterCounts, matchesFilter, reviewFlag } from './attendanceDay'
+import { buildDayViews, filterCounts, matchesFilter, overnightSchedule, reviewFlag } from './attendanceDay'
 
 const base = { login: null, logout: null, breakMin: 0, botBreaks: 0, online: false, onLeave: false }
 
@@ -18,10 +18,28 @@ describe('reviewFlag', () => {
   it('flags a logout earlier on the clock than the login', () => {
     expect(reviewFlag({ ...base, login: '07:47', logout: '00:06' })?.label).toBe('Logout after midnight')
   })
+  it('does not flag one for somebody whose own hours cross midnight', () => {
+    expect(reviewFlag({ ...base, login: '12:00', logout: '05:00', overnightSchedule: true })).toBeNull()
+    // Nobody is excused by a schedule nobody set.
+    expect(reviewFlag({ ...base, login: '12:00', logout: '05:00' })?.id).toBe('after-midnight')
+  })
   it('leaves an ordinary day, an empty day and a leave day alone', () => {
     expect(reviewFlag({ ...base, login: '09:00', logout: '17:00', breakMin: 30, online: true })).toBeNull()
     expect(reviewFlag(base)).toBeNull()
     expect(reviewFlag({ ...base, online: true, onLeave: true })).toBeNull()
+  })
+})
+
+describe('overnightSchedule', () => {
+  it('is true only when the expected finish is earlier on the clock than the start', () => {
+    expect(overnightSchedule({ expected_login: '12:00', expected_logout: '05:00' })).toBe(true)
+    expect(overnightSchedule({ expected_login: '21:00', expected_logout: '06:00' })).toBe(true)
+    expect(overnightSchedule({ expected_login: '09:00', expected_logout: '17:00' })).toBe(false)
+  })
+  it('is false when either half of the schedule is unset', () => {
+    expect(overnightSchedule({ expected_login: '12:00', expected_logout: null })).toBe(false)
+    expect(overnightSchedule({ expected_login: null, expected_logout: '05:00' })).toBe(false)
+    expect(overnightSchedule({ expected_login: null, expected_logout: null })).toBe(false)
   })
 })
 

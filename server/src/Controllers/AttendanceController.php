@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\AttendanceDays;
 use App\Database;
 use App\Http;
 use App\Leaves;
@@ -37,8 +38,18 @@ final class AttendanceController
      * Identity: `user_id` is the bot's account where there is one and a stable "staff-12"
      * stand-in where there isn't, so two people who have never used the bot can't collapse
      * into one row. `bot_user_id` is the real account, and the only thing break rows join on.
+     *
+     * Both halves read a SHIFT rather than a calendar date, so a night that ran past midnight
+     * is one day with one set of hours: the bot's own split rows are stitched by
+     * App\AttendanceDays, and a correction whose logout reads earlier than its login is the
+     * following morning — see keyedLogout().
      */
-    private const DAYS_SOURCE = "(
+    private static function daysSource(): string
+    {
+        $bot    = AttendanceDays::source();
+        $login  = self::keyedLogin();
+        $logout = self::keyedLogout();
+        return "(
         SELECT COALESCE(d.user_id::text, 'staff-' || so.id::text) AS user_id,
                d.user_id::text                                    AS bot_user_id,
                so.id                                              AS staff_id,
@@ -46,12 +57,10 @@ final class AttendanceController
                COALESCE(NULLIF(btrim(so.name), ''), d.staff_name) AS staff_name,
                d.username,
                CASE WHEN o.id IS NOT NULL
-                    THEN CASE WHEN o.login_at IS NULL THEN NULL
-                              ELSE (d.work_date + o.login_at) AT TIME ZONE 'America/New_York' END
+                    THEN CASE WHEN o.login_at IS NULL THEN NULL ELSE {$login} END
                     ELSE d.login_at END                           AS login_at,
                CASE WHEN o.id IS NOT NULL
-                    THEN CASE WHEN o.logout_at IS NULL THEN NULL
-                              ELSE (d.work_date + o.logout_at) AT TIME ZONE 'America/New_York' END
+                    THEN CASE WHEN o.logout_at IS NULL THEN NULL ELSE {$logout} END
                     ELSE d.logout_at END                          AS logout_at,
                d.login_stated,
                d.logout_stated,
@@ -60,7 +69,7 @@ final class AttendanceController
                TRUE                                               AS bot_seen,
                -- A correction's blank break (NULL) falls back to the bot's total, via BREAK_MIN.
                o.break_min                                        AS set_break_min
-          FROM attendance_days d
+          FROM {$bot} d
           LEFT JOIN staff so ON so.attendance_user_id = d.user_id::text
           LEFT JOIN staff_attendance o ON o.staff_id = so.id AND o.work_date = d.work_date
         UNION ALL
@@ -70,10 +79,8 @@ final class AttendanceController
                o.work_date,
                s.name,
                NULL,
-               CASE WHEN o.login_at IS NULL THEN NULL
-                    ELSE (o.work_date + o.login_at) AT TIME ZONE 'America/New_York' END,
-               CASE WHEN o.logout_at IS NULL THEN NULL
-                    ELSE (o.work_date + o.logout_at) AT TIME ZONE 'America/New_York' END,
+               CASE WHEN o.login_at IS NULL THEN NULL ELSE {$login} END,
+               CASE WHEN o.logout_at IS NULL THEN NULL ELSE {$logout} END,
                NULL,
                NULL,
                NULLIF(btrim(o.status), ''),
@@ -84,11 +91,38 @@ final class AttendanceController
           JOIN staff s ON s.id = o.staff_id
          WHERE NOT EXISTS (
                    SELECT 1
-                     FROM attendance_days d2
+                     FROM {$bot} d2
                     WHERE NULLIF(btrim(s.attendance_user_id), '') IS NOT NULL
                       AND d2.user_id::text = btrim(s.attendance_user_id)
                       AND d2.work_date = o.work_date)
     ) d";
+    }
+
+    /** A correction's login, as an instant: its clock time on its own work date. */
+    private static function keyedLogin(): string
+    {
+        return "((o.work_date + o.login_at) AT TIME ZONE '" . self::TZ . "')";
+    }
+
+    /**
+     * A correction's logout, as an instant — THE FOLLOWING MORNING when it reads earlier on
+     * the clock than the login.
+     *
+     * Both cells hold a bare clock time against one work date, so an overnight shift can only
+     * be keyed in as "in 12:00, out 05:00". Read on the work date alone that is minus seven
+     * hours; read as the next day it is the seventeen actually worked, which is how the sheet
+     * has always shown it (netHours() in client/src/lib/staff.ts) and now how it is counted.
+     *
+     * The day is added to the LOCAL timestamp before the zone is applied, so the clock time
+     * is what carries over: a shift closing at 05:00 closes at 05:00 on both sides of a DST
+     * switch, and the hours come out as the 7 or 9 the night really was.
+     */
+    private static function keyedLogout(): string
+    {
+        return "((o.work_date + o.logout_at
+                  + CASE WHEN o.login_at IS NOT NULL AND o.logout_at < o.login_at
+                         THEN INTERVAL '1 day' ELSE INTERVAL '0' END) AT TIME ZONE '" . self::TZ . "')";
+    }
 
     /**
      * The break total: the keyed-in one where a correction gives one, the bot's otherwise —
@@ -97,7 +131,7 @@ final class AttendanceController
     private const BREAK_MIN =
         "CASE WHEN d.set_break_min IS NOT NULL THEN d.set_break_min ELSE COALESCE(b.break_min, 0) END";
 
-    /** Both times are already resolved by DAYS_SOURCE — these two name them for the queries. */
+    /** Both times are already resolved by daysSource() — these two name them for the queries. */
     private const LOGIN_AT  = 'd.login_at';
     private const LOGOUT_AT = 'd.logout_at';
 
@@ -160,14 +194,19 @@ final class AttendanceController
      * Both are measured against the EFFECTIVE times, so a day corrected on the Staff page
      * is judged by the corrected figures rather than the bot's original ones. A leave day
      * is not judged at all.
+     *
+     * Both read the clock the short way round (clockGap), which is what lets a schedule
+     * that crosses midnight be judged at all: an 05:00 logout against an expected 21:00 is
+     * sixteen hours LATE out, not sixteen hours early, and an expected 05:00 finish is met
+     * at 05:00 rather than counted as a whole day short.
      */
     private static function lateMin(): string
     {
         $login = self::LOGIN_AT;
         $tz    = self::TZ;
+        $clock = "((({$login}) AT TIME ZONE '{$tz}')::time)";
         return "CASE WHEN so.expected_login IS NULL OR ({$login}) IS NULL OR " . self::onLeave() . " THEN NULL
-                     ELSE GREATEST(0, ROUND(EXTRACT(EPOCH FROM
-                          (({$login}) AT TIME ZONE '{$tz}')::time - so.expected_login) / 60.0))::int
+                     ELSE " . self::clockGap('so.expected_login', $clock) . "
                 END";
     }
 
@@ -175,10 +214,27 @@ final class AttendanceController
     {
         $logout = self::LOGOUT_AT;
         $tz     = self::TZ;
+        $clock  = "((({$logout}) AT TIME ZONE '{$tz}')::time)";
         return "CASE WHEN so.expected_logout IS NULL OR ({$logout}) IS NULL OR " . self::onLeave() . " THEN NULL
-                     ELSE GREATEST(0, ROUND(EXTRACT(EPOCH FROM
-                          so.expected_logout - (({$logout}) AT TIME ZONE '{$tz}')::time) / 60.0))::int
+                     ELSE " . self::clockGap($clock, 'so.expected_logout') . "
                 END";
+    }
+
+    /**
+     * Minutes forward from clock time `$from` to clock time `$to`, THE SHORT WAY ROUND the
+     * 24-hour face: 0 when `$to` is at or behind `$from`.
+     *
+     * Two bare clock times carry no day, so their difference is ambiguous by 24 hours, and
+     * subtracting them outright gets an overnight shift exactly a day wrong in one direction
+     * or the other. Anything more than twelve hours forward is read as the shorter distance
+     * backwards instead — which is to say, not late and not early — so the same expression
+     * judges a 09:00-to-18:00 desk and a 21:00-to-05:00 night desk without being told which
+     * it is looking at.
+     */
+    private static function clockGap(string $from, string $to): string
+    {
+        $fwd = "(((ROUND(EXTRACT(EPOCH FROM (({$to}) - ({$from}))) / 60.0)::int % 1440) + 1440) % 1440)";
+        return "CASE WHEN {$fwd} > 720 THEN 0 ELSE {$fwd} END";
     }
 
     /** The four schedule columns every day-shaped response carries, as a SELECT fragment. */
@@ -282,7 +338,7 @@ final class AttendanceController
                     GREATEST({$break} - :allow, 0) AS over_break_min,
                     ROUND(EXTRACT(EPOCH FROM ({$logout} - {$login})) / 3600.0 - {$break} / 60.0, 2) AS net_hours,
                     " . self::scheduleColumns() . "
-             FROM " . self::DAYS_SOURCE . "
+             FROM " . self::daysSource() . "
              LEFT JOIN (" . self::breakDaySubquery() . ") b ON " . self::BREAK_JOIN_ON . "
              " . self::OVERRIDE_JOIN . "
              WHERE d.work_date = :date
@@ -299,21 +355,31 @@ final class AttendanceController
         ]);
     }
 
+    /**
+     * Who is at work right now: logged in, not logged out, and recently enough that the
+     * shift could still be running.
+     *
+     * Measured from the LOGIN rather than from today's date, because at 2am a night shift
+     * belongs to yesterday — filtering on the calendar day emptied the board of exactly the
+     * people who were still at their desks. The same span the stitch allows a shift bounds
+     * it, so a logout nobody ever posted drops off instead of standing here for weeks.
+     */
     public function live(): void
     {
         $login  = self::LOGIN_AT;
         $logout = self::LOGOUT_AT;
+        $span   = AttendanceDays::MAX_SHIFT_HOURS;
         $stmt   = Database::connection()->prepare(
             "SELECT d.user_id::text, d.staff_name, d.username,
                     {$login} AS login_at, d.login_stated,
                     " . self::scheduleColumns() . "
-             FROM " . self::DAYS_SOURCE . "
+             FROM " . self::daysSource() . "
              " . self::OVERRIDE_JOIN . "
-             WHERE d.work_date = (now() AT TIME ZONE :tz)::date
-               AND {$login} IS NOT NULL AND {$logout} IS NULL
+             WHERE {$login} IS NOT NULL AND {$logout} IS NULL
+               AND {$login} > now() - INTERVAL '{$span} hours'
              ORDER BY {$login}"
         );
-        $stmt->execute([':tz' => self::TZ]);
+        $stmt->execute();
         Http::json(array_map([$this, 'castSchedule'], $stmt->fetchAll()));
     }
 
@@ -385,7 +451,7 @@ final class AttendanceController
                     " . self::onLeave() . " AS on_leave,
                     d.edited, d.bot_seen, d.staff_id,
                     " . self::scheduleColumns() . "
-             FROM " . self::DAYS_SOURCE . "
+             FROM " . self::daysSource() . "
              LEFT JOIN (" . self::breakDaySubquery() . ") b ON " . self::BREAK_JOIN_ON . "
              " . self::OVERRIDE_JOIN . "
              WHERE " . implode(' AND ', $where) . "
@@ -419,7 +485,7 @@ final class AttendanceController
                     ROUND(SUM(EXTRACT(EPOCH FROM ({$logout} - {$login})) / 3600.0)
                           FILTER (WHERE {$logout} IS NOT NULL), 2) AS total_hours,
                     MIN(d.work_date)::text AS first_day, MAX(d.work_date)::text AS last_day
-             FROM " . self::DAYS_SOURCE . "
+             FROM " . self::daysSource() . "
              " . self::OVERRIDE_JOIN . "
              WHERE d.work_date BETWEEN :from AND :to
              GROUP BY d.user_id, d.staff_name ORDER BY d.staff_name"
@@ -512,11 +578,15 @@ final class AttendanceController
         $logout = self::LOGOUT_AT;
         $join   = self::OVERRIDE_JOIN;
         $allow  = self::BREAK_ALLOW;
+        // The login as a clock time, and how far past the expected one it is — needed twice
+        // over in the 'late' report, as the figure and as the test for being in it at all.
+        $clock  = "((({$login}) AT TIME ZONE '{$tz}')::time)";
+        $late   = self::clockGap("COALESCE(so.expected_login, TIME '09:00')", $clock);
 
         $sql = match($type) {
             'missing_logout' => "SELECT d.user_id, d.staff_name, d.work_date::text,
                                         {$login} AS login_at
-                                   FROM " . self::DAYS_SOURCE . " {$join}
+                                   FROM " . self::daysSource() . " {$join}
                                   WHERE {$login} IS NOT NULL AND {$logout} IS NULL
                                     AND d.work_date < (now() AT TIME ZONE '{$tz}')::date
                                     AND d.work_date BETWEEN :from AND :to
@@ -525,7 +595,7 @@ final class AttendanceController
             'over_break'     => "SELECT d.user_id, d.staff_name, d.work_date::text,
                                         {$break} AS break_min,
                                         {$break} - {$allow} AS over_min
-                                   FROM " . self::DAYS_SOURCE . "
+                                   FROM " . self::daysSource() . "
                               LEFT JOIN (
                                         SELECT user_id, work_date, SUM(duration_min) AS break_min
                                           FROM attendance_breaks GROUP BY user_id, work_date
@@ -537,17 +607,16 @@ final class AttendanceController
             // Late is measured against the person's own expected login from the Staff page.
             // Anyone with no schedule set keeps the flat 9:00 this report has always used,
             // so it never silently empties out as schedules are filled in one by one. Nobody
-            // is late on a day they were on leave.
+            // is late on a day they were on leave. The clock is read the short way round, so
+            // a night desk expected at 21:00 and in at 21:20 is twenty minutes late here
+            // rather than twenty-three hours and forty.
             'late'           => "SELECT d.user_id, d.staff_name, d.work_date::text,
-                                        ({$login} AT TIME ZONE '{$tz}')::time::text AS local_login,
+                                        {$clock}::text AS local_login,
                                         to_char(COALESCE(so.expected_login, TIME '09:00'), 'HH24:MI') AS expected_login,
-                                        GREATEST(0, ROUND(EXTRACT(EPOCH FROM
-                                            (({$login}) AT TIME ZONE '{$tz}')::time
-                                            - COALESCE(so.expected_login, TIME '09:00')) / 60.0))::int AS late_min
-                                   FROM " . self::DAYS_SOURCE . " {$join}
+                                        {$late} AS late_min
+                                   FROM " . self::daysSource() . " {$join}
                                   WHERE {$login} IS NOT NULL
-                                    AND ({$login} AT TIME ZONE '{$tz}')::time
-                                        > COALESCE(so.expected_login, TIME '09:00')
+                                    AND {$late} > 0
                                     AND d.work_date BETWEEN :from AND :to
                                     AND NOT " . self::onLeave() . "
                                   ORDER BY d.work_date DESC",

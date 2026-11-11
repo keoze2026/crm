@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\AttendanceDays;
 use App\Database;
 use App\Http;
 use App\Leaves;
@@ -901,11 +902,16 @@ final class StaffController
      * including a blank clock time, which is what lets a day be corrected to "no login".
      * The id rides along so the page can PUT to it; a NULL id means nothing overrides this
      * day yet and the first edit will POST.
+     *
+     * The bot's days arrive already stitched (App\AttendanceDays), so a shift that ran past
+     * midnight is this one day with the logout that actually closed it — shown as the clock
+     * time it reads, 05:00, which the sheet knows to count as the following morning.
      */
     private function fetchedDaySelect(): string
     {
         $tz    = self::TZ;
         $leave = Leaves::covers('s.id', 'd.work_date');
+        $bot   = AttendanceDays::source();
         return "
             SELECT o.id, 'fetched' AS source, (o.id IS NOT NULL) AS edited,
                    s.id AS staff_id, s.name AS staff_name,
@@ -922,7 +928,7 @@ final class StaffController
                         ELSE 'present' END AS status,
                    COALESCE(o.note, '') AS note,
                    " . $this->onLeave('o.status', 'd.work_date') . " AS on_leave
-              FROM attendance_days d
+              FROM {$bot} d
               JOIN staff s ON s.attendance_user_id = d.user_id::text
          LEFT JOIN (
                    SELECT user_id, work_date, SUM(duration_min)::int AS break_min
@@ -986,7 +992,13 @@ final class StaffController
         return $available;
     }
 
-    /** True when the bot already recorded this person's day — so it may not be keyed in. */
+    /**
+     * True when the bot already recorded this person's day — so it may not be keyed in.
+     *
+     * Read off the stitched days, not the bot's raw rows: the morning a night shift ended on
+     * is no longer a day of its own, so it is free to be keyed in as one if the person really
+     * did work it.
+     */
     private function fetchedDayExists(int $staffId, string $date): bool
     {
         if (!$this->attendanceAvailable()) {
@@ -994,7 +1006,7 @@ final class StaffController
         }
         $stmt = Database::connection()->prepare(
             'SELECT 1
-               FROM attendance_days d
+               FROM ' . AttendanceDays::source() . ' d
                JOIN staff s ON s.attendance_user_id = d.user_id::text
               WHERE s.id = :staff AND d.work_date = :date'
         );

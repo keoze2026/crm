@@ -286,19 +286,31 @@ export function netHours(login: string, logout: string, breakMin: number): numbe
  * reason netHours() is: the mark then moves while a row is still being typed.
  */
 export function lateBy(login: string | null, expected: string | null): number | null {
-  return gap(expected, login)
+  return clockGap(expected, login)
 }
 
 export function earlyBy(logout: string | null, expected: string | null): number | null {
-  return gap(logout, expected)
+  return clockGap(logout, expected)
 }
 
-/** Minutes `b` runs past `a`, floored at 0; null when either is missing. */
-function gap(a: string | null, b: string | null): number | null {
+/**
+ * Minutes forward from `a` to `b` THE SHORT WAY ROUND the 24-hour face — 0 when `b` is at
+ * or behind `a`, null when either is missing.
+ *
+ * A clock time carries no day, so the distance between two of them is ambiguous by 24
+ * hours, and subtracting them outright gets a shift that crosses midnight exactly a day
+ * wrong. Anything beyond twelve hours forward is the shorter distance backwards instead —
+ * not late, not early — which is what lets one rule judge a 09:00–18:00 desk and a
+ * 21:00–05:00 night desk without being told which it is looking at. A logout at 05:00
+ * against an expected 21:00 is eight hours LATE out, so nothing is marked; against an
+ * expected 05:00 finish it is exactly on time.
+ */
+function clockGap(a: string | null, b: string | null): number | null {
   const from = a ? minutesOf(a) : null
   const to = b ? minutesOf(b) : null
   if (from === null || to === null) return null
-  return Math.max(0, to - from)
+  const forward = (((to - from) % 1440) + 1440) % 1440
+  return forward > 720 ? 0 : forward
 }
 
 /** How far off a day is, worded: 7 -> "7m", 95 -> "1h 35m". */

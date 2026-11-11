@@ -372,6 +372,25 @@ describe('lateBy / earlyBy', () => {
     expect(earlyBy('16:00', null)).toBeNull()
     expect(lateBy('', '09:00')).toBeNull()
   })
+
+  it('judges a schedule that crosses midnight on its own clock', () => {
+    // Nights: expected 12:00–05:00. The finish is the next morning, not 19 hours early.
+    expect(earlyBy('05:00', '05:00')).toBe(0)
+    expect(earlyBy('04:30', '05:00')).toBe(30)
+    expect(earlyBy('05:20', '05:00')).toBe(0)
+    // Left before midnight, hours short of a 05:00 finish.
+    expect(earlyBy('23:00', '05:00')).toBe(360)
+    // Expected at 21:00, in at 21:25 — 25 minutes late, not 23 hours and 35.
+    expect(lateBy('21:25', '21:00')).toBe(25)
+    expect(lateBy('20:40', '21:00')).toBe(0)
+  })
+
+  it('reads a finish long past the expected one as late out, not early', () => {
+    // A 12:00–21:00 day that ran to 05:00 is eight hours over, so nothing is marked.
+    expect(earlyBy('05:00', '21:00')).toBe(0)
+    // Past midnight on a 09:00 start is a very late arrival, not an early one.
+    expect(lateBy('00:30', '21:00')).toBe(210)
+  })
 })
 
 describe('gapLabel', () => {

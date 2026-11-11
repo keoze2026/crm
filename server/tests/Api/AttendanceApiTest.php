@@ -222,15 +222,17 @@ final class AttendanceApiTest extends ApiTestCase
 
     // ─── /attendance/live ──────────────────────────────────────────────────────
 
-    public function testLiveListsWhoIsCheckedInTodayWithLateness(): void
+    public function testLiveListsWhoIsStillCheckedInWithLateness(): void
     {
         $today = self::orgToday();
-        $yesterday = (new \DateTimeImmutable($today))->modify('-1 day')->format('Y-m-d');
+        // Days back, not yesterday: the board measures from the login, so "stale" has to be
+        // further back than a shift could reach for this to mean anything at any hour.
+        $stale = (new \DateTimeImmutable($today))->modify('-4 days')->format('Y-m-d');
         self::linkedStaff('Eve', 2001, ['expected_login' => '09:00']);
         self::linkedStaff('Fay', 2002);
         self::botDay(2001, $today, '09:25', null);
         self::botDay(2002, $today, '08:00', '12:00');
-        self::botDay(2003, $yesterday, '08:00', null, 'Yesterday');
+        self::botDay(2003, $stale, '08:00', null, 'Forgotten');
 
         $r = $this->get('/attendance/live');
         $this->assertStatus(200, $r);
@@ -241,6 +243,28 @@ final class AttendanceApiTest extends ApiTestCase
         $this->assertSame(25, $row['late_min']);
         $this->assertNull($row['early_min']);
         $this->assertSame('09:00', $row['expected_login']);
+    }
+
+    /**
+     * A shift that began before midnight is still at work after it. Read off the calendar
+     * day this board showed nobody at 2am — the hours the night team is actually there.
+     */
+    public function testLiveStillShowsAShiftThatBeganYesterday(): void
+    {
+        $login = (new \DateTimeImmutable('now', new \DateTimeZone(self::ORG_TZ)))->modify('-3 hours');
+        self::linkedStaff('Nina', 2004);
+        self::insert('attendance_days', [
+            'user_id'    => 2004,
+            'staff_name' => 'Nina',
+            // Whatever date that login fell on — the point is it may not be today's.
+            'work_date'  => $login->format('Y-m-d'),
+            'login_at'   => $login->format(\DATE_ATOM),
+            'logout_at'  => null,
+        ]);
+
+        $r = $this->get('/attendance/live');
+        $this->assertStatus(200, $r);
+        $this->assertSame(['2004'], array_column($r['json'], 'user_id'));
     }
 
     public function testLiveHonoursAnOverrideThatFillsInTheLogout(): void

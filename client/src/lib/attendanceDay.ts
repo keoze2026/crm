@@ -35,6 +35,13 @@ function minutesOf(hhmm: string | null): number | null {
  * somebody the bot sees online with nothing logged, a break taken before any login, a
  * logout with no login, and a logout earlier on the clock than the login (a shift that ran
  * past midnight, or a mistyped time). A day on leave is never flagged.
+ *
+ * That last one is judged against the PERSON, not the clock: somebody whose expected hours
+ * cross midnight is meant to log out the next morning, so their every shift would otherwise
+ * arrive needing review, and the one night that genuinely needs a look would be buried in
+ * thirty that don't. Set their hours on the Staff page and the chip goes quiet for them
+ * alone — everybody else still gets it, including anyone with no schedule set, since an
+ * overnight shift nobody agreed to is exactly the thing worth checking.
  */
 export function reviewFlag(d: {
   login: string | null
@@ -45,6 +52,8 @@ export function reviewFlag(d: {
   /** The bot sees this person checked in right now. */
   online: boolean
   onLeave: boolean
+  /** Their expected hours themselves cross midnight, so a logout the next morning is the plan. */
+  overnightSchedule?: boolean
 }): ReviewFlag | null {
   if (d.onLeave) return null
   if (!d.login) {
@@ -61,10 +70,17 @@ export function reviewFlag(d: {
   }
   const inAt = minutesOf(d.login)
   const outAt = minutesOf(d.logout)
-  if (inAt !== null && outAt !== null && outAt < inAt) {
-    return { id: 'after-midnight', label: 'Logout after midnight', detail: 'The logout is earlier on the clock than the login: a shift that ran past midnight, or a mistyped time.' }
+  if (!d.overnightSchedule && inAt !== null && outAt !== null && outAt < inAt) {
+    return { id: 'after-midnight', label: 'Logout after midnight', detail: 'The logout is earlier on the clock than the login: counted as a shift that ran past midnight. Worth a look, since it could be a mistyped time — if these are their hours, set them on the Staff page and this stops being flagged.' }
   }
   return null
+}
+
+/** Their expected hours cross midnight: out on the clock before in, so the shift is a night. */
+export function overnightSchedule(person: Pick<StaffMember, 'expected_login' | 'expected_logout'>): boolean {
+  const inAt = minutesOf(person.expected_login)
+  const outAt = minutesOf(person.expected_logout)
+  return inAt !== null && outAt !== null && outAt < inAt
 }
 
 export interface DayView {
@@ -130,7 +146,10 @@ export function buildDayViews(
       flag: punctuality(lateMin, earlyMin),
       hours: netHours(login ?? '', logout ?? '', breakMin),
       online: isOnline,
-      review: reviewFlag({ login, logout, breakMin, botBreaks: bot?.break_count ?? 0, online: isOnline, onLeave }),
+      review: reviewFlag({
+        login, logout, breakMin, botBreaks: bot?.break_count ?? 0, online: isOnline, onLeave,
+        overnightSchedule: overnightSchedule(person),
+      }),
     }
   })
 }
