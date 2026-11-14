@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Range } from './DateRange'
 import { money2, num, today } from '../lib/format'
@@ -36,11 +37,20 @@ import { useServerDraft } from '../lib/useServerDraft'
  *   • Amount Due / Advance = Initial Advance + Σ Amount paid − Σ Payments, and its label
  *     follows the sign: positive = Advance (the vendor holds our money, green), negative
  *     = Due (we owe them, red). Never typed, so it can't drift from the figures.
- * Amount paid auto-saves on blur; the trailing row records a payment on a day the source had
- * no campaign activity (an advance, say) — active days already have a row of their own.
+ * Amount paid saves when the row is left OR when Enter is pressed in it, and every save says
+ * so: a spinner while it is in flight, a tick when it lands, a red "Failed" (with the reason
+ * on hover) when it doesn't. Nothing is ever typed, accepted on screen and quietly dropped.
+ * The trailing row records a payment on a day the source had no campaign activity (an
+ * advance, say) — active days already have a row of their own.
  *
- * Local edit state is reset the codebase way — via React `key`s that remount a row when its
- * underlying data changes — rather than syncing props into state inside effects.
+ * Which columns are typed is said ON the sheet, not only in tooltips: the three derived
+ * columns carry a "from Campaigns" sub-label and the caption above names the one cell that
+ * is hand-entered. A read-only sheet that doesn't admit it reads as a broken one.
+ *
+ * Local edit state is reset the codebase way — via React `key`s — rather than syncing props
+ * into state inside effects. The add-row's key is a NONCE this component owns, bumped only
+ * when that row itself saves: keying it on the row set instead meant a live re-read (someone
+ * else's campaign record landing) remounted it and threw away a half-typed entry.
  */
 export default function VendorSheet({
   vendor, range, onVendorChanged,
@@ -48,6 +58,8 @@ export default function VendorSheet({
   const payments = useAsync(() => api.vendorPayments(vendor.name, range), [vendor.name, range.from, range.to])
   const ledger = payments.data
   const rows = ledger?.rows ?? []
+  // Bumped only by the add-row's own save — see addKey below.
+  const [addNonce, setAddNonce] = useState(0)
 
   // `payments` comes straight from the campaign records' total_bill, so this column and the
   // Campaigns page are the same number — never counted × a rounded rate.
@@ -84,8 +96,9 @@ export default function VendorSheet({
   // activity — every active day already has a row of its own. Defaults to the next day.
   const lastRow = rows[rows.length - 1]
   const defaultDate = lastRow ? addDays(lastRow.entry_date, 1) : (range.from || today())
-  // Remount the add-row (clearing it with fresh defaults) whenever the row set or range shifts.
-  const addKey = `add-${range.from}-${range.to}-${rows.length}-${lastRow?.entry_date ?? 'x'}`
+  // Clear the add-row only when IT saves (or the range changes) — never because the row set
+  // moved underneath it. A live re-read must not take away what somebody is still typing.
+  const addKey = `add-${range.from}-${range.to}-${addNonce}`
 
   return (
     <div>
@@ -93,6 +106,18 @@ export default function VendorSheet({
         <PageLoader label="Loading entries…" size={48} />
       ) : (
         <>
+          {/* Say what this sheet does and does not take, so a derived column never reads as
+              a field that won't accept typing. */}
+          <p className="mb-3 text-xs leading-relaxed text-slate-500">
+            <span className="font-semibold text-slate-600">Amount paid</span> is the only figure typed here
+            {' '}(plus the opening balance below). Converted Lead, Price and Payments are read from this
+            source&apos;s records on the{' '}
+            <Link to="/campaigns" className="font-medium text-blue-600 underline decoration-blue-300 underline-offset-2 hover:text-blue-700">
+              Campaigns sheet
+            </Link>
+            {' '}— enter them there. The balances are calculated and never typed.
+          </p>
+
           <div className="overflow-x-auto">
             <table className="w-full min-w-230 border-collapse text-sm [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white">
               <colgroup>
@@ -109,13 +134,13 @@ export default function VendorSheet({
                 <tr className="bg-[#1a3654] text-center text-xs font-bold uppercase tracking-wide text-white">
                   <th className={headCls}>Date</th>
                   <th className={headCls}>Traffic Source</th>
-                  <th className={headCls}>Converted Lead</th>
-                  <th className={headCls}>Price (Usd)</th>
-                  <th className={headCls}>Payments</th>
+                  <th className={headCls}>Converted Lead<FromCampaigns /></th>
+                  <th className={headCls}>Price (Usd)<FromCampaigns /></th>
+                  <th className={headCls}>Payments<FromCampaigns /></th>
                   <th className={headCls} title="The balance this row opens with — the previous row's closing balance">
-                    Initial Advance
+                    Initial Advance<Derived label="calculated" />
                   </th>
-                  <th className={headCls}>Amount paid</th>
+                  <th className={headCls}>Amount paid<Derived label="you type this" /></th>
                   <th className={headCls} aria-label="actions" />
                 </tr>
               </thead>
@@ -134,7 +159,7 @@ export default function VendorSheet({
                   vendorName={vendor.name}
                   defaultDate={defaultDate}
                   opening={finalBalance}
-                  onChanged={() => payments.reload()}
+                  onAdded={() => { setAddNonce((n) => n + 1); payments.reload() }}
                 />
                 {rows.length === 0 && (
                   <tr>
@@ -198,6 +223,69 @@ const headCls = 'px-3 py-2.5 text-center text-xs font-bold uppercase tracking-wi
 const cellCls = 'px-2 py-1'
 const roCell = cx(cellCls, 'text-center tabular-nums')
 
+/**
+ * A column header's second line: where its figures come from. On the sheet rather than in a
+ * tooltip, because a cell that won't accept typing has to explain itself before it is clicked,
+ * not after.
+ */
+function Derived({ label }: { label: string }) {
+  return <span className="mt-0.5 block text-[10px] font-medium normal-case tracking-normal text-white/55">{label}</span>
+}
+
+function FromCampaigns() {
+  return <Derived label="from Campaigns" />
+}
+
+// ── Save feedback ───────────────────────────────────────────────────────────────
+/**
+ * What a save is doing, shown beside the field that triggered it. A figure typed into a sheet
+ * must never look accepted while the write is still in flight — or, worse, after it failed.
+ * `saved` clears itself; `error` stays until the next attempt, with the reason on hover.
+ */
+type SaveState =
+  | { phase: 'idle' }
+  | { phase: 'saving' }
+  | { phase: 'saved' }
+  | { phase: 'error'; message: string }
+
+/** `saved` is a flash, not a state to live in — it clears itself after a moment. */
+function useSaveState(): [SaveState, (s: SaveState) => void] {
+  const [state, setState] = useState<SaveState>({ phase: 'idle' })
+  useEffect(() => {
+    if (state.phase !== 'saved') return
+    const t = setTimeout(() => setState({ phase: 'idle' }), 1600)
+    return () => clearTimeout(t)
+  }, [state.phase])
+  return [state, setState]
+}
+
+function SaveMark({ state }: { state: SaveState }) {
+  if (state.phase === 'idle') return null
+  if (state.phase === 'saving') {
+    return (
+      <span title="Saving…" className="shrink-0 text-slate-400">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="animate-spin">
+          <path d="M21 12a9 9 0 1 1-6.2-8.56" strokeLinecap="round" />
+        </svg>
+      </span>
+    )
+  }
+  if (state.phase === 'saved') {
+    return (
+      <span title="Saved" className="shrink-0 text-emerald-600">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m5 13 4 4L19 7" />
+        </svg>
+      </span>
+    )
+  }
+  return (
+    <span title={state.message} className="shrink-0 rounded bg-red-100 px-1 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
+      Failed
+    </span>
+  )
+}
+
 /** Balance colouring, shared by the Initial Advance column and the summary: green when the
  *  vendor is holding our money (Advance), red when we owe them (Due). */
 function balanceColor(n: number): string {
@@ -222,13 +310,18 @@ function PaymentRow({
   const [paid, setPaid] = useServerDraft(String(payment.amount_paid))
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
+  const [state, setState] = useSaveState()
 
   const nPaid = Number(paid) || 0
   const dirty = nPaid !== payment.amount_paid
 
   const save = async () => {
-    if (saving.current || !dirty) return
+    if (saving.current) return
+    // Enter on an untouched figure still answers: what is on screen IS what is stored, and
+    // silence would read as a save that went nowhere.
+    if (!dirty) { setState({ phase: 'saved' }); return }
     saving.current = true
+    setState({ phase: 'saving' })
     try {
       // A day with campaign activity may have no vendor_payments row yet — the first amount
       // typed against it creates one; the POST upserts, so it can't double up.
@@ -239,8 +332,11 @@ function PaymentRow({
           vendor: vendorName, entry_date: payment.entry_date, amount_paid: nPaid,
         })
       }
+      setState({ phase: 'saved' })
       onChanged()
-    } catch (err) { alert((err as Error).message) } finally { saving.current = false }
+    } catch (err) {
+      setState({ phase: 'error', message: (err as Error).message })
+    } finally { saving.current = false }
   }
 
   // Only the payment can be removed; the campaign figures belong to the Campaigns page, so a
@@ -248,10 +344,12 @@ function PaymentRow({
   const remove = async () => {
     if (payment.payment_id === null) return
     if (!confirm(`Clear the amount paid on ${payment.entry_date}?`)) return
+    setState({ phase: 'saving' })
     try {
       await api.deleteVendorPayment(payment.payment_id)
+      setState({ phase: 'saved' })
       onChanged()
-    } catch (err) { alert((err as Error).message) }
+    } catch (err) { setState({ phase: 'error', message: (err as Error).message }) }
   }
 
   const onRowBlur = () => setTimeout(() => {
@@ -259,7 +357,14 @@ function PaymentRow({
   }, 0)
 
   return (
-    <tr ref={rowRef} onBlur={onRowBlur} className="bg-[#d4e9f2] text-[#0f172a]">
+    <tr
+      ref={rowRef}
+      onBlur={onRowBlur}
+      // Enter saves where it is, without having to leave the row first. Without this, a
+      // figure typed and confirmed with Enter sat on screen looking saved and never was.
+      onKeyDown={(e) => { if (isEnterSubmit(e)) save() }}
+      className="bg-[#d4e9f2] text-[#0f172a]"
+    >
       <td className={roCell}>{payment.entry_date}</td>
       <td className={cx(cellCls, 'text-center font-medium text-[#1a3654]')}>{vendorName}</td>
       {/* Read-only: these three come from this source's campaign records for the day. */}
@@ -272,8 +377,11 @@ function PaymentRow({
       <td className={cx(roCell, 'font-semibold')}>{money2(payment.payments)}</td>
       <td className={cx(roCell, 'font-semibold', balanceColor(opening))}>{money2(opening)}</td>
       <td className={cellCls}>
-        <Input type="number" min="0" step="0.01" value={paid} className="text-right"
-          onChange={(e) => setPaid(e.target.value)} />
+        <div className="flex items-center gap-1.5">
+          <Input type="number" min="0" step="0.01" value={paid} className="text-right"
+            onChange={(e) => setPaid(e.target.value)} />
+          <SaveMark state={state} />
+        </div>
       </td>
       <td className="p-0 text-center">
         <button onClick={remove} disabled={payment.payment_id === null}
@@ -288,13 +396,20 @@ function PaymentRow({
   )
 }
 
-// ── Trailing "add entry" row (remounts with fresh defaults after any row change) ──
+// ── Trailing "add entry" row ────────────────────────────────────────────────────
+/**
+ * Remounted (via its key) only when it saves or the date range changes — never because the
+ * rows above it moved, which used to wipe a half-typed entry whenever a live re-read landed.
+ * `defaultDate` may therefore change under a mounted row; that is deliberate, since a date
+ * somebody is part way through choosing must not jump.
+ */
 function AddRow({
-  vendorName, defaultDate, opening, onChanged,
-}: { vendorName: string; defaultDate: string; opening: number; onChanged: () => void }) {
+  vendorName, defaultDate, opening, onAdded,
+}: { vendorName: string; defaultDate: string; opening: number; onAdded: () => void }) {
   const [date, setDate] = useState(defaultDate)
   const [paid, setPaid] = useState('')
   const saving = useRef(false)
+  const [state, setState] = useSaveState()
 
   const nPaid = Number(paid) || 0
   // Converted Lead and Price aren't typed any more, so the only thing this row records is a
@@ -304,10 +419,15 @@ function AddRow({
   const add = async () => {
     if (saving.current || !canAdd) return
     saving.current = true
+    setState({ phase: 'saving' })
     try {
       await api.createVendorPayment({ vendor: vendorName, entry_date: date, amount_paid: nPaid })
-      onChanged() // reload → this row remounts (via its key) with the next default date
-    } catch (err) { alert((err as Error).message) } finally { saving.current = false }
+      onAdded() // reload + bump the nonce → this row remounts with the next default date
+    } catch (err) {
+      // Left on screen with the reason on hover: the entry is still here to correct and
+      // retry, which an alert that wipes nothing but the user's place cannot offer.
+      setState({ phase: 'error', message: (err as Error).message })
+    } finally { saving.current = false }
   }
 
   return (
@@ -319,7 +439,12 @@ function AddRow({
       <td className={cx(roCell, 'text-slate-400')}>—</td>
       {/* What a new entry would open with = where the ledger currently stands. */}
       <td className={cx(roCell, 'text-slate-400')}>{money2(opening)}</td>
-      <td className={cellCls}><Input type="number" min="0" step="0.01" value={paid} placeholder="0.00" className="text-right" onChange={(e) => setPaid(e.target.value)} /></td>
+      <td className={cellCls}>
+        <div className="flex items-center gap-1.5">
+          <Input type="number" min="0" step="0.01" value={paid} placeholder="0.00" className="text-right" onChange={(e) => setPaid(e.target.value)} />
+          <SaveMark state={state} />
+        </div>
+      </td>
       <td className="p-0 text-center">
         {/* Say WHY it is greyed out — an unexplained disabled button reads as broken. */}
         <button onClick={add} disabled={!canAdd}
@@ -351,18 +476,24 @@ function InitialAdvance({
 }: { vendor: Vendor; initialAdvance: number; priorNet: number; onSaved: () => void }) {
   const [amount, setAmount] = useServerDraft(initialAdvance ? String(initialAdvance) : '')
   const saving = useRef(false)
+  const [state, setState] = useSaveState()
 
   const n = Number(amount) || 0
   const carried = Math.abs(priorNet) > 0.005
 
   const save = async () => {
-    if (saving.current || Math.abs(n - initialAdvance) < 0.005) return
+    if (saving.current) return
+    if (Math.abs(n - initialAdvance) < 0.005) { setState({ phase: 'saved' }); return }
     saving.current = true
+    setState({ phase: 'saving' })
     try {
       // Store the seed, not the on-screen figure — see the note above.
       await api.saveVendorMeta({ name: vendor.name, opening_advance: n - priorNet })
+      setState({ phase: 'saved' })
       onSaved()
-    } catch (err) { alert((err as Error).message) } finally { saving.current = false }
+    } catch (err) {
+      setState({ phase: 'error', message: (err as Error).message })
+    } finally { saving.current = false }
   }
 
   return (
@@ -371,9 +502,12 @@ function InitialAdvance({
       <input
         type="number" step="0.01" value={amount} placeholder="0.00"
         onChange={(e) => setAmount(e.target.value)} onBlur={save}
+        // The one other typed figure on this page, so it answers Enter the same way.
+        onKeyDown={(e) => { if (isEnterSubmit(e)) save() }}
         className={cx('glass-input w-32 rounded-lg border border-white/70 px-2.5 py-1 text-right text-lg font-bold tabular-nums focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30',
           balanceColor(n))}
       />
+      <SaveMark state={state} />
       <span className="text-xs text-slate-400">
         {carried ? 'carried forward — starts the column below' : 'opening balance — negative = Due'}
       </span>
