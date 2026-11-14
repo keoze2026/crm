@@ -3,7 +3,7 @@ import type { CellHookData, UserOptions } from 'jspdf-autotable'
 import type { AttendanceDay } from '../types'
 import {
   BREAK_ALLOWANCE_MIN,
-  TARGET_LOGIN_MIN,
+
   aggregateBreaks,
   buildAllUsersBreakPdf,
   buildTeamBreakPdf,
@@ -118,10 +118,12 @@ function styleOf(opts: UserOptions, section: 'head' | 'body', row: number, col: 
 
 const allText = (doc: FakeDoc): string[] => doc.texts.flatMap((t) => (Array.isArray(t.text) ? t.text : [t.text]))
 
-// June is EDT (UTC-4): 13:20Z is 9:20 AM in New York.
+// June is EDT (UTC-4): 13:20Z is 9:20 AM in New York. Anna's expected hours start at 9:00,
+// so the server sends her 20 minutes late on the 2nd and on time on the 1st — the marks are
+// hers, not a company-wide hour applied to her.
 const anna = [
-  day({ work_date: '2026-06-02', login_at: '2026-06-02T13:20:00Z', logout_at: '2026-06-02T21:30:00Z', hours: 8, break_min: 70, over_break_min: 10 }),
-  day({ work_date: '2026-06-01', login_at: '2026-06-01T12:50:00Z', logout_at: '2026-06-01T21:00:00Z', hours: 7.5, break_min: 30 }),
+  day({ work_date: '2026-06-02', login_at: '2026-06-02T13:20:00Z', logout_at: '2026-06-02T21:30:00Z', hours: 8, break_min: 70, over_break_min: 10, late_min: 20 }),
+  day({ work_date: '2026-06-01', login_at: '2026-06-01T12:50:00Z', logout_at: '2026-06-01T21:00:00Z', hours: 7.5, break_min: 30, late_min: 0 }),
   day({ work_date: '2026-06-03' }),
 ]
 const ben = [
@@ -129,9 +131,8 @@ const ben = [
 ]
 
 describe('constants', () => {
-  it('uses a 60-minute break allowance and a 9:00 AM fallback login', () => {
+  it('uses a 60-minute break allowance', () => {
     expect(BREAK_ALLOWANCE_MIN).toBe(60)
-    expect(TARGET_LOGIN_MIN).toBe(540)
   })
 })
 
@@ -140,40 +141,39 @@ describe('loginLateMinutes', () => {
     expect(loginLateMinutes(day({ late_min: 15 }))).toBeNull()
   })
 
-  it('prefers the server-computed late_min, including an explicit 0', () => {
+  it('reads the lateness computed for that person, including an explicit 0', () => {
     expect(loginLateMinutes(day({ login_at: '2026-06-01T15:00:00Z', late_min: 0 }))).toBe(0)
     expect(loginLateMinutes(day({ login_at: '2026-06-01T12:00:00Z', late_min: 12 }))).toBe(12)
   })
 
-  it('falls back to minutes past 9:00 AM New York time', () => {
-    expect(loginLateMinutes(day({ login_at: '2026-06-01T13:15:00Z' }))).toBe(15)
-    // January is EST (UTC-5).
-    expect(loginLateMinutes(day({ login_at: '2026-01-05T14:45:00Z' }))).toBe(45)
+  it('judges nobody whose expected hours have not been set', () => {
+    // No late_min means no schedule on the Staff page. There is no company-wide hour to
+    // stand in for one, so there is no verdict — not "late", and not "on time" either.
+    expect(loginLateMinutes(day({ login_at: '2026-06-01T13:15:00Z' }))).toBeNull()
+    expect(isLateLogin(day({ login_at: '2026-06-01T13:15:00Z' }))).toBe(false)
   })
 
-  it('floors an early login at 0', () => {
-    expect(loginLateMinutes(day({ login_at: '2026-06-01T12:30:00Z' }))).toBe(0)
-    expect(loginLateMinutes(day({ login_at: '2026-06-01T13:00:00Z' }))).toBe(0)
+  it('does not invent lateness for a night desk or a late-morning start', () => {
+    // The two that were reported: 16:52 signed on against a 16:45 start, and 10:08 against
+    // a 10:30 start. Read against a flat 9:00 these came back as 7h52m and 1h08m late.
+    expect(loginLateMinutes(day({ login_at: '2026-11-12T21:52:00Z' }))).toBeNull()
+    expect(loginLateMinutes(day({ login_at: '2026-11-12T15:08:00Z' }))).toBeNull()
+    // With their hours actually set, the server's figures come straight through.
+    expect(loginLateMinutes(day({ login_at: '2026-11-12T21:52:00Z', late_min: 7 }))).toBe(7)
+    expect(loginLateMinutes(day({ login_at: '2026-11-12T15:08:00Z', late_min: 0 }))).toBe(0)
   })
 
-  it('reads midnight as minute 0, not 24:00', () => {
-    expect(loginLateMinutes(day({ login_at: '2026-06-01T04:00:00Z' }))).toBe(0)
-  })
-
-  it('returns null for an unparseable timestamp rather than throwing', () => {
-    expect(loginLateMinutes(day({ login_at: 'not-a-date' }))).toBeNull()
-  })
-
-  it('never judges a day on leave, even by the 9:00 fallback', () => {
-    expect(loginLateMinutes(day({ login_at: '2026-06-01T18:00:00Z', on_leave: true }))).toBeNull()
-    expect(isLateLogin(day({ login_at: '2026-06-01T18:00:00Z', on_leave: true }))).toBe(false)
+  it('never judges a day on leave', () => {
+    expect(loginLateMinutes(day({ login_at: '2026-06-01T18:00:00Z', on_leave: true, late_min: 40 }))).toBeNull()
+    expect(isLateLogin(day({ login_at: '2026-06-01T18:00:00Z', on_leave: true, late_min: 40 }))).toBe(false)
   })
 })
 
 describe('isLateLogin', () => {
-  it('is true only for a positive lateness', () => {
-    expect(isLateLogin(day({ login_at: '2026-06-01T13:01:00Z' }))).toBe(true)
-    expect(isLateLogin(day({ login_at: '2026-06-01T13:00:00Z' }))).toBe(false)
+  it('is true only for a positive lateness that was really measured', () => {
+    expect(isLateLogin(day({ login_at: '2026-06-01T13:01:00Z', late_min: 1 }))).toBe(true)
+    expect(isLateLogin(day({ login_at: '2026-06-01T13:00:00Z', late_min: 0 }))).toBe(false)
+    expect(isLateLogin(day({ login_at: '2026-06-01T13:01:00Z' }))).toBe(false)
     expect(isLateLogin(day())).toBe(false)
   })
 })
@@ -287,8 +287,8 @@ describe('tallyByMonth', () => {
     const months = tallyByMonth([
       ...anna,
       ...ben,
-      day({ work_date: '2026-05-29', login_at: '2026-05-29T13:45:00Z' }),
-      day({ user_id: 'u2', work_date: '2026-05-29', login_at: '2026-05-29T12:00:00Z' }),
+      day({ work_date: '2026-05-29', login_at: '2026-05-29T13:45:00Z', late_min: 45 }),
+      day({ user_id: 'u2', work_date: '2026-05-29', login_at: '2026-05-29T12:00:00Z', late_min: 0 }),
     ])
     expect(months).toEqual([
       { month: '2026-05', label: 'May 2026', late: 1, onTime: 1, lateMin: 45, days: 1 },
@@ -355,7 +355,7 @@ describe('loginMonthSheet', () => {
   it('tabulates the month split with totals and reds the late columns of late months', () => {
     const sheet = loginMonthSheet([
       ...anna,
-      day({ work_date: '2026-05-04', login_at: '2026-05-04T12:00:00Z' }),
+      day({ work_date: '2026-05-04', login_at: '2026-05-04T12:00:00Z', late_min: 0 }),
     ])
     expect(sheet.name).toBe('Late Logins by Month')
     expect(sheet.rows).toEqual([
@@ -411,7 +411,7 @@ describe('buildTeamBreakPdf', () => {
 
   it('uses the raw rows passed for the month split when given', () => {
     const stats = aggregateBreaks(anna)
-    buildTeamBreakPdf(stats, '2026-05-01', '2026-06-30', [day({ work_date: '2026-05-04', login_at: '2026-05-04T12:00:00Z' })])
+    buildTeamBreakPdf(stats, '2026-05-01', '2026-06-30', [day({ work_date: '2026-05-04', login_at: '2026-05-04T12:00:00Z', late_min: 0 })])
     expect(h.state.tables[0].opts.body).toEqual([['May 2026', '1', '1', '0', '0m']])
   })
 
@@ -468,8 +468,8 @@ describe('buildUserBreakPdf', () => {
 
   it('says so when the member was never late, and pluralises overage days', () => {
     const [s] = aggregateBreaks([
-      day({ login_at: '2026-06-01T12:00:00Z', over_break_min: 5 }),
-      day({ work_date: '2026-06-02', login_at: '2026-06-02T12:00:00Z', over_break_min: 5 }),
+      day({ login_at: '2026-06-01T12:00:00Z', over_break_min: 5, late_min: 0 }),
+      day({ work_date: '2026-06-02', login_at: '2026-06-02T12:00:00Z', over_break_min: 5, late_min: 0 }),
     ])
     const text = allText(buildUserBreakPdf(s, '2026-06-01', '2026-06-02') as unknown as FakeDoc)
     expect(text).toContain('Late logins 0 of 2  ·  never late in this period')

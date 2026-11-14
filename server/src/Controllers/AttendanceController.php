@@ -581,7 +581,7 @@ final class AttendanceController
         // The login as a clock time, and how far past the expected one it is — needed twice
         // over in the 'late' report, as the figure and as the test for being in it at all.
         $clock  = "((({$login}) AT TIME ZONE '{$tz}')::time)";
-        $late   = self::clockGap("COALESCE(so.expected_login, TIME '09:00')", $clock);
+        $late   = self::clockGap('so.expected_login', $clock);
 
         $sql = match($type) {
             'missing_logout' => "SELECT d.user_id, d.staff_name, d.work_date::text,
@@ -604,18 +604,21 @@ final class AttendanceController
                                   WHERE d.work_date BETWEEN :from AND :to
                                     AND {$break} > {$allow}
                                   ORDER BY over_min DESC",
-            // Late is measured against the person's own expected login from the Staff page.
-            // Anyone with no schedule set keeps the flat 9:00 this report has always used,
-            // so it never silently empties out as schedules are filled in one by one. Nobody
-            // is late on a day they were on leave. The clock is read the short way round, so
-            // a night desk expected at 21:00 and in at 21:20 is twenty minutes late here
-            // rather than twenty-three hours and forty.
+            // Late is measured against the person's own expected login from the Staff page,
+            // and against nothing at all where none is set: this report used to fall back to
+            // a flat 9:00, which booked a night desk signing on at 16:52 as seven hours and
+            // fifty-two minutes late and a 10:30 start arriving at 10:08, early, as an hour
+            // and eight late. An empty report says "nobody's hours are set"; the old one said
+            // something false about everybody. Nobody is late on a day they were on leave,
+            // and the clock is read the short way round, so a night desk expected at 21:00
+            // and in at 21:20 is twenty minutes late rather than twenty-three hours and forty.
             'late'           => "SELECT d.user_id, d.staff_name, d.work_date::text,
                                         {$clock}::text AS local_login,
-                                        to_char(COALESCE(so.expected_login, TIME '09:00'), 'HH24:MI') AS expected_login,
+                                        to_char(so.expected_login, 'HH24:MI') AS expected_login,
                                         {$late} AS late_min
                                    FROM " . self::daysSource() . " {$join}
                                   WHERE {$login} IS NOT NULL
+                                    AND so.expected_login IS NOT NULL
                                     AND {$late} > 0
                                     AND d.work_date BETWEEN :from AND :to
                                     AND NOT " . self::onLeave() . "

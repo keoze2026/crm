@@ -241,6 +241,71 @@ final class AttendanceOvernightApiTest extends ApiTestCase
         $this->assertEqualsWithDelta(17.0, $rows[self::N1]['hours'], 0.001);
     }
 
+    /**
+     * The flat 9:00 this report used to fall back to was wrong for everyone who does not
+     * start at nine: it booked a 16:52 sign-on as 7h52m late and a 10:08 sign-on, early
+     * against a 10:30 start, as 1h08m late. Nobody is judged by somebody else's hours now.
+     */
+    public function testNobodyIsLateAgainstHoursThatWereNeverSet(): void
+    {
+        self::botAccount(2009, 'Nita');                      // nights, no schedule on file
+        self::staffRow('Nita', ['attendance_user_id' => '2009']);
+        self::botDay(2009, self::N1, '16:52', null,    'Nita');
+        self::botAccount(2010, 'Tom');                       // a 10:30 start, also unset
+        self::staffRow('Tom', ['attendance_user_id' => '2010']);
+        self::botDay(2010, self::N1, '10:08', '23:00', 'Tom');
+
+        $r = $this->get('/attendance/exceptions?type=late&from=' . self::N1 . '&to=' . self::N1);
+        $this->assertStatus(200, $r);
+        $this->assertSame([], $r['json']['rows']);
+
+        // And the day rows carry no verdict either — not late, and not on time.
+        $days = $this->get('/attendance/days?from=' . self::N1 . '&to=' . self::N1)['json']['rows'];
+        $this->assertCount(2, $days);
+        foreach ($days as $row) {
+            $this->assertNull($row['late_min'], "late_min for {$row['staff_name']}");
+            $this->assertNull($row['expected_login'], "expected_login for {$row['staff_name']}");
+        }
+    }
+
+    /**
+     * The two desks that were reported wrong, with their hours set: a 16:45–05:15 night and
+     * a 10:30–23:00 day. Both were being booked hours late against a flat 9:00.
+     */
+    public function testTheTwoReportedSchedulesAreJudgedCorrectly(): void
+    {
+        self::botAccount(2011, 'Night');
+        self::staffRow('Night', [
+            'attendance_user_id' => '2011',
+            'expected_login'     => '16:45',
+            'expected_logout'    => '05:15',
+        ]);
+        self::botDay(2011, self::N1, '16:52', null,    'Night');   // 7 minutes late
+        self::botDay(2011, self::N2, '16:41', '05:15', 'Night');   // closing N1, dead on time
+
+        self::botAccount(2012, 'Morning');
+        self::staffRow('Morning', [
+            'attendance_user_id' => '2012',
+            'expected_login'     => '10:30',
+            'expected_logout'    => '23:00',
+        ]);
+        self::botDay(2012, self::N1, '10:08', '23:04', 'Morning'); // 22 minutes EARLY in
+
+        $rows = array_column(
+            $this->get('/attendance/days?from=' . self::N1 . '&to=' . self::N1)['json']['rows'],
+            null,
+            'staff_name'
+        );
+
+        $this->assertSame(7, $rows['Night']['late_min'], '16:52 against a 16:45 start');
+        $this->assertSame(0, $rows['Night']['early_min'], '05:15 is the shift closing on time');
+        $this->assertEqualsWithDelta(12.38, $rows['Night']['hours'], 0.01);
+
+        $this->assertSame(0, $rows['Morning']['late_min'], '10:08 is early for a 10:30 start');
+        $this->assertSame(0, $rows['Morning']['early_min'], '23:04 is past a 23:00 finish');
+        $this->assertEqualsWithDelta(12.93, $rows['Morning']['hours'], 0.01);
+    }
+
     public function testTheLateReportReadsANightScheduleTheShortWayRound(): void
     {
         self::botAccount(2008, 'Kai');

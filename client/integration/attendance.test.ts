@@ -128,14 +128,16 @@ describe('/attendance/days + report logic', () => {
     expect(rs?.totalHours).toBeCloseTo(7.72 + 7.5, 5)
     expect(stats[0].user_id).toBe('8001') // worst break overage first
 
-    // Sam has no schedule, so the flat 9:00 applies: in at 8:30 is on time.
+    // Sam is nobody on the roster, so no hours were ever agreed for him: his 8:30 login is
+    // not late and not on time either. There is no company-wide hour to judge him by.
     const sam = res.rows.find((r) => r.user_id === '8002') as AttendanceDay
-    expect(loginLateMinutes(sam)).toBe(0)
+    expect(loginLateMinutes(sam)).toBeNull()
     expect(isLateLogin(sam)).toBe(false)
 
+    // Only Rae has a schedule, so only Rae's days are counted either way.
     expect(tallyByMonth(res.rows)).toEqual([
       { month: '2026-07', label: 'July 2026', late: 1, onTime: 0, lateMin: 30, days: 1 },
-      { month: '2026-08', label: 'August 2026', late: 1, onTime: 2, lateMin: 7, days: 1 },
+      { month: '2026-08', label: 'August 2026', late: 1, onTime: 0, lateMin: 7, days: 1 },
     ])
 
     const one = await api.attendanceDays({ from: '2026-07-01', to: '2026-08-31', user_id: '8001' })
@@ -198,7 +200,7 @@ describe('/attendance/exceptions', () => {
     expect(lateReturn.rows).toEqual([expect.objectContaining({ user_id: '8001', duration_min: 40, actual_min: 55, late_min: 5, out_till_eod: false, urgent: false })])
   })
 
-  it('agrees with the client\'s late-login rule, including the flat 9:00 for somebody with no schedule', async () => {
+  it('agrees with the client\'s late-login rule, and leaves out anyone with no schedule', async () => {
     seedBotDay(8002, '2026-08-05', '2026-08-05 09:25:00-04', '2026-08-05 17:00:00-04', 'Sam Tate')
     const late = await api.attendanceExceptions('late', range.from, range.to)
     const days = (await api.attendanceDays(range)).rows
@@ -206,7 +208,9 @@ describe('/attendance/exceptions', () => {
       const day = days.find((d) => d.user_id === ex.user_id && d.work_date === ex.work_date) as AttendanceDay
       expect(loginLateMinutes(day)).toBe(ex.late_min)
     }
-    expect(late.rows.map((r) => [r.user_id, r.late_min])).toEqual([['8002', 25], ['8001', 7]])
+    // Sam's 9:25 would have been 25 minutes late against the old flat 9:00. Nobody set him
+    // an hour, so the report no longer claims one for him.
+    expect(late.rows.map((r) => [r.user_id, r.late_min])).toEqual([['8001', 7]])
   })
 
   it('rejects an unknown type', async () => {

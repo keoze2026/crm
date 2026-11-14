@@ -52,8 +52,6 @@ const leaveNote = (l: StaffLeave): string => {
   return `${l.leave_date}: ${parts.filter(Boolean).join(', ')}`
 }
 
-/** The flat late threshold for someone with no expected login on the Staff page. */
-const DEFAULT_LOGIN = '09:00'
 
 // ─── Rating colours: green for good, red for bad, navy outline for the middle ─────────
 
@@ -142,7 +140,9 @@ function rollup(
 
   return staff.map((member) => {
     const days = att.get(member.id) ?? []
-    const expected = member.expected_login ?? DEFAULT_LOGIN
+    // Their own expected login, or nothing: a person whose hours were never agreed has no
+    // late days here rather than being measured against an hour somebody else keeps.
+    const expected = member.expected_login
     const present = days.filter((d) => d.login_at)
     // A login on a day on leave is never late.
     const lateDays = present.filter((d) => !d.on_leave && (lateBy(d.login_at, expected) ?? 0) > 0).length

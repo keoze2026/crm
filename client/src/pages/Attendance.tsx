@@ -194,9 +194,30 @@ const earlyMinutes = (r: AttendanceDay): number => r.early_min ?? 0
 function dayFlag(r: AttendanceDay): Punctuality | null {
   if (r.on_leave) return null
   return punctuality(
-    r.login_at == null ? null : lateMinutes(r),
+    loginLateMinutes(r),
     r.logout_at == null || r.expected_logout == null ? null : earlyMinutes(r),
   )
+}
+
+/**
+ * The "Late By" cell. Four readings, and the fourth is the point: a day whose person has no
+ * expected login on the Staff page is not late and is not on time either — there was nothing
+ * to be on time for. Saying so names the thing to fix instead of quietly passing them.
+ */
+function LateByCell({ r }: { r: AttendanceDay }) {
+  if (r.on_leave) return <span className="text-violet-600">On leave</span>
+  if (r.login_at == null) return <span className="text-slate-300">—</span>
+  const late = loginLateMinutes(r)
+  if (late == null) {
+    return (
+      <span className="text-slate-400" title="No expected login set for this person on Staff Management, so their logins are not judged.">
+        No schedule
+      </span>
+    )
+  }
+  return late > 0
+    ? <span className="font-bold text-rose-600">{gapLabel(late)}</span>
+    : <span className="text-emerald-600">On time</span>
 }
 
 /**
@@ -1764,13 +1785,7 @@ function BreakReportsView() {
                           <ScheduleTime at={r.login_at} off={lateMinutes(r)} word="late" expected={r.expected_login} />
                         </td>
                         <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums">
-                          {r.on_leave
-                            ? <span className="text-violet-600">On leave</span>
-                            : r.login_at == null
-                            ? <span className="text-slate-300">—</span>
-                            : isLateLogin(r)
-                              ? <span className="font-bold text-rose-600">{gapLabel(lateMinutes(r))}</span>
-                              : <span className="text-emerald-600">On time</span>}
+                          <LateByCell r={r} />
                         </td>
                         <td className="whitespace-nowrap px-3 py-2 text-right text-xs">
                           <ScheduleTime at={r.logout_at} off={earlyMinutes(r)} word="early" expected={r.expected_logout} />

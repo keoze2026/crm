@@ -15,7 +15,6 @@ import type { RankedRow } from '../lib/incentive'
 import type { Department, LeaveDay, StaffAttendanceRow, StaffMember } from '../types'
 
 const NAVY = BRAND
-const DEFAULT_LOGIN = '09:00'
 
 const initials = (name: string) => {
   const w = name.trim().split(/\s+/).filter(Boolean)
@@ -129,7 +128,10 @@ export default function StaffOverview({ staff, departments, today, todayRows, to
   const inToday = active.filter((m) => byStaff.get(m.id)?.login_at)
   const late = inToday
     .filter((m) => !leaveToday(m))
-    .map((m) => ({ m, min: lateBy(byStaff.get(m.id)?.login_at ?? null, m.expected_login ?? DEFAULT_LOGIN) ?? 0 }))
+    // Judged against their OWN expected login, with no company-wide hour standing in for
+    // one that was never agreed: a night desk signing on at 4:52pm is not late by seven
+    // hours, and anyone whose hours are unset is simply not counted here.
+    .map((m) => ({ m, min: lateBy(byStaff.get(m.id)?.login_at ?? null, m.expected_login) ?? 0 }))
     .filter((x) => x.min > 0)
     .sort((a, b) => b.min - a.min)
   const notIn = active.filter((m) => !byStaff.get(m.id)?.login_at && !leaveToday(m))

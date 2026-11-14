@@ -531,7 +531,12 @@ final class AttendanceApiTest extends ApiTestCase
         $this->assertSame([75, 70], array_map('intval', array_column($rows, 'break_min')));
     }
 
-    public function testLateUsesEachPersonsScheduleAndFallsBackToNine(): void
+    /**
+     * Each person against their own expected login, and nobody against anybody else's. The
+     * report used to fall back to a flat 9:00 for anyone unscheduled, which made a late
+     * arrival out of every desk that does not start at nine.
+     */
+    public function testLateUsesEachPersonsOwnScheduleAndJudgesNobodyWithout(): void
     {
         self::linkedStaff('Sched Ten', 1, ['expected_login' => '10:00']);
         self::linkedStaff('Sched Eight', 2, ['expected_login' => '08:00']);
@@ -544,12 +549,12 @@ final class AttendanceApiTest extends ApiTestCase
         $this->assertStatus(200, $r);
         $rows = self::byName($r['json']['rows']);
         ksort($rows);
-        $this->assertSame(['No Schedule', 'Sched Eight'], array_keys($rows));
-        $this->assertSame('09:00', $rows['No Schedule']['expected_login']);
-        $this->assertSame(30, (int) $rows['No Schedule']['late_min']);
-        $this->assertSame('09:30:00', $rows['No Schedule']['local_login']);
+        // Sched Ten was half an hour EARLY for a 10:00 start; No Schedule has no hours to
+        // miss; Early Bird has none either. Only the 08:00 desk that arrived at 08:20 is late.
+        $this->assertSame(['Sched Eight'], array_keys($rows));
         $this->assertSame('08:00', $rows['Sched Eight']['expected_login']);
         $this->assertSame(20, (int) $rows['Sched Eight']['late_min']);
+        $this->assertSame('08:20:00', $rows['Sched Eight']['local_login']);
     }
 
     // ─── Leave ─────────────────────────────────────────────────────────────────

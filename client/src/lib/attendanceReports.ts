@@ -16,16 +16,9 @@ import type { AttendanceDay } from '../types'
 import type { XlsxSheet } from './xlsx'
 import { formatDmy } from './format'
 
+/** Every clock time on these reports is read in the org's own zone, never the viewer's. */
 const TZ = 'America/New_York'
 export const BREAK_ALLOWANCE_MIN = 60
-
-/**
- * The flat late threshold — 9:00 AM EST — used only for someone whose expected hours have
- * not been set on the Staff page. It is the same fallback the Attendance roster marks its
- * clock cells with, so a report and the screen it was exported from never disagree about
- * who was late.
- */
-export const TARGET_LOGIN_MIN = 9 * 60
 
 // Company report palette (matches the Reports page exports).
 const NAVY: [number, number, number] = [26, 54, 84]
@@ -60,35 +53,25 @@ export interface BreakStat {
 
 // ─── Late logins ────────────────────────────────────────────────────────────────
 
-/** Minutes-since-midnight of a UTC timestamp, in the org timezone. */
-function minutesEST(iso: string | null): number | null {
-  if (!iso) return null
-  const at = new Date(iso)
-  // formatToParts throws on an Invalid Date, so a bad timestamp must be caught here.
-  if (Number.isNaN(at.getTime())) return null
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false,
-  }).formatToParts(at)
-  const h = Number(parts.find((p) => p.type === 'hour')?.value) % 24
-  const m = Number(parts.find((p) => p.type === 'minute')?.value)
-  if (Number.isNaN(h) || Number.isNaN(m)) return null
-  return h * 60 + m
-}
-
 /**
- * How late the login was, in minutes, against the hours kept for that person on the Staff
- * page — falling back to the flat 9:00 AM this app has always used where none are set.
+ * How late the login was, in minutes, against the hours kept FOR THAT PERSON on the Staff
+ * page. Nothing else: there is no company-wide start time to fall back on.
  *
- * null means there was nothing to judge: no login recorded at all, or a day on leave —
- * which is checked here because the 9:00 fallback would otherwise mark a stray login on one.
- * 0 means on time, and that is worth saying out loud, which is why it is not folded in
+ * There used to be one — a flat 9:00 AM — and it was wrong in both directions for an org
+ * whose desks start at different hours. It booked a night shift that signed on at 4:52pm as
+ * seven hours and fifty-two minutes late, and a 10:30 start that signed on at 10:08, early,
+ * as an hour and eight minutes late. Every late figure on the page is read off this one
+ * function, so one invented expectation reached the chips, the scorecards, the month
+ * roll-ups and the exported reports alike.
+ *
+ * null now means there is nothing to judge the login by — no login, a day on leave, or no
+ * hours agreed for that person — and the pages say so rather than inventing a verdict. 0
+ * means on time against hours that really were agreed, which is why it is not folded in
  * with null.
  */
 export function loginLateMinutes(r: AttendanceDay): number | null {
   if (r.login_at == null || r.on_leave) return null
-  if (r.late_min != null) return r.late_min
-  const m = minutesEST(r.login_at)
-  return m == null ? null : Math.max(0, m - TARGET_LOGIN_MIN)
+  return r.late_min ?? null
 }
 
 /** Was this day a late login? The one question the summaries and scorecards are read for. */
