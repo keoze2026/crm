@@ -301,8 +301,8 @@ export default function Staff() {
               />
             )}
             {elsewhere.length > 0 && (
-              <p className="mt-3 text-[11px] text-slate-500">
-                <span className="font-semibold text-amber-700">
+              <p className="mt-3 text-[11px] text-slate-400">
+                <span className="font-semibold text-amber-300">
                   {elsewhere.length} other {elsewhere.length === 1 ? 'hold is' : 'holds are'} still open
                 </span>
                 {' '}outside {monthLabel} — {[...new Set(elsewhere.map((h) => formatMonth(h.month.slice(0, 7))))].join(', ')}.
@@ -312,7 +312,7 @@ export default function Staff() {
         </Card>
       )}
 
-      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
     </div>
     </PerformerScope>
   )

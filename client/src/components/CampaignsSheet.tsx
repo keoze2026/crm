@@ -34,11 +34,11 @@ export default function CampaignsSheet({ campaigns, onChanged }: {
     }),
     { answered: 0, missed: 0, counted: 0, cost: 0 },
   )
-  const headCls = 'px-3 py-2.5 text-center text-xs font-bold uppercase tracking-wide bg-[#1a3654] text-white'
+  const headCls = 'px-3 py-2.5 text-center text-xs font-bold uppercase tracking-wide bg-[#132a52] text-white'
 
   return (
     <div className="overflow-x-auto rounded-t-2xl">
-      <table className="w-full border-collapse text-sm [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white">
+      <table className="w-full border-collapse text-sm [&_td]:border [&_td]:border-white/[0.08] [&_th]:border [&_th]:border-white/[0.08]">
         <thead>
           <tr>
             <th className={headCls}>Camp</th>
@@ -58,7 +58,7 @@ export default function CampaignsSheet({ campaigns, onChanged }: {
           ))}
         </tbody>
         <tfoot>
-          <tr className="bg-[#1a3654] font-bold text-white">
+          <tr className="bg-[#132a52] font-bold text-white">
             <td className="px-3 py-2.5 text-center text-xs font-bold uppercase">{num(campaigns.length)}</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.answered)}</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.missed)}</td>
@@ -77,7 +77,7 @@ export default function CampaignsSheet({ campaigns, onChanged }: {
 }
 
 const td = 'px-2 py-1'
-const roCell = cx(td, 'text-center tabular-nums text-[#0f172a]')
+const roCell = cx(td, 'text-center tabular-nums text-slate-100')
 // Rate loads back from the stored cost: cost ÷ counted, rounded to cents.
 const rateFromCost = (cost: number, counted: number) =>
   counted > 0 ? String(Math.round((cost / counted) * 100) / 100) : ''
@@ -88,11 +88,11 @@ const TrashIcon = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="no
 function StatusSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const active = value === 'active'
   return (
-    <div className={cx('rounded-xl', active ? 'bg-emerald-200/80' : 'bg-red-200/80')}>
+    <div className={cx('rounded-xl', active ? 'bg-emerald-500/25' : 'bg-red-500/25')}>
       <Select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={cx('border-transparent! bg-transparent! font-semibold', active ? 'text-emerald-800' : 'text-red-700')}
+        className={cx('border-transparent! bg-transparent! font-semibold', active ? 'text-emerald-300' : 'text-red-300')}
       >
         <option value="active">Active</option>
         <option value="inactive">Inactive</option>
@@ -146,7 +146,7 @@ function CampaignRow({ campaign, onChanged }: {
   }
 
   return (
-    <tr ref={rowRef} onBlur={onRowBlur} className="bg-[#d4e9f2] text-[#0f172a]">
+    <tr ref={rowRef} onBlur={onRowBlur} className="bg-[#0a0e17] text-slate-100">
       <td className={td}><Input value={code} onChange={(e) => setCode(e.target.value)} /></td>
       <td className={td}><Input type="number" min="0" value={answered} onChange={(e) => setAnswered(e.target.value)} className="text-right" /></td>
       <td className={td}><Input type="number" min="0" value={missed} onChange={(e) => setMissed(e.target.value)} className="text-right" /></td>
@@ -158,8 +158,8 @@ function CampaignRow({ campaign, onChanged }: {
         <div className="flex items-center justify-center gap-1">
           <CampaignRatesPopover campaign={campaign} onSaved={onChanged} />
           {busy ? <Spinner className="h-4 w-4" /> : dirty
-            ? <button type="button" onClick={save} title="Save changes" className="rounded p-1 text-green-600 hover:bg-green-100"><CheckIcon /></button>
-            : <button type="button" onClick={del} title="Delete campaign" className="rounded p-1 text-slate-500 hover:bg-red-100 hover:text-red-600"><TrashIcon /></button>}
+            ? <button type="button" onClick={save} title="Save changes" className="rounded p-1 text-green-400 hover:bg-green-500/20"><CheckIcon /></button>
+            : <button type="button" onClick={del} title="Delete campaign" className="rounded p-1 text-slate-400 hover:bg-red-500/20 hover:text-red-400"><TrashIcon /></button>}
         </div>
       </td>
     </tr>
@@ -200,7 +200,7 @@ function DraftCampaignRow({ onActivate, onSaved }: { onActivate: () => void; onS
   }, 0)
 
   return (
-    <tr ref={rowRef} onBlur={onRowBlur} onKeyDown={(e) => { if (isEnterSubmit(e)) save() }} className="bg-amber-50/50 text-[#0f172a]">
+    <tr ref={rowRef} onBlur={onRowBlur} onKeyDown={(e) => { if (isEnterSubmit(e)) save() }} className="bg-amber-500/10 text-slate-100">
       <td className={td}><Input value={code} onChange={(e) => onCode(e.target.value)} placeholder="New code" /></td>
       <td className={td}><Input type="number" min="0" value={answered} onChange={(e) => setAnswered(e.target.value)} placeholder="0" className="text-right" /></td>
       <td className={td}><Input type="number" min="0" value={missed} onChange={(e) => setMissed(e.target.value)} placeholder="0" className="text-right" /></td>
@@ -211,7 +211,7 @@ function DraftCampaignRow({ onActivate, onSaved }: { onActivate: () => void; onS
       <td className={cx(td, 'text-center')}>
         {busy ? <Spinner className="h-4 w-4" /> : (
           <button type="button" onClick={save} disabled={!complete} title="Add campaign"
-            className={cx('rounded p-1', complete ? 'text-green-600 hover:bg-green-100' : 'cursor-not-allowed text-slate-300')}>
+            className={cx('rounded p-1', complete ? 'text-green-400 hover:bg-green-500/20' : 'cursor-not-allowed text-slate-300')}>
             <CheckIcon />
           </button>
         )}

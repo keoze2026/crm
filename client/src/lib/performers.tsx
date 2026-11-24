@@ -246,8 +246,8 @@ export function PerformerBadge({ staffId, userId, name, month, compact = false, 
     ? `Top Performer of the Month — ${monthLabel}`
     : `Low performer of the month — ${monthLabel}`
   const tone = top
-    ? 'bg-emerald-100 text-emerald-700 ring-emerald-300'
-    : 'bg-rose-100 text-rose-700 ring-rose-300'
+    ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/40'
+    : 'bg-rose-500/15 text-rose-300 ring-rose-500/40'
   if (compact) {
     return (
       <span

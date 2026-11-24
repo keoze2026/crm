@@ -217,7 +217,7 @@ function StaffField({
         value={value}
         aria-label="Staff"
         onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
-        className={cx(fieldCls, 'font-semibold', value === '' && 'text-slate-500')}
+        className={cx(fieldCls, 'font-semibold', value === '' && 'text-slate-400')}
       >
         {value === '' && <option value="">Select staff</option>}
         {/* Someone since taken off the roster's options still reads as themselves. */}
@@ -232,14 +232,14 @@ function StaffField({
 function AmountField({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
     <div className="flex items-center gap-0.5">
-      <span className="text-[11px] font-bold text-slate-500">$</span>
+      <span className="text-[11px] font-bold text-slate-400">$</span>
       <input
         value={value}
         inputMode="decimal"
         placeholder={placeholder}
         aria-label="Amount in US dollars"
         onChange={(e) => onChange(e.target.value)}
-        className={cx(fieldCls, 'text-right font-semibold tabular-nums', value.trim() !== '' && parseAmount(value) === null && 'text-rose-600')}
+        className={cx(fieldCls, 'text-right font-semibold tabular-nums', value.trim() !== '' && parseAmount(value) === null && 'text-rose-400')}
       />
     </div>
   )

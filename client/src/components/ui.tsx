@@ -63,7 +63,7 @@ export function Card({
   className?: string
 }) {
   return (
-    <div className={cx('glass rounded-2xl shadow-xl shadow-slate-900/5', className)}>
+    <div className={cx('glass rounded-xl', className)}>
       {children}
     </div>
   )
@@ -79,10 +79,10 @@ export function CardHeader({
   action?: ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-3 border-b border-white/50 px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+    <div className="flex flex-col gap-3 border-b border-white/[0.06] px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <div>
-        <h3 className="font-semibold text-slate-900">{title}</h3>
-        {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
+        <h3 className="text-[15px] font-semibold text-slate-50">{title}</h3>
+        {subtitle && <p className="mt-0.5 text-xs text-slate-400">{subtitle}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
@@ -99,20 +99,21 @@ export function Button({
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'dark'
   size?: 'sm' | 'md'
 }) {
+  // The Dashboard's button language: a hairline border, a faint fill, blue for the primary.
   const variants = {
     primary:
-      'bg-linear-to-b from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-600/25 hover:from-blue-600 hover:to-blue-700 disabled:from-blue-300 disabled:to-blue-300 disabled:shadow-none',
-    secondary: 'glass-input border border-white/70 text-slate-700 hover:bg-white/80',
-    ghost: 'text-slate-600 hover:bg-white/60',
-    danger: 'border border-red-200 bg-white/70 text-red-600 hover:bg-red-50',
-    /** The brand blue — for the two-tone surfaces (calendar, dashboard rail). */
-    dark: 'bg-linear-to-b from-brand to-brand-dark text-white shadow-lg shadow-brand/25 hover:from-brand-dark hover:to-brand-dark disabled:from-slate-400 disabled:to-slate-400 disabled:shadow-none',
+      'border border-blue-500/70 bg-blue-600/25 text-white hover:border-blue-400 hover:bg-blue-600/35 disabled:opacity-50',
+    secondary: 'border border-white/10 bg-white/[0.03] text-slate-200 hover:border-white/20 hover:bg-white/[0.06] disabled:opacity-50',
+    ghost: 'border border-transparent text-slate-300 hover:bg-white/[0.06] hover:text-white disabled:opacity-50',
+    danger: 'border border-red-500/40 bg-red-500/10 text-red-300 hover:border-red-400 hover:bg-red-500/20 disabled:opacity-50',
+    /** Solid blue — the one strong call to action on a page. */
+    dark: 'border border-blue-400/60 bg-blue-600 text-white shadow-[0_0_18px_rgba(59,130,246,0.25)] hover:bg-blue-500 disabled:opacity-50 disabled:shadow-none',
   }
   const sizes = { sm: 'px-2.5 py-1.5 text-xs', md: 'px-4 py-2 text-sm' }
   return (
     <button
       className={cx(
-        'inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:cursor-not-allowed',
+        'inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 disabled:cursor-not-allowed',
         variants[variant],
         sizes[size],
         className,
@@ -131,10 +132,10 @@ export function Input({
 }: InputHTMLAttributes<HTMLInputElement> & { label?: string }) {
   return (
     <label className="block">
-      {label && <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>}
+      {label && <span className="mb-1 block text-xs font-medium text-slate-300">{label}</span>}
       <input
         className={cx(
-          'glass-input w-full rounded-xl border border-white/70 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+          'glass-input w-full rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 hover:border-white/20 focus:border-blue-500/60 focus:outline-none focus:ring-2 focus:ring-blue-500/30',
           className,
         )}
         {...props}
@@ -151,10 +152,10 @@ export function Select({
 }: SelectHTMLAttributes<HTMLSelectElement> & { label?: string }) {
   return (
     <label className="block">
-      {label && <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>}
+      {label && <span className="mb-1 block text-xs font-medium text-slate-300">{label}</span>}
       <select
         className={cx(
-          'glass-input w-full rounded-xl border border-white/70 px-3 py-2 text-sm text-slate-900 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+          'glass-input w-full rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-100 hover:border-white/20 focus:border-blue-500/60 focus:outline-none focus:ring-2 focus:ring-blue-500/30',
           className,
         )}
         {...props}
@@ -180,16 +181,16 @@ export function SegmentedTabs<T extends string>({ tabs, value, onChange, classNa
   className?: string
 }) {
   return (
-    <div className={cx('flex w-fit max-w-full flex-wrap items-center gap-1 rounded-2xl bg-linear-to-b from-[#131b31] to-[#0d1424] p-1 shadow-lg shadow-slate-900/25 ring-1 ring-white/10 backdrop-blur', className)}>
+    <div className={cx('flex w-fit max-w-full flex-wrap items-center gap-1 rounded-xl border border-white/10 bg-[#0a1122]/75 p-1 shadow-[0_0_0_1px_rgba(59,130,246,0.07)]', className)}>
       {tabs.map((t) => (
         <button
           key={t.id}
           onClick={() => onChange(t.id)}
           className={cx(
-            'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-3 py-1.5 text-sm font-medium transition-all sm:px-4',
+            'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-1.5 text-[13px] font-medium transition-all sm:px-4',
             value === t.id
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-300 hover:bg-white/10 hover:text-white',
+              ? 'bg-blue-500/[0.16] text-white shadow-[inset_0_0_0_1px_rgba(96,140,255,0.45),0_0_14px_rgba(59,130,246,0.22)]'
+              : 'text-slate-300 hover:bg-white/[0.06] hover:text-white',
           )}
         >
           {t.icon}
@@ -208,12 +209,12 @@ export function StatTile({ label, value, hint, icon }: {
   icon?: ReactNode
 }) {
   return (
-    <div className="glass rounded-2xl p-4 shadow-lg shadow-slate-900/5 transition-transform hover:-translate-y-0.5">
+    <div className="glass rounded-xl p-4 transition-colors hover:border-white/15">
       <div className="flex items-start justify-between gap-3">
-        <span className="text-xs font-medium text-slate-500">{label}</span>
-        {icon && <div className="shrink-0 text-blue-900">{icon}</div>}
+        <span className="font-figures text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">{label}</span>
+        {icon && <div className="shrink-0 text-blue-400">{icon}</div>}
       </div>
-      <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900">{value}</div>
+      <div className="mt-2 font-figures text-2xl font-semibold tracking-tight text-slate-50">{value}</div>
       {hint && <div className="mt-0.5 text-xs text-slate-400">{hint}</div>}
     </div>
   )
@@ -227,11 +228,11 @@ export function Badge({
   color?: 'slate' | 'blue' | 'green' | 'red' | 'amber'
 }) {
   const colors = {
-    slate: 'bg-slate-100 text-slate-600',
-    blue: 'bg-blue-50 text-blue-700',
-    green: 'bg-emerald-50 text-emerald-700',
-    red: 'bg-red-50 text-red-700',
-    amber: 'bg-amber-50 text-amber-700',
+    slate: 'bg-white/[0.06] text-slate-300 ring-1 ring-white/10',
+    blue: 'bg-blue-500/15 text-blue-300 ring-1 ring-blue-500/30',
+    green: 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30',
+    red: 'bg-red-500/15 text-red-300 ring-1 ring-red-500/30',
+    amber: 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30',
   }
   return (
     <span className={cx('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', colors[color])}>
@@ -257,13 +258,13 @@ export function Modal({
   const maxW = size === 'sm' ? 'max-w-md' : 'max-w-lg'
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/30 p-4 backdrop-blur-sm sm:p-8"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm sm:p-8"
       onClick={onClose}
     >
-      <div className={cx('glass-strong w-full rounded-2xl shadow-2xl shadow-slate-900/20', maxW)} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-white/50 px-4 py-3">
-          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+      <div className={cx('glass-strong w-full rounded-xl shadow-2xl shadow-black/60', maxW)} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
+          <h3 className="text-[15px] font-semibold text-slate-50">{title}</h3>
+          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-white/[0.06] hover:text-white">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6 6 18M6 6l12 12" />
             </svg>
@@ -299,7 +300,7 @@ export function RefreshIcon({ size = 15, spinning = false }: { size?: number; sp
 
 export function Spinner({ className }: { className?: string }) {
   return (
-    <svg className={cx('animate-spin text-blue-600', className)} width="20" height="20" viewBox="0 0 24 24" fill="none">
+    <svg className={cx('animate-spin text-blue-400', className)} width="20" height="20" viewBox="0 0 24 24" fill="none">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.4 0 0 5.4 0 12h4z" />
     </svg>
@@ -326,28 +327,28 @@ export function PageLoader({ label = 'Loading…', size = 56, className }: { lab
       >
         <defs>
           <linearGradient id="pageLoaderArc" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#1a3654" />
-            <stop offset="100%" stopColor="#2563eb" />
+            <stop offset="0%" stopColor="#1d4ed8" />
+            <stop offset="100%" stopColor="#60a5fa" />
           </linearGradient>
         </defs>
         {/* Track */}
-        <circle cx={mid} cy={mid} r={r} fill="none" strokeWidth={stroke} className="stroke-slate-200/80" />
+        <circle cx={mid} cy={mid} r={r} fill="none" strokeWidth={stroke} className="stroke-white/[0.08]" />
         {/* Sweeping arc (~28% of the ring) with a soft glow */}
         <circle
           cx={mid} cy={mid} r={r} fill="none" strokeWidth={stroke} strokeLinecap="round"
           stroke="url(#pageLoaderArc)"
           strokeDasharray={`${circumference * 0.28} ${circumference}`}
-          style={{ filter: 'drop-shadow(0 0 5px rgba(37,99,235,0.35))' }}
+          style={{ filter: 'drop-shadow(0 0 6px rgba(59,130,246,0.45))' }}
         />
       </svg>
-      {label && <span className="animate-pulse text-sm font-medium text-slate-500">{label}</span>}
+      {label && <span className="animate-pulse text-sm font-medium text-slate-400">{label}</span>}
     </div>
   )
 }
 
 export function EmptyState({ message }: { message: string }) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400">
+    <div className="flex flex-col items-center justify-center py-12 text-center text-slate-500">
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <path d="M3 7h18M3 12h18M3 17h18" />
       </svg>

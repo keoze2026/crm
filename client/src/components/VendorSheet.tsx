@@ -108,18 +108,18 @@ export default function VendorSheet({
         <>
           {/* Say what this sheet does and does not take, so a derived column never reads as
               a field that won't accept typing. */}
-          <p className="mb-3 text-xs leading-relaxed text-slate-500">
-            <span className="font-semibold text-slate-600">Amount paid</span> is the only figure typed here
+          <p className="mb-3 text-xs leading-relaxed text-slate-400">
+            <span className="font-semibold text-slate-300">Amount paid</span> is the only figure typed here
             {' '}(plus the opening balance below). Converted Lead, Price and Payments are read from this
             source&apos;s records on the{' '}
-            <Link to="/campaigns" className="font-medium text-blue-600 underline decoration-blue-300 underline-offset-2 hover:text-blue-700">
+            <Link to="/campaigns" className="font-medium text-blue-400 underline decoration-blue-300 underline-offset-2 hover:text-blue-300">
               Campaigns sheet
             </Link>
             {' '}— enter them there. The balances are calculated and never typed.
           </p>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-230 border-collapse text-sm [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white">
+            <table className="w-full min-w-230 border-collapse text-sm [&_td]:border [&_td]:border-white/[0.08] [&_th]:border [&_th]:border-white/[0.08]">
               <colgroup>
                 <col style={{ width: '13%' }} />
                 <col style={{ width: '15%' }} />
@@ -131,7 +131,7 @@ export default function VendorSheet({
                 <col style={{ width: '6%' }} />
               </colgroup>
               <thead>
-                <tr className="bg-[#1a3654] text-center text-xs font-bold uppercase tracking-wide text-white">
+                <tr className="bg-[#132a52] text-center text-xs font-bold uppercase tracking-wide text-white">
                   <th className={headCls}>Date</th>
                   <th className={headCls}>Traffic Source</th>
                   <th className={headCls}>Converted Lead<FromCampaigns /></th>
@@ -163,14 +163,14 @@ export default function VendorSheet({
                 />
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="bg-white/40 px-3 py-3 text-center text-xs text-slate-400">
+                    <td colSpan={8} className="bg-white/[0.05] px-3 py-3 text-center text-xs text-slate-400">
                       No entries in the selected range yet — add one in the row above.
                     </td>
                   </tr>
                 )}
               </tbody>
               <tfoot>
-                <tr className="bg-[#1a3654] font-bold text-white">
+                <tr className="bg-[#132a52] font-bold text-white">
                   <td className="px-3 py-2.5 text-center text-xs font-bold uppercase" colSpan={2}>Total</td>
                   <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.leads)}</td>
                   <td className="px-3 py-2.5" />
@@ -189,9 +189,9 @@ export default function VendorSheet({
           {/* Summary — Average + the opening figure (left) and the derived balance (right). */}
           <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex flex-col gap-3 self-start">
-              <div className="glass-input inline-flex items-center gap-3 self-start rounded-xl border border-white/70 px-4 py-2.5">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Average Leads a Day</span>
-                <span className="text-2xl font-bold tabular-nums text-[#1a3654]">{avg ?? '—'}</span>
+              <div className="glass-input inline-flex items-center gap-3 self-start rounded-xl border border-white/10 px-4 py-2.5">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Average Leads a Day</span>
+                <span className="text-2xl font-bold tabular-nums text-blue-300">{avg ?? '—'}</span>
                 <span className="text-xs text-slate-400">
                   {daysWorked > 0
                     ? `${num(totals.leads)} ÷ ${daysWorked} day${daysWorked === 1 ? '' : 's'} worked`
@@ -214,7 +214,7 @@ export default function VendorSheet({
         </>
       )}
 
-      {payments.error && <p className="mt-4 text-sm text-red-600">{payments.error}</p>}
+      {payments.error && <p className="mt-4 text-sm text-red-400">{payments.error}</p>}
     </div>
   )
 }
@@ -272,7 +272,7 @@ function SaveMark({ state }: { state: SaveState }) {
   }
   if (state.phase === 'saved') {
     return (
-      <span title="Saved" className="shrink-0 text-emerald-600">
+      <span title="Saved" className="shrink-0 text-emerald-400">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
           <path d="m5 13 4 4L19 7" />
         </svg>
@@ -280,7 +280,7 @@ function SaveMark({ state }: { state: SaveState }) {
     )
   }
   return (
-    <span title={state.message} className="shrink-0 rounded bg-red-100 px-1 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
+    <span title={state.message} className="shrink-0 rounded bg-red-500/20 px-1 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-300">
       Failed
     </span>
   )
@@ -290,7 +290,7 @@ function SaveMark({ state }: { state: SaveState }) {
  *  vendor is holding our money (Advance), red when we owe them (Due). */
 function balanceColor(n: number): string {
   if (Math.abs(n) < 0.005) return 'text-slate-400'
-  return n > 0 ? 'text-emerald-600' : 'text-red-600'
+  return n > 0 ? 'text-emerald-400' : 'text-red-400'
 }
 
 /** Add n days to an ISO date (YYYY-MM-DD), returning ISO. */
@@ -363,10 +363,10 @@ function PaymentRow({
       // Enter saves where it is, without having to leave the row first. Without this, a
       // figure typed and confirmed with Enter sat on screen looking saved and never was.
       onKeyDown={(e) => { if (isEnterSubmit(e)) save() }}
-      className="bg-[#d4e9f2] text-[#0f172a]"
+      className="bg-[#0a0e17] text-slate-100"
     >
       <td className={roCell}>{payment.entry_date}</td>
-      <td className={cx(cellCls, 'text-center font-medium text-[#1a3654]')}>{vendorName}</td>
+      <td className={cx(cellCls, 'text-center font-medium text-blue-300')}>{vendorName}</td>
       {/* Read-only: these three come from this source's campaign records for the day. */}
       <td className={cx(roCell, 'text-right')} title="From the Campaigns records for this day">
         {num(payment.converted_calls)}
@@ -386,7 +386,7 @@ function PaymentRow({
       <td className="p-0 text-center">
         <button onClick={remove} disabled={payment.payment_id === null}
           title={payment.payment_id === null ? 'Nothing paid on this day yet' : 'Clear the amount paid'}
-          className="mx-auto flex h-7 w-7 items-center justify-center rounded text-slate-500 transition-colors hover:bg-red-100 hover:text-red-600 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-500">
+          className="mx-auto flex h-7 w-7 items-center justify-center rounded text-slate-400 transition-colors hover:bg-red-500/20 hover:text-red-400 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-400">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
           </svg>
@@ -431,7 +431,7 @@ function AddRow({
   }
 
   return (
-    <tr className="bg-[#eaf5fa] text-[#0f172a]" onKeyDown={(e) => { if (isEnterSubmit(e)) add() }}>
+    <tr className="bg-[#0d1322] text-slate-100" onKeyDown={(e) => { if (isEnterSubmit(e)) add() }}>
       <td className={cellCls}><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></td>
       <td className={cx(cellCls, 'text-center font-medium text-slate-400')}>{vendorName}</td>
       <td className={cx(roCell, 'text-right text-slate-400')} title="Comes from the Campaigns records">—</td>
@@ -449,7 +449,7 @@ function AddRow({
         {/* Say WHY it is greyed out — an unexplained disabled button reads as broken. */}
         <button onClick={add} disabled={!canAdd}
           title={canAdd ? 'Record this payment' : !date ? 'Pick a date first' : 'Enter an amount paid'}
-          className="mx-auto flex h-7 w-7 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-100 disabled:opacity-30 disabled:hover:bg-transparent">
+          className="mx-auto flex h-7 w-7 items-center justify-center rounded text-blue-400 transition-colors hover:bg-blue-500/20 disabled:opacity-30 disabled:hover:bg-transparent">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M12 5v14M5 12h14" />
           </svg>
@@ -497,14 +497,14 @@ function InitialAdvance({
   }
 
   return (
-    <div className="glass-input inline-flex items-center gap-3 self-start rounded-xl border border-white/70 px-4 py-2.5">
-      <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Initial Advance</span>
+    <div className="glass-input inline-flex items-center gap-3 self-start rounded-xl border border-white/10 px-4 py-2.5">
+      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Initial Advance</span>
       <input
         type="number" step="0.01" value={amount} placeholder="0.00"
         onChange={(e) => setAmount(e.target.value)} onBlur={save}
         // The one other typed figure on this page, so it answers Enter the same way.
         onKeyDown={(e) => { if (isEnterSubmit(e)) save() }}
-        className={cx('glass-input w-32 rounded-lg border border-white/70 px-2.5 py-1 text-right text-lg font-bold tabular-nums focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+        className={cx('glass-input w-32 rounded-lg border border-white/10 px-2.5 py-1 text-right text-lg font-bold tabular-nums focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30',
           balanceColor(n))}
       />
       <SaveMark state={state} />
@@ -525,10 +525,10 @@ function BalanceSummary({
 
   return (
     <div className="text-right">
-      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Amount Due / Advance</div>
+      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Amount Due / Advance</div>
       <div className="flex items-center justify-end gap-2">
         <span className={cx('rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide',
-          settled ? 'bg-slate-100 text-slate-500' : advance ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')}>
+          settled ? 'bg-white/[0.06] text-slate-400' : advance ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400')}>
           {settled ? 'Settled' : advance ? 'Advance' : 'Due'}
         </span>
         <span className={cx('text-3xl font-extrabold tabular-nums tracking-tight', balanceColor(balance))}>

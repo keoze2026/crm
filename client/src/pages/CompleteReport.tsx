@@ -32,7 +32,7 @@ function CompleteReportView() {
         {report.loading ? (
           <PageLoader label="Loading report…" />
         ) : report.error ? (
-          <p className="py-10 text-center text-sm text-red-600">{report.error}</p>
+          <p className="py-10 text-center text-sm text-red-400">{report.error}</p>
         ) : !data || (data.buyers.length === 0 && data.campaigns.length === 0) ? (
           <EmptyState message="No data for this period." />
         ) : (
@@ -53,8 +53,8 @@ function ReportView({ data }: { data: CompleteReport }) {
   return (
     <div className="mx-auto space-y-8">
       {/* Period line */}
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 text-xs text-slate-500">
-        <span>Period: <span className="font-medium text-slate-700">{dateLabel}</span></span>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 text-xs text-slate-400">
+        <span>Period: <span className="font-medium text-slate-200">{dateLabel}</span></span>
         <span>{data.buyers.length} destinations · {data.campaigns.length} campaign rows</span>
       </div>
 
@@ -97,7 +97,7 @@ function FormulaBand({ revenue, cost, portalExpenses, profit }: {
   revenue: number; cost: number; portalExpenses: number; profit: number
 }) {
   return (
-    <div className="flex flex-col items-stretch gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-center">
+    <div className="flex flex-col items-stretch gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:flex-row sm:items-center sm:justify-center">
       <Tile label="Revenue" value={money2(revenue)} />
       <Operator>−</Operator>
       <Tile label="Cost" value={money2(cost)} />
@@ -114,9 +114,9 @@ function FormulaBand({ revenue, cost, portalExpenses, profit }: {
 }
 
 function Tile({ label, value, highlight }: { label: string; value: string; highlight?: 'navy' | 'red' }) {
-  const filled = highlight === 'navy' ? 'bg-[#1a3654] text-white border-[#1a3654]'
+  const filled = highlight === 'navy' ? 'bg-[#132a52] text-white border-blue-500/60'
     : highlight === 'red' ? 'bg-red-600 text-white border-red-600'
-    : 'bg-white text-[#0f172a] border-slate-200'
+    : 'bg-[#0a0e17] text-slate-100 border-white/10'
   return (
     <div className={cx('flex-1 rounded-xl border px-6 py-4 text-center shadow-sm', filled)}>
       <p className={cx('text-[11px] font-semibold uppercase tracking-wide', highlight ? 'text-white/80' : 'text-slate-400')}>{label}</p>

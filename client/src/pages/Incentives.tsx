@@ -77,7 +77,7 @@ export default function Incentives() {
       )}
 
       {(incentives.error || staff.error) && (
-        <p className="mt-4 text-sm text-red-600">{incentives.error ?? staff.error}</p>
+        <p className="mt-4 text-sm text-red-400">{incentives.error ?? staff.error}</p>
       )}
     </div>
     </PerformerScope>

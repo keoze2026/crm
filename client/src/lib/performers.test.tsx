@@ -326,14 +326,14 @@ describe('PerformerBadge', () => {
     const el = await badge({ staffId: 1 })
     expect(el?.textContent).toBe('Top performer')
     expect(el?.getAttribute('title')).toBe('Top Performer of the Month — August 2026')
-    expect(el?.className).toContain('bg-emerald-100')
+    expect(el?.className).toContain('bg-emerald-500/15')
   })
 
   it('marks the lowest performer in red', async () => {
     const el = await badge({ name: 'cy low', className: 'ml-1' })
     expect(el?.textContent).toBe('Low performer')
     expect(el?.getAttribute('aria-label')).toBe('Low performer of the month — August 2026')
-    expect(el?.className).toContain('bg-rose-100')
+    expect(el?.className).toContain('bg-rose-500/15')
     expect(el?.className).toContain('ml-1')
   })
 

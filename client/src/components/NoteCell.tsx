@@ -66,9 +66,9 @@ export default function NoteCell({ value, onSave, placeholder = 'Add note', prom
         onClick={() => (open ? commit() : openPanel())}
         title={value || 'Add a note'}
         className={cx(
-          'flex w-full items-center gap-1 rounded border bg-white px-1.5 py-0.5 text-left text-xs transition-colors',
-          open ? 'border-[#1a3654] ring-1 ring-[#1a3654]/30' : 'border-slate-300 hover:border-[#1a3654]',
-          value === '' ? 'text-slate-400' : 'text-slate-800',
+          'flex w-full items-center gap-1 rounded border bg-[#0a0e17] px-1.5 py-0.5 text-left text-xs transition-colors',
+          open ? 'border-blue-500/60 ring-1 ring-blue-500/30' : 'border-white/15 hover:border-blue-500/60',
+          value === '' ? 'text-slate-400' : 'text-slate-100',
         )}
       >
         <NoteIcon filled={value !== ''} />
@@ -79,7 +79,7 @@ export default function NoteCell({ value, onSave, placeholder = 'Add note', prom
         <div
           data-note-popover
           style={{ position: 'absolute', top: pos.top, left: pos.left, width: pos.width }}
-          className="z-50 rounded-xl border border-slate-300 bg-white p-2 shadow-2xl shadow-slate-900/20"
+          className="z-50 rounded-xl border border-white/15 bg-[#0a0e17] p-2 shadow-2xl shadow-slate-900/20"
         >
           <textarea
             ref={textRef}
@@ -87,19 +87,19 @@ export default function NoteCell({ value, onSave, placeholder = 'Add note', prom
             rows={4}
             placeholder={prompt}
             onChange={(e) => setText(e.target.value)}
-            className="w-full resize-y rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-[#1a3654] focus:outline-none focus:ring-2 focus:ring-[#1a3654]/25"
+            className="w-full resize-y rounded-lg border border-white/15 bg-[#0a0e17] px-2 py-1.5 text-xs text-slate-100 placeholder:text-slate-400 focus:border-blue-500/60 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
           />
           <div className="mt-1.5 flex items-center justify-between">
             <button
               onClick={() => { setText(''); onSave(''); setOpen(false) }}
               disabled={value === '' && text === ''}
-              className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 disabled:border-slate-200 disabled:text-slate-400"
+              className="rounded-lg border border-white/15 bg-[#0a0e17] px-2 py-1 text-[11px] font-semibold text-slate-200 hover:bg-white/[0.06] disabled:border-white/10 disabled:text-slate-400"
             >
               Clear
             </button>
             <button
               onClick={commit}
-              className="rounded-lg bg-[#1a3654] px-3 py-1 text-[11px] font-bold text-white hover:bg-[#24466b]"
+              className="rounded-lg bg-[#132a52] px-3 py-1 text-[11px] font-bold text-white hover:bg-[#24466b]"
             >
               Save note
             </button>
@@ -114,7 +114,7 @@ export default function NoteCell({ value, onSave, placeholder = 'Add note', prom
 /** Solid once a note exists, so a glance down the column shows who has one. */
 const NoteIcon = ({ filled }: { filled: boolean }) => (
   <svg width="12" height="12" viewBox="0 0 24 24" {...sheetStroke}
-    className={cx('shrink-0', filled ? 'text-[#1a3654]' : 'text-slate-400')}
+    className={cx('shrink-0', filled ? 'text-blue-300' : 'text-slate-400')}
     fill={filled ? 'currentColor' : 'none'} fillOpacity={filled ? 0.15 : 0}>
     <path d="M4 4h16v12H8l-4 4z" />
   </svg>

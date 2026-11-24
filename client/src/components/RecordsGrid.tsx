@@ -64,18 +64,18 @@ export default function RecordsGrid({
   // Always show existing rows highest-rate first.
   const sortedRecords = [...records].sort((a, b) => b.rate - a.rate)
 
-  const headCls = cx('px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide', navy ? 'bg-[#1a3654] text-white' : 'bg-blue-600 text-blue-50')
+  const headCls = cx('px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide', navy ? 'bg-[#132a52] text-white' : 'bg-blue-600 text-blue-50')
   // "REPLACEMENT" is the longest header; in the fixed-width campaign grid it clips
   // against the column edge, so this variant tightens the padding, drops the wide
   // letter-spacing and shrinks the font a notch so the whole word fits.
-  const headClsReplacement = cx('px-1 py-2.5 text-center text-[10px] font-semibold uppercase tracking-tight whitespace-nowrap', navy ? 'bg-[#1a3654] text-white' : 'bg-blue-600 text-blue-50')
+  const headClsReplacement = cx('px-1 py-2.5 text-center text-[10px] font-semibold uppercase tracking-tight whitespace-nowrap', navy ? 'bg-[#132a52] text-white' : 'bg-blue-600 text-blue-50')
 
   return (
     <div className="overflow-x-auto rounded-t-2xl">
       {/* min-w keeps columns from crushing on small screens; the wrapper scrolls
           horizontally instead (matching Users / System Logs). Campaigns carry an
           extra Source column + Status select, so they need a wider floor. */}
-      <table className={cx('w-full text-sm', isBuyer ? 'min-w-[760px]' : 'min-w-[1020px] table-fixed', navy && 'border-collapse [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white')}>
+      <table className={cx('w-full text-sm', isBuyer ? 'min-w-[760px]' : 'min-w-[1020px] table-fixed', navy && 'border-collapse [&_td]:border [&_td]:border-white/[0.08] [&_th]:border [&_th]:border-white/[0.08]')}>
         {/* Campaign grid only: without a colgroup the fixed layout splits all ten
             columns evenly (10% each). Traffic Source holds the longest values, so it
             takes 12%; the extra 2% comes out of the trailing actions column, which
@@ -134,20 +134,20 @@ export default function RecordsGrid({
           ))}
         </tbody>
         <tfoot>
-          <tr className={cx('font-semibold', navy ? 'bg-[#1a3654] font-bold text-white' : 'border-t-2 border-blue-200 bg-blue-50 text-slate-900')}>
-            <td className={cx('px-3 py-2.5 text-xs font-bold uppercase', navy ? 'text-white' : 'text-blue-700')} colSpan={isBuyer ? 1 : 2}>
+          <tr className={cx('font-semibold', navy ? 'bg-[#132a52] font-bold text-white' : 'border-t-2 border-blue-500/30 bg-blue-500/15 text-slate-100')}>
+            <td className={cx('px-3 py-2.5 text-xs font-bold uppercase', navy ? 'text-white' : 'text-blue-300')} colSpan={isBuyer ? 1 : 2}>
               {num(entityCount)} {isBuyer ? 'dest.' : 'sources'}
             </td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.answered)}</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.missed)}</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.replacement)}</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.counted)}</td>
-            <td className={cx('px-3 py-2.5 text-center tabular-nums', navy ? 'text-white/90' : 'text-blue-700')} title="Average rate = Total ÷ Counted">{totals.counted > 0 ? money2(totals.total / totals.counted) : '—'}</td>
-            <td className={cx('px-3 py-2.5 text-center tabular-nums', navy ? 'text-white' : 'text-blue-700')}>{money2(totals.total)}</td>
+            <td className={cx('px-3 py-2.5 text-center tabular-nums', navy ? 'text-white/90' : 'text-blue-300')} title="Average rate = Total ÷ Counted">{totals.counted > 0 ? money2(totals.total / totals.counted) : '—'}</td>
+            <td className={cx('px-3 py-2.5 text-center tabular-nums', navy ? 'text-white' : 'text-blue-300')}>{money2(totals.total)}</td>
             {!isBuyer && <td className="px-3 py-2.5" />}
             <td className="px-2 py-2.5 text-center">
               <button type="button" onClick={addRow} title="Add row"
-                className={cx('rounded p-1', navy ? 'text-white hover:bg-white/20' : 'text-blue-600 hover:bg-blue-100')}>
+                className={cx('rounded p-1', navy ? 'text-white hover:bg-white/20' : 'text-blue-400 hover:bg-blue-500/20')}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
               </button>
             </td>
@@ -172,7 +172,7 @@ function fallbackCampaign(r: CallRecord): Campaign | undefined {
 }
 
 const rowCls = (navy: boolean, extra = '') =>
-  cx(navy ? 'bg-[#d4e9f2] text-[#0f172a]' : 'border-b border-slate-100/70 hover:bg-blue-50/40', extra)
+  cx(navy ? 'bg-[#0a0e17] text-slate-100' : 'border-b border-white/[0.06] hover:bg-blue-500/10', extra)
 const cellCls = 'px-2 py-1'
 const numInput = 'text-right'
 
@@ -183,11 +183,11 @@ const CheckIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="no
 function StatusSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const active = value === 'active'
   return (
-    <div className={cx('rounded-xl', active ? 'bg-emerald-200/80' : 'bg-red-200/80')}>
+    <div className={cx('rounded-xl', active ? 'bg-emerald-500/25' : 'bg-red-500/25')}>
       <Select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={cx('border-transparent! bg-transparent! font-semibold', active ? 'text-emerald-800' : 'text-red-700')}
+        className={cx('border-transparent! bg-transparent! font-semibold', active ? 'text-emerald-300' : 'text-red-300')}
       >
         <option value="active">Active</option>
         <option value="inactive">Inactive</option>
@@ -313,13 +313,13 @@ function ExistingRow({ record, isBuyer, navy, onChanged, campaign }: {
         <td className={cellCls}>
           {record.buyer_id != null
             ? <Input value={buyerCode} onChange={(e) => setBuyerCode(e.target.value)} />
-            : <span className="font-medium text-slate-800">{record.buyer_code ?? '—'}</span>}
+            : <span className="font-medium text-slate-100">{record.buyer_code ?? '—'}</span>}
         </td>
       ) : (
         <td className={cellCls}>
           {campaign
             ? <Input value={code} onChange={(e) => setCode(e.target.value)} />
-            : <span className="font-medium text-slate-800">{record.campaign_code ?? '—'}</span>}
+            : <span className="font-medium text-slate-100">{record.campaign_code ?? '—'}</span>}
         </td>
       )}
       {!isBuyer && <td className={cellCls}><Input value={source} onChange={(e) => setSource(e.target.value)} /></td>}
@@ -328,11 +328,11 @@ function ExistingRow({ record, isBuyer, navy, onChanged, campaign }: {
       <td className={cellCls}>
         {manualRep
           ? <Input type="number" min="0" value={replacement} onChange={(e) => setReplacement(e.target.value)} className={numInput} />
-          : <Input type="number" value={autoRep} readOnly tabIndex={-1} title="Auto-filled: Answered − Counted" className={cx(numInput, 'cursor-not-allowed bg-slate-100 text-slate-500')} />}
+          : <Input type="number" value={autoRep} readOnly tabIndex={-1} title="Auto-filled: Answered − Counted" className={cx(numInput, 'cursor-not-allowed bg-white/[0.06] text-slate-400')} />}
       </td>
       <td className={cellCls}><Input type="number" min="0" value={counted} onChange={(e) => setCounted(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} className={numInput} /></td>
-      <td className={cx(cellCls, 'text-center font-semibold tabular-nums text-slate-900')}>{money2(total)}</td>
+      <td className={cx(cellCls, 'text-center font-semibold tabular-nums text-slate-100')}>{money2(total)}</td>
       {!isBuyer && (
         <td className={cellCls}>
           {campaign ? <StatusSelect value={campaign.status} onChange={changeStatus} /> : <span className="text-slate-300">—</span>}
@@ -342,8 +342,8 @@ function ExistingRow({ record, isBuyer, navy, onChanged, campaign }: {
         <div className="flex items-center justify-center gap-1">
           {!isBuyer && campaign && <CampaignRatesPopover campaign={campaign} onSaved={onChanged} />}
           {busy ? <Spinner className="h-4 w-4" /> : dirty
-            ? <button type="button" onClick={save} title="Save changes" className="rounded p-1 text-green-600 hover:bg-green-50"><CheckIcon /></button>
-            : <button type="button" onClick={del} title="Delete" className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"><TrashIcon /></button>}
+            ? <button type="button" onClick={save} title="Save changes" className="rounded p-1 text-green-400 hover:bg-green-500/15"><CheckIcon /></button>
+            : <button type="button" onClick={del} title="Delete" className="rounded p-1 text-slate-400 hover:bg-red-500/15 hover:text-red-400"><TrashIcon /></button>}
         </div>
       </td>
     </tr>
@@ -438,7 +438,7 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
   }, 0)
 
   return (
-    <tr ref={rowRef} onBlur={onRowBlur} onKeyDown={(e) => { if (isEnterSubmit(e)) save() }} className={rowCls(navy, navy ? '!bg-white/70' : 'bg-amber-50/30')}>
+    <tr ref={rowRef} onBlur={onRowBlur} onKeyDown={(e) => { if (isEnterSubmit(e)) save() }} className={rowCls(navy, navy ? '!bg-white/[0.05]' : 'bg-amber-500/10')}>
       <td className={cellCls}>
         {/* Entity is a free typing field (find-or-create by code). Dropdown retired:
               <Select value={entityId} onChange={(e) => onEntity(e.target.value)}>
@@ -466,16 +466,16 @@ function DraftRow({ isBuyer, date, entities, destinations, navy, onActivate, onS
       <td className={cellCls}>
         {manualRep
           ? <Input type="number" min="0" value={replacement} onChange={(e) => setReplacement(e.target.value)} className={numInput} />
-          : <Input type="number" value={autoRep} readOnly tabIndex={-1} title="Auto-filled: Answered − Counted" className={cx(numInput, 'cursor-not-allowed bg-slate-100 text-slate-500')} />}
+          : <Input type="number" value={autoRep} readOnly tabIndex={-1} title="Auto-filled: Answered − Counted" className={cx(numInput, 'cursor-not-allowed bg-white/[0.06] text-slate-400')} />}
       </td>
       <td className={cellCls}><Input type="number" min="0" value={counted} onChange={(e) => onCounted(e.target.value)} className={numInput} /></td>
       <td className={cellCls}><Input type="number" min="0" step="0.01" value={rate} onChange={(e) => onRate(e.target.value)} className={numInput} /></td>
-      <td className={cx(cellCls, 'text-center font-semibold tabular-nums text-slate-900')}>{money2(total)}</td>
+      <td className={cx(cellCls, 'text-center font-semibold tabular-nums text-slate-100')}>{money2(total)}</td>
       {!isBuyer && <td className={cellCls} />}
       <td className={cx(cellCls, 'text-center')}>
         {busy ? <Spinner className="h-4 w-4" /> : (
           <button type="button" onClick={save} disabled={!complete} title="Save row"
-            className={cx('rounded p-1', complete ? 'text-green-600 hover:bg-green-50' : 'cursor-not-allowed text-slate-300')}>
+            className={cx('rounded p-1', complete ? 'text-green-400 hover:bg-green-500/15' : 'cursor-not-allowed text-slate-300')}>
             <CheckIcon />
           </button>
         )}

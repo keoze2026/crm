@@ -62,7 +62,7 @@ export default function StaffAttendanceSheet({
       <div className="overflow-x-auto">
         <table className="table-dash w-full min-w-[68rem] border-collapse text-left">
           <thead>
-            <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <tr className="border-b border-white/10 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
               <th className="w-10 font-semibold">#</th>
               <th className="font-semibold">Name</th>
               <th className="font-semibold">Department</th>
@@ -139,13 +139,13 @@ const statusLabel = (s: string) => STATUS_LABEL[s.trim().toLowerCase()] ?? s
  */
 const PILL_TONE: Record<string, string> = {
   'still in': 'bg-brand/10 text-brand',
-  'present':  'bg-emerald-50 text-emerald-800',
-  'half day': 'bg-amber-50 text-amber-800',
-  'leave':    'bg-violet-50 text-violet-700',
-  'holiday':  'bg-slate-100 text-slate-600',
-  'absent':   'bg-slate-100 text-slate-500',
+  'present':  'bg-emerald-500/15 text-emerald-300',
+  'half day': 'bg-amber-500/15 text-amber-300',
+  'leave':    'bg-violet-500/15 text-violet-300',
+  'holiday':  'bg-white/[0.06] text-slate-300',
+  'absent':   'bg-white/[0.06] text-slate-400',
 }
-const pillTone = (s: string) => PILL_TONE[s.trim().toLowerCase()] ?? 'bg-slate-100 text-slate-700'
+const pillTone = (s: string) => PILL_TONE[s.trim().toLowerCase()] ?? 'bg-white/[0.06] text-slate-200'
 
 /** The same status as a static tag, for anywhere a day is quoted outside the sheet. */
 export function StatusTag({ status, implied = false, className }: {
@@ -239,17 +239,17 @@ function DayRow({ index, day, date, monthTally, monthLabel, breakAllowanceMin, o
   }
 
   return (
-    <tr className={cx('border-b border-slate-100 last:border-b-0', day.review && 'bg-amber-50/70')}>
-      <td className="text-xs tabular-nums text-slate-500">{index}</td>
+    <tr className={cx('border-b border-white/[0.06] last:border-b-0', day.review && 'bg-amber-500/10')}>
+      <td className="text-xs tabular-nums text-slate-400">{index}</td>
       <td className="max-w-[13rem]">
         <span className="flex items-center gap-1.5">
           <span
             aria-hidden
             title={day.online ? 'Checked in right now' : undefined}
-            className={cx('h-1.5 w-1.5 shrink-0 rounded-full', day.online ? 'bg-emerald-500' : worked ? 'bg-slate-300' : 'bg-transparent')}
+            className={cx('h-1.5 w-1.5 shrink-0 rounded-full', day.online ? 'bg-emerald-500' : worked ? 'bg-white/15' : 'bg-transparent')}
           />
           <span
-            className={cx('truncate text-[13px]', worked ? 'font-semibold text-slate-900' : 'text-slate-600')}
+            className={cx('truncate text-[13px]', worked ? 'font-semibold text-slate-100' : 'text-slate-300')}
             title={bot?.username ? `@${bot.username}` : undefined}
           >
             {person.name}
@@ -260,14 +260,14 @@ function DayRow({ index, day, date, monthTally, monthLabel, breakAllowanceMin, o
       <td><DepartmentCell person={person} /></td>
       <td>
         <ClockCell at={login} />
-        <ScheduleMark minutes={day.lateMin} word="late" expected={person.expected_login} tone="text-red-600" />
+        <ScheduleMark minutes={day.lateMin} word="late" expected={person.expected_login} tone="text-red-400" />
       </td>
       <td>
-        {login && !logout ? <span className="text-[13px] text-slate-500">Not yet</span> : <ClockCell at={logout} />}
-        <ScheduleMark minutes={day.earlyMin} word="early" expected={person.expected_logout} tone="text-amber-700" />
+        {login && !logout ? <span className="text-[13px] text-slate-400">Not yet</span> : <ClockCell at={logout} />}
+        <ScheduleMark minutes={day.earlyMin} word="early" expected={person.expected_logout} tone="text-amber-300" />
       </td>
       <td><BreakCell day={day} allowance={breakAllowanceMin} onOpen={onBreakDetail} /></td>
-      <td className="text-[13px] tabular-nums text-slate-900">{hoursLabel(day.hours)}</td>
+      <td className="text-[13px] tabular-nums text-slate-100">{hoursLabel(day.hours)}</td>
       <td><LateMonthCount tally={monthTally} monthLabel={monthLabel} name={person.name} /></td>
       <td><FlagCell day={day} /></td>
       <td>
@@ -287,7 +287,7 @@ function DayRow({ index, day, date, monthTally, monthLabel, breakAllowanceMin, o
               pillTone(day.status),
             )}
           >
-            {ATTENDANCE_STATUSES.map((s) => <option key={s} value={s} className="bg-white text-slate-900">{statusLabel(s)}</option>)}
+            {ATTENDANCE_STATUSES.map((s) => <option key={s} value={s} className="bg-[#0a0e17] text-slate-100">{statusLabel(s)}</option>)}
           </select>
           <svg className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 opacity-70" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
             <polyline points="6 9 12 15 18 9" />
@@ -305,7 +305,7 @@ function DayRow({ index, day, date, monthTally, monthLabel, breakAllowanceMin, o
           aria-expanded={editOpen}
           className={cx(
             'inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30',
-            editOpen ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800',
+            editOpen ? 'bg-white/[0.06] text-slate-100' : 'text-slate-400 hover:bg-white/[0.06] hover:text-slate-100',
           )}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -323,7 +323,7 @@ function DepartmentCell({ person }: { person: StaffMember }) {
   return (
     <div className="flex max-w-[11rem] flex-wrap gap-1">
       {person.departments.map((d) => (
-        <span key={d.id} className="whitespace-nowrap rounded border border-slate-200 bg-white px-1.5 text-[11px] leading-[18px] text-slate-600">
+        <span key={d.id} className="whitespace-nowrap rounded border border-white/10 bg-[#0a0e17] px-1.5 text-[11px] leading-[18px] text-slate-300">
           {d.name}
         </span>
       ))}
@@ -333,7 +333,7 @@ function DepartmentCell({ person }: { person: StaffMember }) {
 
 function ClockCell({ at }: { at: string | null }) {
   if (!at) return <span className="text-slate-400">—</span>
-  return <span className="whitespace-nowrap text-[13px] tabular-nums text-slate-900">{clockLabel(at).replace(/^(\d):/, '0$1:')}</span>
+  return <span className="whitespace-nowrap text-[13px] tabular-nums text-slate-100">{clockLabel(at).replace(/^(\d):/, '0$1:')}</span>
 }
 
 /**
@@ -366,8 +366,8 @@ function BreakCell({ day, allowance, onOpen }: { day: DayView; allowance: number
   const notes = [over > 0 && `+${gapLabel(over)} over`, back > 0 && `back +${gapLabel(back)}`, day.bot?.on_break && 'out now'].filter(Boolean).join(' · ')
   const body = (
     <>
-      <span className={cx('whitespace-nowrap text-[13px] tabular-nums', bad ? 'font-semibold text-red-600' : 'text-slate-900')}>{text}</span>
-      {notes && <span className={cx('block whitespace-nowrap text-[11px]', bad ? 'text-red-600' : 'text-slate-500')}>{notes}</span>}
+      <span className={cx('whitespace-nowrap text-[13px] tabular-nums', bad ? 'font-semibold text-red-400' : 'text-slate-100')}>{text}</span>
+      {notes && <span className={cx('block whitespace-nowrap text-[11px]', bad ? 'text-red-400' : 'text-slate-400')}>{notes}</span>}
     </>
   )
   if (!day.bot || count === 0 || !onOpen) return body
@@ -391,7 +391,7 @@ function BreakCell({ day, allowance, onOpen }: { day: DayView; allowance: number
 function FlagCell({ day }: { day: DayView }) {
   if (day.review) {
     return (
-      <span title={day.review.detail} className="inline-flex items-center gap-1 whitespace-nowrap rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-900">
+      <span title={day.review.detail} className="inline-flex items-center gap-1 whitespace-nowrap rounded bg-amber-500/20 px-1.5 py-0.5 text-[11px] font-medium text-amber-300">
         <span aria-hidden>⚠</span>{day.review.label}
       </span>
     )
@@ -401,10 +401,10 @@ function FlagCell({ day }: { day: DayView }) {
 
 function PunctualityText({ flag }: { flag: Punctuality | null }) {
   if (!flag) return <span className="text-slate-400">—</span>
-  const tone = flag.id === 'on-time' ? 'text-emerald-700'
-    : flag.id === 'both' ? 'font-semibold text-red-600'
-    : flag.id === 'late' ? 'text-red-600'
-    : 'text-amber-700'
+  const tone = flag.id === 'on-time' ? 'text-emerald-300'
+    : flag.id === 'both' ? 'font-semibold text-red-400'
+    : flag.id === 'late' ? 'text-red-400'
+    : 'text-amber-300'
   return <span title={flag.detail} className={cx('whitespace-nowrap text-xs', tone)}>{flag.short}</span>
 }
 
@@ -414,12 +414,12 @@ function LateMonthCount({ tally, monthLabel, name }: { tally: LoginTally; monthL
     return <span title={`No logins recorded for ${name} in ${monthLabel}`} className="text-slate-400">—</span>
   }
   if (tally.late === 0) {
-    return <span title={`${name} was on time for all ${tally.judged} logins in ${monthLabel}`} className="text-[13px] tabular-nums text-slate-500">0/{tally.judged}</span>
+    return <span title={`${name} was on time for all ${tally.judged} logins in ${monthLabel}`} className="text-[13px] tabular-nums text-slate-400">0/{tally.judged}</span>
   }
   return (
     <span
       title={`${name}: ${tally.late} late login${tally.late === 1 ? '' : 's'} of ${tally.judged} in ${monthLabel} · ${gapLabel(tally.lateMin)} lost · worst ${gapLabel(tally.worstLateMin)}`}
-      className="text-[13px] font-semibold tabular-nums text-red-600"
+      className="text-[13px] font-semibold tabular-nums text-red-400"
     >
       {tally.late}<span className="font-normal text-red-400">/{tally.judged}</span>
     </span>
@@ -543,9 +543,9 @@ function DayEditPopover({ day, anchor, date, breakAllowanceMin, onBreakDetail, o
     }
   }
 
-  const field = 'w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-[13px] text-slate-900 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20'
-  const label = 'mb-0.5 block text-[11px] font-medium text-slate-600'
-  const hint = 'mt-0.5 block text-[10px] text-slate-500'
+  const field = 'w-full rounded-md border border-white/10 bg-[#0a0e17] px-2 py-1 text-[13px] text-slate-100 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20'
+  const label = 'mb-0.5 block text-[11px] font-medium text-slate-300'
+  const hint = 'mt-0.5 block text-[10px] text-slate-400'
 
   return createPortal(
     <div
@@ -555,7 +555,7 @@ function DayEditPopover({ day, anchor, date, breakAllowanceMin, onBreakDetail, o
       onKeyDown={(e) => { if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') { e.preventDefault(); save() } }}
       style={{ position: 'fixed', top: pos?.top ?? -9999, left: pos?.left ?? -9999, fontFamily: "'Inter', 'Poppins', ui-sans-serif, system-ui, sans-serif" }}
       className={cx(
-        'z-50 w-76 rounded-xl border border-slate-200 bg-white p-3 shadow-lg shadow-slate-900/10',
+        'z-50 w-76 rounded-xl border border-white/10 bg-[#0a0e17] p-3 shadow-lg shadow-slate-900/10',
         'transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none',
         shown ? 'translate-y-0 opacity-100' : cx('opacity-0', pos?.above ? 'translate-y-1.5' : '-translate-y-1.5'),
       )}
@@ -563,21 +563,21 @@ function DayEditPopover({ day, anchor, date, breakAllowanceMin, onBreakDetail, o
       {/* Who, which day, where the record came from. */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-[13px] font-semibold text-slate-900">{person.name} · {dayLabel}</div>
-          <div className="text-[11px] text-slate-500">{source}</div>
+          <div className="truncate text-[13px] font-semibold text-slate-100">{person.name} · {dayLabel}</div>
+          <div className="text-[11px] text-slate-400">{source}</div>
         </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="-mr-1 -mt-0.5 rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+          className="-mr-1 -mt-0.5 rounded-md p-0.5 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-slate-200"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden><path d="M18 6 6 18M6 6l12 12" /></svg>
         </button>
       </div>
 
       {day.review && (
-        <p title={day.review.detail} className="mt-2 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-900">⚠ {day.review.label}</p>
+        <p title={day.review.detail} className="mt-2 rounded-md bg-amber-500/15 px-2 py-1 text-[11px] text-amber-300">⚠ {day.review.label}</p>
       )}
 
       <div className="mt-2.5 grid grid-cols-2 gap-x-2 gap-y-2">
@@ -610,8 +610,8 @@ function DayEditPopover({ day, anchor, date, breakAllowanceMin, onBreakDetail, o
       </div>
 
       {/* What the values come to, live. */}
-      <div className="mt-2.5 flex items-center gap-3 border-t border-slate-100 pt-2 text-[11px] text-slate-600">
-        <span>Hours <b className="tabular-nums text-slate-900">{hoursLabel(hours)}</b></span>
+      <div className="mt-2.5 flex items-center gap-3 border-t border-white/[0.06] pt-2 text-[11px] text-slate-300">
+        <span>Hours <b className="tabular-nums text-slate-100">{hoursLabel(hours)}</b></span>
         <span className="truncate">Flag <PunctualityText flag={flag} /></span>
         {bot && bot.break_count > 0 && onBreakDetail && (
           <button type="button" onClick={() => { onClose(); onBreakDetail(bot) }} className="ml-auto shrink-0 font-semibold text-brand hover:underline">
@@ -622,12 +622,12 @@ function DayEditPopover({ day, anchor, date, breakAllowanceMin, onBreakDetail, o
 
       <div className="mt-2.5 flex items-center justify-between gap-2">
         {row?.id != null ? (
-          <button type="button" onClick={remove} disabled={saving} className="text-[11px] font-medium text-red-600 hover:underline disabled:opacity-50">
+          <button type="button" onClick={remove} disabled={saving} className="text-[11px] font-medium text-red-400 hover:underline disabled:opacity-50">
             {overridden ? "Put back bot's record" : 'Clear entry'}
           </button>
         ) : <span />}
         <div className="flex gap-1.5">
-          <button type="button" onClick={onClose} className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">Cancel</button>
+          <button type="button" onClick={onClose} className="rounded-md border border-white/10 bg-[#0a0e17] px-2.5 py-1 text-xs text-slate-200 hover:bg-white/[0.03]">Cancel</button>
           <button type="button" onClick={save} disabled={saving} className="rounded-md bg-brand px-3 py-1 text-xs font-semibold text-white hover:bg-brand-dark disabled:opacity-60">
             {saving ? 'Saving…' : 'Save'}
           </button>

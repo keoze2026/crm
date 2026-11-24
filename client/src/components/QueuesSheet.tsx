@@ -71,7 +71,7 @@ export default function QueuesSheet({
           {!filtered && <AddRow board={board} free={free} codes={codes} onChanged={onChanged} />}
         </tbody>
         <tfoot>
-          <tr className="bg-[#1a3654] font-bold text-white">
+          <tr className="bg-[#132a52] font-bold text-white">
             <td className="px-2 py-1.5 text-center text-[11px] font-bold uppercase" colSpan={3}>
               {filtered ? 'Total (shown)' : 'Total'}
             </td>
@@ -212,7 +212,7 @@ function AddRow({ board, free, codes, onChanged }: {
           value={personId}
           disabled={free.length === 0}
           onChange={(e) => setPersonId(e.target.value === '' ? '' : Number(e.target.value))}
-          className={cx(selectCls, personId === '' && 'text-slate-500')}
+          className={cx(selectCls, personId === '' && 'text-slate-400')}
         >
           <option value="">{free.length === 0 ? 'All names used' : 'Select name'}</option>
           {free.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -226,7 +226,7 @@ function AddRow({ board, free, codes, onChanged }: {
           <QueuePicker codes={codes} value={picked} onChange={setPicked} />
         </div>
       </td>
-      <td className={cx(cellCls, 'text-center text-xs font-bold tabular-nums text-slate-500')}>{picked.length}</td>
+      <td className={cx(cellCls, 'text-center text-xs font-bold tabular-nums text-slate-400')}>{picked.length}</td>
       <td className="p-0">
         <div className="flex items-center justify-center">
           <button
@@ -310,9 +310,9 @@ function QueuePicker({
         className={cx(
           // Compact on purpose: the chips themselves now live beside it, where they can be
           // dragged. This is only the add/remove affordance.
-          'flex shrink-0 items-center gap-1 whitespace-nowrap rounded border bg-white px-1.5 py-0.5 text-xs font-semibold transition-colors',
-          open ? 'border-[#1a3654] ring-1 ring-[#1a3654]/30' : 'border-slate-300 hover:border-[#1a3654]',
-          selected.length === 0 ? 'text-slate-500' : 'text-slate-800',
+          'flex shrink-0 items-center gap-1 whitespace-nowrap rounded border bg-[#0a0e17] px-1.5 py-0.5 text-xs font-semibold transition-colors',
+          open ? 'border-blue-500/60 ring-1 ring-blue-500/30' : 'border-white/15 hover:border-blue-500/60',
+          selected.length === 0 ? 'text-slate-400' : 'text-slate-100',
         )}
       >
         {selected.length === 0 ? 'Select' : 'Edit'}
@@ -323,7 +323,7 @@ function QueuePicker({
         <div
           data-queue-picker
           style={{ position: 'absolute', top: pos.top, left: pos.left, width: pos.width }}
-          className="z-50 rounded-xl border border-slate-300 bg-white p-2.5 shadow-2xl shadow-slate-900/20"
+          className="z-50 rounded-xl border border-white/15 bg-[#0a0e17] p-2.5 shadow-2xl shadow-slate-900/20"
         >
           <div className="mb-2 flex items-center gap-1.5">
             <input
@@ -331,27 +331,27 @@ function QueuePicker({
               value={search}
               placeholder="Search…"
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#1a3654] focus:outline-none focus:ring-2 focus:ring-[#1a3654]/25"
+              className="w-full rounded-lg border border-white/15 bg-[#0a0e17] px-2.5 py-1.5 text-sm text-slate-100 placeholder:text-slate-400 focus:border-blue-500/60 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
             />
             <button
               onClick={() => onChange([...new Set([...value, ...shown.map((c) => c.id)])])}
-              className="shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              className="shrink-0 rounded-lg border border-white/15 bg-[#0a0e17] px-2 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/[0.06]"
             >
               All
             </button>
             <button
               onClick={() => onChange([])}
               disabled={value.length === 0}
-              className="shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:border-slate-200 disabled:text-slate-400"
+              className="shrink-0 rounded-lg border border-white/15 bg-[#0a0e17] px-2 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/[0.06] disabled:border-white/10 disabled:text-slate-400"
             >
               None
             </button>
           </div>
 
           {codes.length === 0 ? (
-            <p className="py-6 text-center text-xs font-medium text-slate-500">No queues in the list yet.</p>
+            <p className="py-6 text-center text-xs font-medium text-slate-400">No queues in the list yet.</p>
           ) : shown.length === 0 ? (
-            <p className="py-6 text-center text-xs font-medium text-slate-500">No match.</p>
+            <p className="py-6 text-center text-xs font-medium text-slate-400">No match.</p>
           ) : (
             <div className="flex max-h-60 flex-wrap content-start gap-1.5 overflow-y-auto">
               {shown.map((c) => {
@@ -364,8 +364,8 @@ function QueuePicker({
                     className={cx(
                       'flex items-center gap-1 rounded-lg border-2 px-2 py-1 text-xs font-bold transition-all',
                       on
-                        ? 'border-[#1a3654] bg-[#1a3654] text-white'
-                        : 'border-slate-300 bg-white text-slate-700 hover:border-[#1a3654] hover:bg-slate-100',
+                        ? 'border-blue-500/60 bg-[#132a52] text-white'
+                        : 'border-white/15 bg-[#0a0e17] text-slate-200 hover:border-blue-500/60 hover:bg-white/[0.06]',
                     )}
                   >
                     {on && <CheckIcon />}
@@ -376,11 +376,11 @@ function QueuePicker({
             </div>
           )}
 
-          <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2">
-            <span className="text-xs font-bold text-slate-600">{value.length} selected</span>
+          <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2">
+            <span className="text-xs font-bold text-slate-300">{value.length} selected</span>
             <button
               onClick={close}
-              className="rounded-lg bg-[#1a3654] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#24466b]"
+              className="rounded-lg bg-[#132a52] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#24466b]"
             >
               Done
             </button>
@@ -408,7 +408,7 @@ const TrashIcon = () => (
 )
 const CaretIcon = ({ open }: { open: boolean }) => (
   <svg width="14" height="14" viewBox="0 0 24 24" {...sheetStroke}
-    className={cx('shrink-0 text-slate-600 transition-transform', open && 'rotate-180')}>
+    className={cx('shrink-0 text-slate-300 transition-transform', open && 'rotate-180')}>
     <path d="m6 9 6 6 6-6" />
   </svg>
 )

@@ -59,9 +59,9 @@ function BuyersPage() {
         <PageLoader label="Loading buyers…" />
       ) : (
         <Card className="overflow-hidden">
-          <div className="border-b border-white/50 px-5 py-4">
-            <h2 className="font-semibold text-slate-900">Monthly Sheet</h2>
-            <p className="mt-0.5 text-sm text-slate-500">Only buyers with Leads bought in the selected date range are listed; Total Leads Bought auto-populates from the Daily Sheet for that range. Edit a buyer code or Rate inline (Total, Average &amp; Amount auto-calculate). New buyers appear here once used on the Daily Sheet.</p>
+          <div className="border-b border-white/10 px-5 py-4">
+            <h2 className="font-semibold text-slate-100">Monthly Sheet</h2>
+            <p className="mt-0.5 text-sm text-slate-400">Only buyers with Leads bought in the selected date range are listed; Total Leads Bought auto-populates from the Daily Sheet for that range. Edit a buyer code or Rate inline (Total, Average &amp; Amount auto-calculate). New buyers appear here once used on the Daily Sheet.</p>
           </div>
           {list.length === 0 ? (
             <EmptyState message="No buyers bought Leads in this date range — widen the date filter to see more." />
@@ -71,7 +71,7 @@ function BuyersPage() {
         </Card>
       )}
 
-      {buyers.error && <p className="mt-4 text-sm text-red-600">{buyers.error}</p>}
+      {buyers.error && <p className="mt-4 text-sm text-red-400">{buyers.error}</p>}
 
       {/* Revenue billing section retired — it duplicates the Leads Records page.
       <RecordsSection type="buyer" title="Revenue billing" subtitle="Buyer Lead records — billing sheet" compact theme="navy" onChange={() => buyers.reload()} />
@@ -125,10 +125,10 @@ function BuyerForm({ editing, onSaved, onCancel }: { editing: Buyer | null; onSa
         <Input label="Rate ($/Lead)" type="number" min="0" step="0.01" placeholder="e.g. 55.00" value={rate} onChange={(e) => setRate(e.target.value)} required />
       </div>
       <label className="block">
-        <span className="mb-1 block text-sm font-medium text-slate-700">Notes</span>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="glass-input w-full rounded-xl border border-white/70 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+        <span className="mb-1 block text-sm font-medium text-slate-200">Notes</span>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="glass-input w-full rounded-xl border border-white/10 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
       </label>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-400">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
         <Button type="submit" disabled={saving}>{saving && <Spinner className="h-4 w-4 text-white" />}{editing ? 'Save' : 'Add buyer'}</Button>

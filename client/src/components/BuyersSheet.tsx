@@ -33,11 +33,11 @@ export default function BuyersSheet({ buyers, onChanged }: { buyers: Buyer[]; on
   const maxDays = buyers.reduce((m, b) => Math.max(m, b.record_days), 0)
   const totalAvgPerDay = maxDays > 0 ? Math.round(totals.counted / maxDays) : 0
 
-  const headCls = 'px-3 py-2.5 text-center text-xs font-bold uppercase tracking-wide bg-[#1a3654] text-white'
+  const headCls = 'px-3 py-2.5 text-center text-xs font-bold uppercase tracking-wide bg-[#132a52] text-white'
 
   return (
     <div className="overflow-x-auto rounded-t-2xl">
-      <table className="mx-auto w-[69.06%] min-w-138 table-fixed border-collapse text-sm [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white">
+      <table className="mx-auto w-[69.06%] min-w-138 table-fixed border-collapse text-sm [&_td]:border [&_td]:border-white/[0.08] [&_th]:border [&_th]:border-white/[0.08]">
         {/* No redistribution — reduced columns just shrink the table. Widths are
             the equal-share ratio (Sr No 0.6, Buyers/Rates 0.75, others 1.0),
             normalised to 100%. */}
@@ -63,7 +63,7 @@ export default function BuyersSheet({ buyers, onChanged }: { buyers: Buyer[]; on
           {buyers.map((b, i) => <BuyerRow key={b.id} index={i + 1} buyer={b} onChanged={onChanged} />)}
         </tbody>
         <tfoot>
-          <tr className="bg-[#1a3654] font-bold text-white">
+          <tr className="bg-[#132a52] font-bold text-white">
             <td className="px-3 py-2.5 text-center text-xs font-bold uppercase">Total</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(buyers.length)}</td>
             <td className="px-3 py-2.5 text-center tabular-nums">{num(totals.counted)}</td>
@@ -73,7 +73,7 @@ export default function BuyersSheet({ buyers, onChanged }: { buyers: Buyer[]; on
           </tr>
         </tfoot>
       </table>
-      <div className="mt-2 inline-block rounded bg-[#1a3654] px-3 py-1.5 text-sm font-semibold text-white">
+      <div className="mt-2 inline-block rounded bg-[#132a52] px-3 py-1.5 text-sm font-semibold text-white">
         Total Average Leads a Day - {num(totalAvgPerDay)}
       </div>
     </div>
@@ -81,7 +81,7 @@ export default function BuyersSheet({ buyers, onChanged }: { buyers: Buyer[]; on
 }
 
 const td = 'px-2 py-1'
-const roCell = cx(td, 'text-center tabular-nums text-[#0f172a]')
+const roCell = cx(td, 'text-center tabular-nums text-slate-100')
 
 // ── Existing buyer row ──────────────────────────────────────────────────────────
 function BuyerRow({ index, buyer, onChanged }: { index: number; buyer: Buyer; onChanged: () => void }) {
@@ -111,7 +111,7 @@ function BuyerRow({ index, buyer, onChanged }: { index: number; buyer: Buyer; on
   }, 0)
 
   return (
-    <tr ref={rowRef} onBlur={onRowBlur} className="bg-[#d4e9f2] text-[#0f172a]">
+    <tr ref={rowRef} onBlur={onRowBlur} className="bg-[#0a0e17] text-slate-100">
       <td className={roCell}>{num(index)}</td>
       <td className={td}><Input value={code} onChange={(e) => setCode(e.target.value)} /></td>
       <td className={roCell}>{num(buyer.counted)}</td>

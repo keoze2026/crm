@@ -32,7 +32,7 @@ const chevron = (dir: 'left' | 'right') => (
   </svg>
 )
 
-const stepBtn = 'glass-input flex h-9 w-9 items-center justify-center rounded-lg border border-white/70 text-slate-600 transition-colors hover:bg-white/80 hover:text-slate-900'
+const stepBtn = 'glass-input flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-300 transition-colors hover:bg-white/[0.05] hover:text-slate-100'
 
 /**
  * Month picker: prev/next chevrons around a label that opens a year-stepper +
@@ -69,7 +69,7 @@ export function MonthSelector({ value, onChange }: { value: string; onChange: (v
 
       <button
         onClick={() => (open ? close() : setOpen(true))}
-        className="glass-input flex min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-white/70 px-3 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-white/80 sm:min-w-44 sm:flex-none"
+        className="glass-input flex min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-white/[0.05] sm:min-w-44 sm:flex-none"
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-slate-400">
           <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
@@ -86,16 +86,16 @@ export function MonthSelector({ value, onChange }: { value: string; onChange: (v
       </button>
 
       {open && (
-        <div className="glass-strong absolute right-0 top-full z-50 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/50 p-3 shadow-2xl shadow-slate-900/20">
+        <div className="glass-strong absolute right-0 top-full z-50 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/10 p-3 shadow-2xl shadow-slate-900/20">
           {/* Year stepper */}
           <div className="mb-3 flex items-center justify-between">
             <button onClick={() => setYearOverride(pickYear - 1)} aria-label="Previous year"
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-white/60 hover:text-slate-900">
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/[0.05] hover:text-slate-100">
               {chevron('left')}
             </button>
-            <span className="text-sm font-semibold text-slate-900">{pickYear}</span>
+            <span className="text-sm font-semibold text-slate-100">{pickYear}</span>
             <button onClick={() => setYearOverride(pickYear + 1)} aria-label="Next year"
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-white/60 hover:text-slate-900">
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/[0.05] hover:text-slate-100">
               {chevron('right')}
             </button>
           </div>
@@ -115,7 +115,7 @@ export function MonthSelector({ value, onChange }: { value: string; onChange: (v
                     'rounded-lg py-2 text-sm font-medium transition-colors',
                     active
                       ? 'bg-brand text-white shadow-lg shadow-slate-900/25'
-                      : 'text-slate-700 hover:bg-white/60',
+                      : 'text-slate-200 hover:bg-white/[0.05]',
                   )}
                 >
                   {label}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { barLabel, bucketCount, bucketKey, shareLabel, splitEnds } from './dashboard'
+import { barLabel, bucketCount, bucketKey, bucketLabel, groupByPrice, parseAmount, parseCsv, parseRankCsv, roundedLike, roundingDrift, shareLabel, splitEnds, unitEconomics, whatChanged } from './dashboard'
 
 describe('bucketKey', () => {
   it('keeps a day as itself', () => {
@@ -73,5 +73,119 @@ describe('shareLabel', () => {
     expect(shareLabel(17.22)).toBe('17.2%')
     expect(shareLabel(0.0357)).toBe('0.04%')
     expect(shareLabel(0)).toBe('0.0%')
+  })
+})
+
+describe('bucketLabel', () => {
+  it('writes a day with its weekday', () => {
+    expect(bucketLabel('2026-11-02', 'day')).toBe('Mon, Nov 02')
+  })
+  it('writes a 4-day window as its span and a week by its Monday', () => {
+    expect(bucketLabel('2026-11-02', '4day')).toBe('Nov 02 – Nov 05')
+    expect(bucketLabel('2026-11-02', 'week')).toBe('Week of Nov 02')
+  })
+})
+
+describe('parseAmount', () => {
+  it('reads blanks as 0 and strips $ and commas', () => {
+    expect(parseAmount('')).toBe(0)
+    expect(parseAmount(' $1,250.50 ')).toBe(1250.5)
+    expect(parseAmount('.5')).toBe(0.5)
+  })
+  it('rejects anything that is not a non-negative number', () => {
+    expect(parseAmount('abc')).toBeNull()
+    expect(parseAmount('-5')).toBeNull()
+    expect(parseAmount('.')).toBeNull()
+    expect(parseAmount('1.2.3')).toBeNull()
+  })
+})
+
+describe('unitEconomics', () => {
+  it('works out profit, margin and per-lead figures without rounding', () => {
+    const u = unitEconomics({ revenue: 1054240.5, cost: 927476, counted: 21051 })
+    expect(u.profit).toBeCloseTo(126764.5, 6)
+    expect(u.marginPct!.toFixed(1)).toBe('12.0')
+    expect(u.revenuePerLead!.toFixed(2)).toBe('50.08')
+    expect(u.costPerLead!.toFixed(2)).toBe('44.06')
+  })
+  it('has no per-lead figures without counted leads', () => {
+    const u = unitEconomics({ revenue: 0, cost: 10, counted: 0 })
+    expect(u.marginPct).toBeNull()
+    expect(u.revenuePerLead).toBeNull()
+  })
+})
+
+describe('whatChanged', () => {
+  it('reads the mock period the way the designer wrote it', () => {
+    const curr = { revenue: 1054240.5, cost: 927476, counted: 21051 }
+    const prev = { revenue: 1333562, cost: 1087333, counted: 26655 }
+    expect(whatChanged(curr, prev, 'previous 23 days')).toBe(
+      'Margin fell 6.4 pts. Revenue per lead held at about $50, but cost per lead rose 8.0% to $44.06 and volume fell 21%.',
+    )
+  })
+  it('says so when there is no baseline', () => {
+    expect(whatChanged({ revenue: 10, cost: 5, counted: 1 }, { revenue: 0, cost: 0, counted: 0 }, 'previous day'))
+      .toBe('Nothing was billed in the previous day, so there is no baseline to compare against.')
+  })
+})
+
+describe('groupByPrice', () => {
+  it('groups buyers by price per lead, biggest revenue first', () => {
+    const g = groupByPrice([
+      { label: 'A', value: 500, counted: 10 },
+      { label: 'B', value: 1100, counted: 20 },
+      { label: 'C', value: 250, counted: 5 },
+      { label: 'D', value: 40, counted: 0 },
+    ])
+    expect(g.map((x) => [x.price, x.value, x.counted, x.members])).toEqual([
+      [55, 1100, 20, ['B']],
+      [50, 750, 15, ['A', 'C']],
+      [null, 40, 0, ['D']],
+    ])
+  })
+})
+
+describe('roundedLike / roundingDrift', () => {
+  it('rounds the way the ~ labels print', () => {
+    expect(roundedLike(106_812.5)).toBe(107_000)
+    expect(roundedLike(2_740)).toBe(3_000)
+    expect(roundedLike(563.4)).toBe(563)
+    expect(roundedLike(1_234_567)).toBe(1_200_000)
+  })
+  it('measures how far the printed figures drift from the total', () => {
+    // Peak printed exactly; the others rounded to $1K.
+    expect(roundingDrift([107_781.5, 106_600, 2_400], 0, 216_781.5)).toBe(0)
+    expect(roundingDrift([107_781.5, 106_400, 2_400], 0, 216_581.5)).toBe(800)
+  })
+})
+
+describe('parseCsv', () => {
+  it('splits cells, honours quotes and skips blank lines', () => {
+    expect(parseCsv('a,b\r\n"x, y","say ""hi"""\n\n1,2')).toEqual([['a', 'b'], ['x, y', 'say "hi"'], ['1', '2']])
+  })
+})
+
+describe('parseRankCsv', () => {
+  it('reads a buyer list, biggest revenue first', () => {
+    const r = parseRankCsv('buyer,revenue,leads,first,last\nDEE,50,1,Nov 17,Nov 17\nRTG 04,"$171,380.00",3116,Nov 02,Nov 19')
+    expect(r).toEqual({
+      kind: 'buyers',
+      rows: [
+        { label: 'RTG 04', buyer: null, value: 171380, counted: 3116, first: 'Nov 02', last: 'Nov 19' },
+        { label: 'DEE', buyer: null, value: 50, counted: 1, first: 'Nov 17', last: 'Nov 17' },
+      ],
+    })
+  })
+  it('reads a campaign list with its buyer, columns in any order', () => {
+    const r = parseRankCsv('revenue,campaign,leads,buyer\n900,C1,18,RTG 04')
+    expect(r).toEqual({ kind: 'campaigns', rows: [{ label: 'C1', buyer: 'RTG 04', value: 900, counted: 18, first: '', last: '' }] })
+  })
+  it('explains what is wrong', () => {
+    expect(parseRankCsv('')).toEqual({ error: 'Paste a CSV with a header row first.' })
+    expect('error' in parseRankCsv('name,revenue\nA,1')).toBe(true)
+    expect(parseRankCsv('buyer,revenue\nA,1')).toEqual({ error: 'The header row is missing the “leads” column.' })
+    expect(parseRankCsv('buyer,revenue,leads\nA,lots,1')).toEqual({ error: 'Row 2: revenue “lots” is not an amount.' })
+    expect(parseRankCsv('buyer,revenue,leads\nA,10,1.5')).toEqual({ error: 'Row 2: leads “1.5” is not a whole number.' })
+    expect(parseRankCsv('buyer,revenue,leads')).toEqual({ error: 'There are no rows under the header.' })
   })
 })

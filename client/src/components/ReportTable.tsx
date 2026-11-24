@@ -64,8 +64,8 @@ export function campTableData(data: CompleteReport) {
 export function SectionHeading({ title, note }: { title: string; note: string }) {
   return (
     <div className="mb-3 flex items-center gap-2">
-      <span className="h-5 w-1.5 rounded-full bg-[#1a3654]" />
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+      <span className="h-5 w-1.5 rounded-full bg-[#132a52]" />
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-200">
         {title} <span className="font-normal normal-case text-slate-400">— {note}</span>
       </h3>
     </div>
@@ -79,9 +79,9 @@ function Box({ children, w }: { children: ReactNode; w: string }) {
 
 // Body text colours mirror the report theme: ink text on cyan cells, bold total.
 const KIND_CLASS: Record<Col['kind'], string> = {
-  text:  'text-[#0f172a]',
-  num:   'tabular-nums text-[#0f172a]',
-  total: 'font-bold tabular-nums text-[#0f172a]',
+  text:  'text-slate-100',
+  num:   'tabular-nums text-slate-100',
+  total: 'font-bold tabular-nums text-slate-100',
 }
 
 /** One styled report table — navy header, cyan body with white grid, navy TOTAL band. */
@@ -96,28 +96,28 @@ export function SectionTable({ dateLabel, cols, rows, totals }: { dateLabel: str
         </colgroup>
 
         <thead>
-          <tr className="bg-[#1a3654] text-center text-xs font-bold uppercase tracking-wide text-white">
-            <th className="border border-white px-4 py-2.5">DATE</th>
-            {cols.map((c) => <th key={c.label} className="border border-white px-4 py-2.5">{c.label}</th>)}
+          <tr className="bg-[#132a52] text-center text-xs font-bold uppercase tracking-wide text-white">
+            <th className="border border-white/[0.08] px-4 py-2.5">DATE</th>
+            {cols.map((c) => <th key={c.label} className="border border-white/[0.08] px-4 py-2.5">{c.label}</th>)}
           </tr>
         </thead>
 
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td className="border border-white bg-[#bfdeeb] px-2 py-2 text-center align-middle font-bold leading-tight text-[#1a3654]">{dateLabel}</td>
-              {cols.map((c) => <td key={c.label} className="border border-white bg-[#d4e9f2] px-2 py-2 text-center text-slate-400"><Box w={c.box}>—</Box></td>)}
+              <td className="border border-white/[0.08] bg-[#0f1a2e] px-2 py-2 text-center align-middle font-bold leading-tight text-blue-300">{dateLabel}</td>
+              {cols.map((c) => <td key={c.label} className="border border-white/[0.08] bg-[#0a0e17] px-2 py-2 text-center text-slate-400"><Box w={c.box}>—</Box></td>)}
             </tr>
           ) : (
             rows.map((cells, ri) => (
               <tr key={ri}>
                 {ri === 0 && (
-                  <td rowSpan={span} className="border border-white bg-[#bfdeeb] px-2 py-2 text-center align-middle font-bold leading-tight text-[#1a3654]">
+                  <td rowSpan={span} className="border border-white/[0.08] bg-[#0f1a2e] px-2 py-2 text-center align-middle font-bold leading-tight text-blue-300">
                     {dateLabel}
                   </td>
                 )}
                 {cells.map((cell, ci) => (
-                  <td key={ci} className={cx('border border-white bg-[#d4e9f2] px-2 py-2 text-center', KIND_CLASS[cols[ci].kind])}>
+                  <td key={ci} className={cx('border border-white/[0.08] bg-[#0a0e17] px-2 py-2 text-center', KIND_CLASS[cols[ci].kind])}>
                     {cols[ci].fit ? <FitText>{cell}</FitText> : <Box w={cols[ci].box}>{cell}</Box>}
                   </td>
                 ))}
@@ -127,11 +127,11 @@ export function SectionTable({ dateLabel, cols, rows, totals }: { dateLabel: str
         </tbody>
 
         <tfoot>
-          <tr className="bg-[#1a3654] text-white">
+          <tr className="bg-[#132a52] text-white">
             {/* "TOTAL" sits under the DATE column; each data column shows its total. */}
-            <td className="border border-white px-4 py-2.5 text-center text-xs font-bold uppercase tracking-wide">TOTAL</td>
+            <td className="border border-white/[0.08] px-4 py-2.5 text-center text-xs font-bold uppercase tracking-wide">TOTAL</td>
             {totals.map((cell, ci) => (
-              <td key={ci} className="border border-white px-2 py-2.5 text-center font-bold tabular-nums">
+              <td key={ci} className="border border-white/[0.08] px-2 py-2.5 text-center font-bold tabular-nums">
                 <Box w={cols[ci].box}>{cell}</Box>
               </td>
             ))}

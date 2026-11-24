@@ -94,7 +94,7 @@ export default function PortalExpenses() {
           </Card>
 
           <div className="mt-6 flex justify-center">
-            <div className="rounded-2xl bg-[#1a3654] px-6 py-3 text-center text-white shadow-xl shadow-slate-900/10">
+            <div className="rounded-2xl bg-[#132a52] px-6 py-3 text-center text-white shadow-xl shadow-slate-900/10">
               <span className="text-sm font-semibold uppercase tracking-wide">Total Expenses: </span>
               <span className="text-2xl font-bold tracking-tight">{money2(grandTotal)}</span>
             </div>
@@ -102,7 +102,7 @@ export default function PortalExpenses() {
         </>
       )}
 
-      {expenses.error && <p className="mt-4 text-sm text-red-600">{expenses.error}</p>}
+      {expenses.error && <p className="mt-4 text-sm text-red-400">{expenses.error}</p>}
     </div>
   )
 }
@@ -116,7 +116,7 @@ function Legend({ rows }: { rows: PortalExpense[] }) {
       {rows.map((e, i) => (
         <div key={e.id} className="flex items-center gap-1.5">
           <span className="inline-block h-2 w-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-          <span className="text-xs font-medium text-slate-500">{e.name}</span>
+          <span className="text-xs font-medium text-slate-400">{e.name}</span>
         </div>
       ))}
     </div>
@@ -126,15 +126,15 @@ function Legend({ rows }: { rows: PortalExpense[] }) {
 /** A single independently-scaled metric panel: one bar per provider. */
 function MetricChart({ label, data, money }: { label: string; data: Datum[]; money: boolean }) {
   return (
-    <div className="glass-input rounded-xl border border-white/70 p-3">
-      <div className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+    <div className="glass-input rounded-xl border border-white/10 p-3">
+      <div className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</div>
       <div className="h-48">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 8, right: 8, left: -12, bottom: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
             <XAxis dataKey="name" hide />
             <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={44} />
-            <Tooltip content={<MetricTooltip money={money} />} cursor={{ fill: '#f8fafc' }} />
+            <Tooltip content={<MetricTooltip money={money} />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
             <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={48}>
               {data.map((d, i) => (
                 <Cell key={i} fill={d.fill} />
@@ -157,11 +157,11 @@ function MetricTooltip({ active, payload, money }: TooltipProps) {
   if (!active || !payload?.length) return null
   const p = payload[0]
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-lg">
+    <div className="rounded-lg border border-white/10 bg-[#0a0e17] px-3 py-2 text-xs shadow-lg">
       <div className="flex items-center gap-2">
         <span className="inline-block h-2 w-2 rounded-full" style={{ background: p.payload.fill }} />
-        <span className="text-slate-500">{p.payload.name}:</span>
-        <span className="font-medium text-slate-800">{money ? money2(p.value) : fmtNum(p.value)}</span>
+        <span className="text-slate-400">{p.payload.name}:</span>
+        <span className="font-medium text-slate-100">{money ? money2(p.value) : fmtNum(p.value)}</span>
       </div>
     </div>
   )

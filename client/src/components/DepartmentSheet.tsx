@@ -78,7 +78,7 @@ function Cells({
             onDraft({ ...draft, performance: e.target.value })
             onRating?.(e.target.value)
           }}
-          className={cx(fieldCls, 'font-semibold', draft.performance === '' && 'text-slate-500')}
+          className={cx(fieldCls, 'font-semibold', draft.performance === '' && 'text-slate-400')}
         >
           <option value="">Select</option>
           {PERFORMANCE_RATINGS.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -93,7 +93,7 @@ function Cells({
             onChange={(e) => { if (NUMERIC.test(e.target.value)) onDraft({ ...draft, percentage: e.target.value }) }}
             className={cx(fieldCls, 'text-right font-semibold')}
           />
-          <span className="text-[11px] font-bold text-slate-500">%</span>
+          <span className="text-[11px] font-bold text-slate-400">%</span>
         </div>
       </td>
     </>

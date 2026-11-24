@@ -283,8 +283,8 @@ export default function AnnualReviewSheet({
   return (
     <div className="space-y-4">
       {/* ── The period ───────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
-        <div className="inline-flex self-start rounded-lg border border-slate-200 p-0.5" role="tablist" aria-label="Period length">
+      <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-[#0a0e17] px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
+        <div className="inline-flex self-start rounded-lg border border-white/10 p-0.5" role="tablist" aria-label="Period length">
           {SPANS.map((s) => (
             <button
               key={s.id}
@@ -294,7 +294,7 @@ export default function AnnualReviewSheet({
               onClick={() => onSpan(s.id)}
               className={cx(
                 'rounded-md px-3 py-1 text-xs font-semibold transition-colors',
-                span === s.id ? 'bg-brand text-white' : 'text-slate-500 hover:text-brand',
+                span === s.id ? 'bg-brand text-white' : 'text-slate-400 hover:text-brand',
               )}
             >
               {s.label}
@@ -304,7 +304,7 @@ export default function AnnualReviewSheet({
 
         <div className="flex flex-wrap items-center gap-3">
           <label
-            className="inline-flex items-center gap-1.5 text-[11px] text-slate-600"
+            className="inline-flex items-center gap-1.5 text-[11px] text-slate-300"
             title={`Somebody reviewed in fewer than this many of the period's ${SPAN_MONTHS[span]} months is still listed, but the period will not name them its top or its lowest.`}
           >
             Name on
@@ -316,12 +316,12 @@ export default function AnnualReviewSheet({
               onChange={(e) => setSettings({
                 minMonths: Math.max(0, Math.min(SPAN_MONTHS[span], Number(e.target.value) || 0)),
               })}
-              className="w-12 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-center text-[11px] tabular-nums focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+              className="w-12 rounded-md border border-white/10 bg-[#0a0e17] px-1.5 py-0.5 text-center text-[11px] tabular-nums focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
             />
             + months
           </label>
           <span
-            className={cx('text-[11px] font-medium', sync === 'error' ? 'text-rose-600' : sync === 'saving' ? 'text-slate-400' : 'text-emerald-600')}
+            className={cx('text-[11px] font-medium', sync === 'error' ? 'text-rose-400' : sync === 'saving' ? 'text-slate-400' : 'text-emerald-400')}
             title={sync === 'error' ? syncError ?? 'Could not save' : undefined}
           >
             {sync === 'saving' ? 'Saving…' : sync === 'error' ? 'Not saved' : 'Saved'}
@@ -333,7 +333,7 @@ export default function AnnualReviewSheet({
             title={resetTo === null
               ? 'Nothing saved on this sheet is more than 24 hours old yet, so there is no earlier version to go back to.'
               : `Put the sheet back to how it was saved on ${stamp(resetTo)} — the most recent version more than 24 hours old.`}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 transition-colors hover:border-brand hover:text-brand disabled:border-slate-200 disabled:text-slate-400 disabled:hover:border-slate-200 disabled:hover:text-slate-400"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-[#0a0e17] px-2.5 py-1.5 text-[11px] font-semibold text-slate-200 transition-colors hover:border-brand hover:text-brand disabled:border-white/10 disabled:text-slate-400 disabled:hover:border-white/10 disabled:hover:text-slate-400"
           >
             <IconUndo size={12} />
             {resetting ? 'Resetting…' : resetTo === null ? 'Reset unavailable' : `Reset to ${stamp(resetTo)}`}
@@ -362,17 +362,17 @@ export default function AnnualReviewSheet({
       {/* ── What the period is made of ───────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: 'People in the roll-up', value: String(rows.length), of: null, tone: 'text-slate-900' },
-          { label: 'Average performance', value: `${avg}%`, of: null, tone: 'text-slate-900' },
+          { label: 'People in the roll-up', value: String(rows.length), of: null, tone: 'text-slate-100' },
+          { label: 'Average performance', value: `${avg}%`, of: null, tone: 'text-slate-100' },
           {
             label: `Reviewed in ${settings.minMonths}+ months`,
             value: String(scored.length - picks.uncovered.length),
             of: scored.length,
-            tone: picks.uncovered.length ? 'text-amber-600' : 'text-slate-900',
+            tone: picks.uncovered.length ? 'text-amber-400' : 'text-slate-100',
           },
         ].map((t) => (
-          <div key={t.label} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-            <div className="text-[11px] font-medium text-slate-500">{t.label}</div>
+          <div key={t.label} className="rounded-xl border border-white/10 bg-[#0a0e17] px-4 py-3">
+            <div className="text-[11px] font-medium text-slate-400">{t.label}</div>
             <div className="mt-1 flex items-baseline gap-1.5">
               <span className={cx('text-xl font-bold tabular-nums', t.tone)}>{t.value}</span>
               {t.of !== null && <span className="text-[11px] text-slate-400">of {t.of}</span>}
@@ -399,7 +399,7 @@ export default function AnnualReviewSheet({
           <tbody>
             {rows.length === 0 ? (
               <tr className={rowCls}>
-                <td className={cx(cellCls, 'py-6 text-center text-slate-500')} colSpan={COLUMNS.length + 2}>
+                <td className={cx(cellCls, 'py-6 text-center text-slate-400')} colSpan={COLUMNS.length + 2}>
                   No reviews in {label} yet — pick a rating on the monthly tabs, or add a row below.
                 </td>
               </tr>
@@ -469,8 +469,8 @@ function Row({
   return (
     <tr className={cx(
       rowCls,
-      standing === 'top' && 'bg-emerald-50',
-      standing === 'low' && 'bg-rose-50',
+      standing === 'top' && 'bg-emerald-500/15',
+      standing === 'low' && 'bg-rose-500/15',
     )}>
       <td className={cx(idxCell, 'whitespace-nowrap')}>{sr}</td>
       {COLUMNS.map((col) => (
@@ -558,7 +558,7 @@ function Cell({ col, row, ctx, typed, onChange }: {
           value={value}
           title={title}
           onChange={(e) => onChange(e.target.value === computed ? '' : e.target.value)}
-          className={cx(fieldCls, 'font-semibold', ring, value === '' && 'text-slate-500')}
+          className={cx(fieldCls, 'font-semibold', ring, value === '' && 'text-slate-400')}
         >
           <option value="">Select</option>
           {options.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -585,7 +585,7 @@ function Cell({ col, row, ctx, typed, onChange }: {
           }}
           className={cx(fieldCls, ring, align, numeric && 'font-semibold tabular-nums', col.id === 'name' && 'font-semibold')}
         />
-        {col.kind === 'percent' && <span className="text-[11px] font-bold text-slate-500">%</span>}
+        {col.kind === 'percent' && <span className="text-[11px] font-bold text-slate-400">%</span>}
       </div>
     </td>
   )

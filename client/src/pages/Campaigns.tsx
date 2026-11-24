@@ -48,15 +48,15 @@ function CampaignsPage() {
         <div className="flex justify-center py-16"><Spinner className="h-6 w-6" /></div>
       ) : (
         <Card className="overflow-hidden rounded-md!">
-          <div className="border-b border-white/50 px-5 py-4">
-            <h2 className="font-semibold text-slate-900">Monthly Sheet</h2>
-            <p className="mt-0.5 text-sm text-slate-500">Edit a cell to update a campaign; the $ button sets per-source rates; fill the bottom row (or press +) to add one; the trash deletes.</p>
+          <div className="border-b border-white/10 px-5 py-4">
+            <h2 className="font-semibold text-slate-100">Monthly Sheet</h2>
+            <p className="mt-0.5 text-sm text-slate-400">Edit a cell to update a campaign; the $ button sets per-source rates; fill the bottom row (or press +) to add one; the trash deletes.</p>
           </div>
           <CampaignsSheet campaigns={list} onChanged={() => campaigns.reload()} />
         </Card>
       )}
 
-      {campaigns.error && <p className="mt-4 text-sm text-red-600">{campaigns.error}</p>}
+      {campaigns.error && <p className="mt-4 text-sm text-red-400">{campaigns.error}</p>}
       */}
 
       {/* Campaign (cost) records — the sole campaign management surface now. */}
@@ -106,10 +106,10 @@ function CampaignForm({ editing, onSaved, onCancel }: { editing: Campaign | null
       </div>
       <Input label="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
       <label className="block">
-        <span className="mb-1 block text-sm font-medium text-slate-700">Notes</span>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="glass-input w-full rounded-xl border border-white/70 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+        <span className="mb-1 block text-sm font-medium text-slate-200">Notes</span>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="glass-input w-full rounded-xl border border-white/10 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
       </label>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-400">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
         <Button type="submit" disabled={saving}>{saving && <Spinner className="h-4 w-4 text-white" />}{editing ? 'Save' : 'Add campaign'}</Button>

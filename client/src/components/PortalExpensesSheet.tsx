@@ -59,7 +59,7 @@ export default function PortalExpensesSheet({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-7xl border-collapse text-sm [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white">
+      <table className="w-full min-w-7xl border-collapse text-sm [&_td]:border [&_td]:border-white/[0.08] [&_th]:border [&_th]:border-white/[0.08]">
         <colgroup>
           <col style={{ width: '4%' }} />
           <col style={{ width: '14%' }} />
@@ -74,7 +74,7 @@ export default function PortalExpensesSheet({
           <col style={{ width: '3%' }} />
         </colgroup>
         <thead>
-          <tr className="bg-[#1a3654] text-center text-xs font-bold uppercase tracking-wide text-white">
+          <tr className="bg-[#132a52] text-center text-xs font-bold uppercase tracking-wide text-white">
             <th className={headCls}>Sr. No.</th>
             <th className={headCls}>Name</th>
             {COMPONENTS.map((c) => <th key={c.key} className={headCls}>{c.label}</th>)}
@@ -90,7 +90,7 @@ export default function PortalExpensesSheet({
           <AddRow month={month} onChanged={onChanged} />
         </tbody>
         <tfoot>
-          <tr className="bg-[#1a3654] font-bold text-white">
+          <tr className="bg-[#132a52] font-bold text-white">
             <td className="px-3 py-2.5 text-center text-xs font-bold uppercase" colSpan={2}>Total</td>
             {COMPONENTS.map((c) => (
               <td key={c.key} className="px-3 py-2.5 text-center tabular-nums">
@@ -111,7 +111,7 @@ const headCls = 'px-3 py-2.5 text-center text-xs font-bold uppercase tracking-wi
 const cellCls = 'px-2 py-1'
 const roCell = cx(cellCls, 'text-center tabular-nums')
 /** Sr. No. / index column — the darker label band, matching the report tables. */
-const idxCell = cx(cellCls, 'bg-[#bfdeeb] text-center font-bold text-[#1a3654]')
+const idxCell = cx(cellCls, 'bg-[#0f1a2e] text-center font-bold text-blue-300')
 
 /** Digits with at most one decimal point — no letters, signs, spaces or exponents. */
 const NUMERIC = /^\d*\.?\d*$/
@@ -197,7 +197,7 @@ function ExpenseRow({
   }, 0)
 
   return (
-    <tr ref={rowRef} onBlur={onRowBlur} className="bg-[#d4e9f2] text-[#0f172a]">
+    <tr ref={rowRef} onBlur={onRowBlur} className="bg-[#0a0e17] text-slate-100">
       <td className={idxCell}>{index}</td>
       <td className={cellCls}><Input value={name} onChange={(e) => setName(e.target.value)} /></td>
       {COMPONENTS.map((c) => (
@@ -216,7 +216,7 @@ function ExpenseRow({
       <td className={cx(roCell, 'font-semibold')}>{pctOfTotal.toFixed(1)}</td>
       <td className="p-0 text-center">
         <button onClick={remove} title="Delete row"
-          className="mx-auto flex h-7 w-7 items-center justify-center rounded text-slate-500 transition-colors hover:bg-red-100 hover:text-red-600">
+          className="mx-auto flex h-7 w-7 items-center justify-center rounded text-slate-400 transition-colors hover:bg-red-500/20 hover:text-red-400">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
           </svg>
@@ -253,7 +253,7 @@ function AddRow({ month, onChanged }: { month: string; onChanged: () => void }) 
   }
 
   return (
-    <tr className="bg-[#eaf5fa] text-[#0f172a]" onKeyDown={(e) => { if (isEnterSubmit(e)) add() }}>
+    <tr className="bg-[#0d1322] text-slate-100" onKeyDown={(e) => { if (isEnterSubmit(e)) add() }}>
       <td className={cx(idxCell, 'text-slate-400')}>+</td>
       <td className={cellCls}><Input value={name} placeholder="Add provider…" onChange={(e) => setName(e.target.value)} /></td>
       {COMPONENTS.map((c) => (
@@ -268,7 +268,7 @@ function AddRow({ month, onChanged }: { month: string; onChanged: () => void }) 
       <td className={roCell}>—</td>
       <td className="p-0 text-center">
         <button onClick={add} disabled={name.trim() === ''} title="Add row"
-          className="mx-auto flex h-7 w-7 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-100 disabled:opacity-30 disabled:hover:bg-transparent">
+          className="mx-auto flex h-7 w-7 items-center justify-center rounded text-blue-400 transition-colors hover:bg-blue-500/20 disabled:opacity-30 disabled:hover:bg-transparent">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M12 5v14M5 12h14" />
           </svg>

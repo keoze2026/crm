@@ -14,5 +14,6 @@ export default function RequireAuth() {
 }
 
 export function FullPageSpinner() {
-  return <PageLoader className="min-h-screen" />
+  // Dark, so the wait between the sign-in page and the app's dark bar doesn't flash white.
+  return <PageLoader className="min-h-screen bg-[#04060b]" />
 }

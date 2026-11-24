@@ -84,14 +84,14 @@ export default function SystemLogs() {
         {logs.loading ? (
           <PageLoader label="Loading logs…" />
         ) : logs.error ? (
-          <p className="py-10 text-center text-sm text-red-600">{logs.error}</p>
+          <p className="py-10 text-center text-sm text-red-400">{logs.error}</p>
         ) : rows.length === 0 ? (
           <EmptyState message="No audit events match these filters." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] text-sm">
               <thead>
-                <tr className="border-b border-white/50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <tr className="border-b border-white/10 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                   <th className="px-4 py-3 w-8"></th>
                   <th className="px-4 py-3">Time</th>
                   <th className="px-4 py-3">User</th>
@@ -118,7 +118,7 @@ export default function SystemLogs() {
         )}
 
         {rows.length > 0 && (
-          <div className="flex items-center justify-between border-t border-white/50 px-4 py-3 text-sm text-slate-500">
+          <div className="flex items-center justify-between border-t border-white/10 px-4 py-3 text-sm text-slate-400">
             <span>{offset + 1}–{Math.min(offset + PAGE, total)} of {total}</span>
             <div className="flex gap-2">
               <Button variant="secondary" size="sm" disabled={offset === 0}
@@ -151,10 +151,10 @@ function LogRow({ row, open, onToggle, onDelete, busy }: {
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </td>
-        <td className="whitespace-nowrap px-4 py-2.5 text-slate-500">{fmtTime(row.created_at)}</td>
-        <td className="px-4 py-2.5 font-medium text-slate-700">{row.user_email ?? '—'}</td>
-        <td className="px-4 py-2.5"><span className="font-mono text-xs text-slate-700">{row.action}</span></td>
-        <td className="px-4 py-2.5 text-slate-600" title={row.entity_id != null ? `#${row.entity_id}` : undefined}>
+        <td className="whitespace-nowrap px-4 py-2.5 text-slate-400">{fmtTime(row.created_at)}</td>
+        <td className="px-4 py-2.5 font-medium text-slate-200">{row.user_email ?? '—'}</td>
+        <td className="px-4 py-2.5"><span className="font-mono text-xs text-slate-200">{row.action}</span></td>
+        <td className="px-4 py-2.5 text-slate-300" title={row.entity_id != null ? `#${row.entity_id}` : undefined}>
           {entityCell(row)}
         </td>
         <td className="px-4 py-2.5">{status ? <Badge color={color}>{status}</Badge> : '—'}</td>
@@ -164,7 +164,7 @@ function LogRow({ row, open, onToggle, onDelete, busy }: {
             disabled={busy}
             title="Delete this entry"
             aria-label="Delete this entry"
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-red-500/15 hover:text-red-400 disabled:opacity-40"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
@@ -174,7 +174,7 @@ function LogRow({ row, open, onToggle, onDelete, busy }: {
       </tr>
       {open && (
         <tr>
-          <td colSpan={7} className="bg-slate-50/60 px-6 py-4">
+          <td colSpan={7} className="bg-white/[0.03] px-6 py-4">
             <div className="animate-expand">
               <Detail row={row} />
             </div>
@@ -193,7 +193,7 @@ function Detail({ row }: { row: AuditLog }) {
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-700">{summary}</p>
+      <p className="text-sm text-slate-200">{summary}</p>
 
       <div className="grid grid-cols-1 gap-x-8 gap-y-1.5 sm:grid-cols-2">
         <Meta label="When" value={new Date(row.created_at).toLocaleString()} />
@@ -212,13 +212,13 @@ function Detail({ row }: { row: AuditLog }) {
       {entries.length > 0 && (
         <div>
           <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Values</div>
-          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+          <div className="overflow-hidden rounded-lg border border-white/10 bg-[#0a0e17]">
             <table className="w-full text-sm">
               <tbody>
                 {entries.map(([k, v]) => (
-                  <tr key={k} className="border-b border-slate-100 last:border-0">
-                    <td className="w-40 px-3 py-1.5 font-medium text-slate-500">{k}</td>
-                    <td className="px-3 py-1.5 font-mono text-xs text-slate-700 break-all">{renderValue(v)}</td>
+                  <tr key={k} className="border-b border-white/[0.06] last:border-0">
+                    <td className="w-40 px-3 py-1.5 font-medium text-slate-400">{k}</td>
+                    <td className="px-3 py-1.5 font-mono text-xs text-slate-200 break-all">{renderValue(v)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -235,7 +235,7 @@ function Meta({ label, value, mono }: { label: string; value: string; mono?: boo
   return (
     <div className="flex items-baseline gap-2 text-sm">
       <span className="shrink-0 text-slate-400">{label}:</span>
-      <span className={mono ? 'font-mono text-xs text-slate-700 break-all' : 'text-slate-700'}>{value}</span>
+      <span className={mono ? 'font-mono text-xs text-slate-200 break-all' : 'text-slate-200'}>{value}</span>
     </div>
   )
 }
@@ -243,8 +243,8 @@ function Meta({ label, value, mono }: { label: string; value: string; mono?: boo
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const cxRow = (open: boolean) =>
-  'cursor-pointer border-b border-white/30 last:border-0 transition-colors ' +
-  (open ? 'bg-white/50' : 'hover:bg-white/40')
+  'cursor-pointer border-b border-white/10 last:border-0 transition-colors ' +
+  (open ? 'bg-white/[0.05]' : 'hover:bg-white/[0.05]')
 
 /**
  * Entity slugs that read better with a space than a hyphen in the summary sentence. Keys

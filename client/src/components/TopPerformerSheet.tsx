@@ -93,12 +93,12 @@ function VerdictPill({ c, row, name, onToggle }: { c: Criterion; row: RankedRow;
       className={cx(
         'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap transition-colors',
         confirmed ? 'border-brand bg-brand text-white'
-          : v.unknown ? 'border-transparent bg-slate-100 text-slate-500 hover:border-brand'
-          : v.met ? 'border-transparent bg-emerald-50 text-emerald-700 hover:border-brand'
-          : 'border-transparent bg-rose-50 text-rose-600 hover:border-brand',
+          : v.unknown ? 'border-transparent bg-white/[0.06] text-slate-400 hover:border-brand'
+          : v.met ? 'border-transparent bg-emerald-500/15 text-emerald-300 hover:border-brand'
+          : 'border-transparent bg-rose-500/15 text-rose-400 hover:border-brand',
       )}
     >
-      <span className={cx('inline-flex h-3.5 w-3.5 items-center justify-center rounded-full', confirmed ? 'bg-white/25' : v.unknown ? 'bg-slate-200' : v.met ? 'bg-emerald-100' : 'bg-rose-100')}>
+      <span className={cx('inline-flex h-3.5 w-3.5 items-center justify-center rounded-full', confirmed ? 'bg-white/25' : v.unknown ? 'bg-white/10' : v.met ? 'bg-emerald-500/20' : 'bg-rose-500/20')}>
         {confirmed || v.met ? <IconCheck size={9} /> : v.unknown ? <span className="text-[9px] font-bold leading-none">?</span> : <IconCross />}
       </span>
       {c.label}
@@ -118,10 +118,10 @@ function TickChip({ c, on, onToggle, name }: { c: Criterion; on: boolean; onTogg
       onClick={onToggle}
       className={cx(
         'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap transition-colors',
-        on ? 'border-brand bg-brand text-white' : 'border-slate-200 bg-white text-slate-500 hover:border-brand hover:text-brand',
+        on ? 'border-brand bg-brand text-white' : 'border-white/10 bg-[#0a0e17] text-slate-400 hover:border-brand hover:text-brand',
       )}
     >
-      <span className={cx('inline-flex h-3.5 w-3.5 items-center justify-center rounded-full', on ? 'bg-white/25' : 'bg-slate-100')}>
+      <span className={cx('inline-flex h-3.5 w-3.5 items-center justify-center rounded-full', on ? 'bg-white/25' : 'bg-white/[0.06]')}>
         {on && <IconCheck size={9} />}
       </span>
       {c.label}
@@ -132,22 +132,22 @@ function TickChip({ c, on, onToggle, name }: { c: Criterion; on: boolean; onTogg
 function StatusPill({ row }: { row: RankedRow }) {
   if (row.allMet) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-500/40">
         <IconCheck /> Eligible
       </span>
     )
   }
   const left = row.total - row.met
   return (
-    <span className={cx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset', left <= 2 ? 'bg-white text-brand ring-brand/30' : 'bg-slate-50 text-slate-500 ring-slate-200')}>
-      <span className={cx('h-1.5 w-1.5 rounded-full', left <= 2 ? 'bg-brand' : 'bg-slate-400')} />
+    <span className={cx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset', left <= 2 ? 'bg-[#0a0e17] text-brand ring-brand/30' : 'bg-white/[0.03] text-slate-400 ring-white/10')}>
+      <span className={cx('h-1.5 w-1.5 rounded-full', left <= 2 ? 'bg-brand' : 'bg-white/20')} />
       {left} to go
     </span>
   )
 }
 
 const MARK_BUTTON = 'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap transition-colors'
-const MARK_BLOCKED = 'cursor-not-allowed border-slate-100 bg-white text-slate-300'
+const MARK_BLOCKED = 'cursor-not-allowed border-white/[0.06] bg-[#0a0e17] text-slate-300'
 
 /**
  * The Top badge as a switch — the only way anyone gets it. It can't be set on somebody
@@ -169,7 +169,7 @@ function TopToggle({ row, low, name, onToggle }: { row: RankedRow; low: boolean;
         MARK_BUTTON,
         on ? 'border-emerald-600 bg-emerald-600 text-white'
           : blocked ? MARK_BLOCKED
-          : 'border-slate-200 bg-white text-slate-400 hover:border-emerald-500 hover:text-emerald-600',
+          : 'border-white/10 bg-[#0a0e17] text-slate-400 hover:border-emerald-500 hover:text-emerald-400',
       )}
     >
       <IconCrown size={10} />
@@ -215,9 +215,9 @@ function LowToggle({ row, byRules, threshold, name, onToggle }: {
         MARK_BUTTON,
         blocked ? MARK_BLOCKED
           : low && manual ? 'border-rose-600 bg-rose-600 text-white'
-          : low ? 'border-transparent bg-rose-50 text-rose-700 hover:border-rose-400'
-          : manual ? 'border-brand bg-white text-brand'
-          : 'border-slate-200 bg-white text-slate-400 hover:border-rose-400 hover:text-rose-600',
+          : low ? 'border-transparent bg-rose-500/15 text-rose-300 hover:border-rose-400'
+          : manual ? 'border-brand bg-[#0a0e17] text-brand'
+          : 'border-white/10 bg-[#0a0e17] text-slate-400 hover:border-rose-400 hover:text-rose-400',
       )}
     >
       <IconDownArrow size={10} />
@@ -238,7 +238,7 @@ function CriterionLine({ c, on, onToggle }: { c: Criterion; on: boolean; onToggl
       className={cx('flex items-center gap-2 py-1', !on && 'opacity-50')}
     >
       <span className={cx('inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold', auto ? 'bg-brand text-white' : 'border border-brand/40 text-brand')}>{c.n}</span>
-      <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-800">{c.label}</span>
+      <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-100">{c.label}</span>
       <span className="shrink-0 text-[10px] text-slate-400">{auto ? SOURCE_LABEL[c.source].replace('Checked from ', '') : 'You confirm'}</span>
       {onToggle && (
         <button
@@ -246,10 +246,10 @@ function CriterionLine({ c, on, onToggle }: { c: Criterion; on: boolean; onToggl
           role="switch"
           aria-checked={on}
           onClick={onToggle}
-          className={cx('relative ml-1 h-4 w-7 shrink-0 rounded-full transition-colors', on ? 'bg-brand' : 'bg-slate-300')}
+          className={cx('relative ml-1 h-4 w-7 shrink-0 rounded-full transition-colors', on ? 'bg-brand' : 'bg-white/15')}
           aria-label={`${on ? 'Remove' : 'Include'} ${c.label}`}
         >
-          <span className={cx('absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-all', on ? 'left-3.5' : 'left-0.5')} />
+          <span className={cx('absolute top-0.5 h-3 w-3 rounded-full bg-[#0a0e17] shadow transition-all', on ? 'left-3.5' : 'left-0.5')} />
         </button>
       )}
     </li>
@@ -268,7 +268,7 @@ function FoldPanel({ id, title, meta, children }: { id: string; title: string; m
     try { localStorage.setItem(key, next ? 'open' : 'closed') } catch { /* storage unavailable */ }
   }
   return (
-    <section className="rounded-xl border border-slate-200 bg-white">
+    <section className="rounded-xl border border-white/10 bg-[#0a0e17]">
       <button type="button" onClick={toggle} aria-expanded={open} className="flex w-full items-center gap-2 px-4 py-2.5 text-left">
         <span className="text-sm font-semibold text-brand">{title}</span>
         <span className="text-[11px] text-slate-400">{meta}</span>
@@ -276,7 +276,7 @@ function FoldPanel({ id, title, meta, children }: { id: string; title: string; m
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
-      {open && <div className="border-t border-slate-100 px-4 pb-3 pt-1">{children}</div>}
+      {open && <div className="border-t border-white/[0.06] px-4 pb-3 pt-1">{children}</div>}
     </section>
   )
 }
@@ -294,24 +294,24 @@ function FoldPanel({ id, title, meta, children }: { id: string; title: string; m
 /** The palette and the wording for each end — everything else about the two cards is shared. */
 const ENDS = {
   top: {
-    frame: 'border-emerald-200 bg-gradient-to-r from-emerald-50 to-white shadow-sm shadow-emerald-100',
+    frame: 'border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 to-[#0a0e17] shadow-sm shadow-emerald-500/20',
     badge: 'bg-emerald-600 text-white shadow-sm',
-    kicker: 'text-emerald-700',
-    chip: 'ring-emerald-200',
+    kicker: 'text-emerald-300',
+    chip: 'ring-emerald-500/40',
     dot: 'bg-emerald-600',
-    pill: 'bg-emerald-50 text-emerald-700',
-    ring: 'text-emerald-500',
-    figure: 'text-emerald-700',
+    pill: 'bg-emerald-500/15 text-emerald-300',
+    ring: 'text-emerald-400',
+    figure: 'text-emerald-300',
   },
   low: {
-    frame: 'border-rose-200 bg-gradient-to-r from-rose-50 to-white shadow-sm shadow-rose-100',
+    frame: 'border-rose-500/30 bg-gradient-to-r from-rose-500/10 to-[#0a0e17] shadow-sm shadow-rose-500/20',
     badge: 'bg-rose-600 text-white shadow-sm',
-    kicker: 'text-rose-700',
-    chip: 'ring-rose-200',
+    kicker: 'text-rose-300',
+    chip: 'ring-rose-500/40',
     dot: 'bg-rose-600',
-    pill: 'bg-rose-50 text-rose-700',
-    ring: 'text-rose-500',
-    figure: 'text-rose-700',
+    pill: 'bg-rose-500/15 text-rose-300',
+    ring: 'text-rose-400',
+    figure: 'text-rose-300',
   },
 } as const
 
@@ -341,12 +341,12 @@ export function PerformerEndCard({ end, people, title, empty, periodLabel, tied 
   const t = ENDS[end]
   return (
     <div
-      className={cx('flex overflow-hidden rounded-xl border', any ? t.frame : 'border-slate-200 bg-white')}
+      className={cx('flex overflow-hidden rounded-xl border', any ? t.frame : 'border-white/10 bg-[#0a0e17]')}
       aria-label={`${title}, ${periodLabel}`}
     >
       {/* Who */}
       <div className="flex min-w-0 flex-1 items-start gap-3 px-4 py-3">
-        <span className={cx('mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full', any ? t.badge : 'bg-slate-100 text-slate-400')}>
+        <span className={cx('mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full', any ? t.badge : 'bg-white/[0.06] text-slate-400')}>
           {end === 'top' ? <IconCrown size={15} /> : <IconDownArrow />}
         </span>
         <div className="min-w-0">
@@ -356,7 +356,7 @@ export function PerformerEndCard({ end, people, title, empty, periodLabel, tied 
           {any ? (
             <ul className="mt-1.5 flex flex-wrap gap-1.5">
               {people.map((w) => (
-                <li key={w.key} className={cx('inline-flex items-center gap-1.5 rounded-full bg-white py-0.5 pl-0.5 pr-1 text-xs font-semibold text-slate-800 shadow-sm ring-1', t.chip)}>
+                <li key={w.key} className={cx('inline-flex items-center gap-1.5 rounded-full bg-[#0a0e17] py-0.5 pl-0.5 pr-1 text-xs font-semibold text-slate-100 shadow-sm ring-1', t.chip)}>
                   <span className={cx('inline-flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold text-white', t.dot)}>{initials(w.name)}</span>
                   {w.name}
                   <span className={cx('rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums', t.pill)}>{w.pct}%</span>
@@ -364,7 +364,7 @@ export function PerformerEndCard({ end, people, title, empty, periodLabel, tied 
               ))}
             </ul>
           ) : (
-            <p className="mt-1 text-sm font-medium text-slate-500">{empty}</p>
+            <p className="mt-1 text-sm font-medium text-slate-400">{empty}</p>
           )}
         </div>
       </div>
@@ -588,7 +588,7 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
 
       {/* The Low badge's bar, set per month like the Goal Achievement target below. */}
       <div
-        className="flex flex-wrap items-center justify-end gap-1.5 text-[11px] text-slate-500"
+        className="flex flex-wrap items-center justify-end gap-1.5 text-[11px] text-slate-400"
         title="The Percentage on the Review page's Performance tab. Mark or clear anyone by hand in the Low column."
       >
         <span>Low performer under</span>
@@ -599,7 +599,7 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
           aria-label="Low performer threshold"
           value={settings.lowPerformance}
           onChange={(e) => setSettings((s) => ({ ...s, lowPerformance: Math.max(0, Math.min(100, Number(e.target.value) || 0)) }))}
-          className="w-14 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-center text-[11px] tabular-nums focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+          className="w-14 rounded-md border border-white/10 bg-[#0a0e17] px-1.5 py-0.5 text-center text-[11px] tabular-nums focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
         />
         <span>% performance</span>
       </div>
@@ -607,13 +607,13 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
       {/* Headline tiles, like the inspiration's stat cards. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
-          { label: 'Eligible for incentive', value: String(winners.length), of: rows.length, tone: winners.length ? 'text-emerald-600' : 'text-slate-900' },
+          { label: 'Eligible for incentive', value: String(winners.length), of: rows.length, tone: winners.length ? 'text-emerald-400' : 'text-slate-100' },
           { label: 'Pass every automatic check', value: String(passData.length), of: rows.length, tone: 'text-brand' },
-          { label: 'Average score', value: `${avgScore}%`, of: null, tone: 'text-slate-900' },
-          { label: 'Reviewed this month', value: String(rows.length), of: onRoster, tone: awaitingReview ? 'text-amber-600' : 'text-slate-900' },
+          { label: 'Average score', value: `${avgScore}%`, of: null, tone: 'text-slate-100' },
+          { label: 'Reviewed this month', value: String(rows.length), of: onRoster, tone: awaitingReview ? 'text-amber-400' : 'text-slate-100' },
         ].map((t) => (
-          <div key={t.label} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-            <div className="text-[11px] font-medium text-slate-500">{t.label}</div>
+          <div key={t.label} className="rounded-xl border border-white/10 bg-[#0a0e17] px-4 py-3">
+            <div className="text-[11px] font-medium text-slate-400">{t.label}</div>
             <div className="mt-1 flex items-baseline gap-1.5">
               <span className={cx('text-xl font-bold tabular-nums', t.tone)}>{t.value}</span>
               {t.of !== null && <span className="text-[11px] text-slate-400">of {t.of}</span>}
@@ -625,17 +625,17 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
       {/* Criteria — the client's list, one line each, foldable. Hover a line for the wording and the rule. */}
       <div className="grid gap-3 lg:grid-cols-2">
         <FoldPanel id="core" title="Criteria to become Top Performer of the Month" meta="1–7 · always apply">
-          <ol className="divide-y divide-slate-100">
+          <ol className="divide-y divide-white/[0.06]">
             {core.map((c) => <CriterionLine key={c.id} c={c} on />)}
           </ol>
         </FoldPanel>
         <FoldPanel id="additional" title="Additional criteria (if applicable)" meta="8–12 · switch on what applies">
-          <ol className="divide-y divide-slate-100">
+          <ol className="divide-y divide-white/[0.06]">
             {additional.map((c) => (
               <CriterionLine key={c.id} c={c} on={settings.additional.includes(c.id)} onToggle={() => toggleAdditional(c.id)} />
             ))}
           </ol>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-white/[0.06] pt-2 text-[11px] text-slate-400">
             <span>Goal Achievement target:</span>
             <input
               type="number"
@@ -643,7 +643,7 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
               max={100}
               value={settings.minPerformance}
               onChange={(e) => setSettings((s) => ({ ...s, minPerformance: Math.max(0, Math.min(100, Number(e.target.value) || 0)) }))}
-              className="w-14 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-center text-[11px] tabular-nums focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+              className="w-14 rounded-md border border-white/10 bg-[#0a0e17] px-1.5 py-0.5 text-center text-[11px] tabular-nums focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
             />
             <span>% or a rating of Excellent / Good.</span>
           </div>
@@ -651,14 +651,14 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
       </div>
 
       {/* The leaderboard. */}
-      <div className="rounded-xl border border-slate-200 bg-white">
-        <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="rounded-xl border border-white/10 bg-[#0a0e17]">
+        <div className="flex flex-col gap-2 border-b border-white/[0.06] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <span className="text-brand"><IconAward /></span>
-            <h4 className="text-sm font-semibold text-slate-900">Ranking — {monthLabel}</h4>
+            <h4 className="text-sm font-semibold text-slate-100">Ranking — {monthLabel}</h4>
             <span className="text-[11px] text-slate-400">{shown.length} of {rows.length}</span>
             <span
-              className={cx('text-[11px] font-medium', sync === 'error' ? 'text-rose-600' : sync === 'saving' ? 'text-slate-400' : 'text-emerald-600')}
+              className={cx('text-[11px] font-medium', sync === 'error' ? 'text-rose-400' : sync === 'saving' ? 'text-slate-400' : 'text-emerald-400')}
               title={sync === 'error' ? syncError ?? 'Could not save' : undefined}
             >
               {sync === 'saving' ? 'Saving…' : sync === 'error' ? 'Not saved — check your connection' : 'Saved'}
@@ -669,9 +669,9 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search name or department…"
-              className="w-52 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+              className="w-52 rounded-lg border border-white/10 bg-[#0a0e17] px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
             />
-            <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-slate-600">
+            <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-slate-300">
               <input type="checkbox" checked={onlyEligible} onChange={(e) => setOnlyEligible(e.target.checked)} className="h-3.5 w-3.5 accent-brand" />
               Only people who pass every automatic check
             </label>
@@ -679,8 +679,8 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
         </div>
 
         {winners.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 border-b border-emerald-100 bg-emerald-50/60 px-4 py-2 text-xs text-emerald-800">
-            <span className="text-emerald-600"><IconCrown /></span>
+          <div className="flex flex-wrap items-center gap-2 border-b border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-300">
+            <span className="text-emerald-400"><IconCrown /></span>
             {winners.length === 1
               ? <><span className="font-semibold">{winners[0].candidate.member.name}</span> meets all {active.length} criteria.</>
               : <><span className="font-semibold">{winners.length} people</span> meet all {active.length} criteria: {winners.map((w) => w.candidate.member.name).join(', ')}.</>}
@@ -690,7 +690,7 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
         <div className="overflow-x-auto">
           <div className="min-w-190">
             {/* Header */}
-            <div className={cx('grid items-center gap-x-2 px-3 py-2 text-[11px] font-medium text-slate-500', cols)}>
+            <div className={cx('grid items-center gap-x-2 px-3 py-2 text-[11px] font-medium text-slate-400', cols)}>
               <span>#</span>
               <span>Staff</span>
               <span className="flex flex-wrap items-center gap-1">
@@ -704,7 +704,7 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
                       onClick={() => tickAll(c.id)}
                       disabled={shown.length === 0}
                       title={all ? `Hand "${c.label}" back to the data for everyone shown` : `Confirm "${c.label}" by hand for everyone shown`}
-                      className={cx('rounded border px-1 py-px text-[9px] font-semibold transition-colors', all ? 'border-brand bg-brand text-white' : 'border-slate-200 text-slate-400 hover:border-brand hover:text-brand')}
+                      className={cx('rounded border px-1 py-px text-[9px] font-semibold transition-colors', all ? 'border-brand bg-brand text-white' : 'border-white/10 text-slate-400 hover:border-brand hover:text-brand')}
                     >
                       {c.label}
                     </button>
@@ -722,7 +722,7 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
                       onClick={() => tickAll(c.id)}
                       disabled={shown.length === 0}
                       title={all ? `Take "${c.label}" back from everyone shown` : `Credit "${c.label}" to everyone shown`}
-                      className={cx('rounded border px-1 py-px text-[9px] font-semibold transition-colors', all ? 'border-brand bg-brand text-white' : 'border-slate-200 text-slate-400 hover:border-brand hover:text-brand')}
+                      className={cx('rounded border px-1 py-px text-[9px] font-semibold transition-colors', all ? 'border-brand bg-brand text-white' : 'border-white/10 text-slate-400 hover:border-brand hover:text-brand')}
                     >
                       {c.label}
                     </button>
@@ -742,21 +742,21 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
                   : q ? `Nothing matches "${query}".` : 'Nobody passes every automatic check yet.'}
               </div>
             ) : (
-              <ol className="divide-y divide-slate-100">
+              <ol className="divide-y divide-white/[0.06]">
                 {shown.map((r) => {
                   const m = r.candidate.member
                   const first = r.rank === 1
                   const pct = scorePct(r)
                   return (
-                    <li key={m.id} className={cx('grid items-center gap-x-2 px-3 py-2.5 transition-colors hover:bg-slate-50/80', cols, r.allMet && 'bg-emerald-50/40')}>
+                    <li key={m.id} className={cx('grid items-center gap-x-2 px-3 py-2.5 transition-colors hover:bg-white/[0.03]', cols, r.allMet && 'bg-emerald-500/10')}>
                       {/* Rank */}
-                      <span className={cx('inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold', r.allMet ? 'bg-emerald-600 text-white' : first ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600')}>
+                      <span className={cx('inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold', r.allMet ? 'bg-emerald-600 text-white' : first ? 'bg-brand text-white' : 'bg-white/[0.06] text-slate-300')}>
                         {r.topMark ? <IconCrown /> : r.rank}
                       </span>
                       {/* Person */}
                       <span className="min-w-0 leading-tight">
                         <span className="flex min-w-0 items-center gap-1">
-                          <span className="truncate text-sm font-semibold text-slate-800" title={m.name}>{m.name}</span>
+                          <span className="truncate text-sm font-semibold text-slate-100" title={m.name}>{m.name}</span>
                           <PerformerBadge staffId={m.id} compact />
                         </span>
                         <span className="block truncate text-[11px] text-slate-400">
@@ -780,8 +780,8 @@ export default function TopPerformerSheet({ month, monthLabel, staff, attendance
                       </span>
                       {/* Score: the figure, with its bar under it */}
                       <span className="flex flex-col gap-1">
-                        <span className="text-xs font-semibold tabular-nums text-slate-700">{pct}%</span>
-                        <span className="h-1 overflow-hidden rounded-full bg-slate-100">
+                        <span className="text-xs font-semibold tabular-nums text-slate-200">{pct}%</span>
+                        <span className="h-1 overflow-hidden rounded-full bg-white/[0.06]">
                           <span className={cx('block h-full rounded-full', r.allMet ? 'bg-emerald-500' : 'bg-brand')} style={{ width: `${pct}%` }} />
                         </span>
                       </span>

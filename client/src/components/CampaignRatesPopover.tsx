@@ -47,7 +47,7 @@ export function CampaignRatesPopover({ campaign, onSaved }: { campaign: Campaign
         type="button"
         onClick={() => setOpen((o) => !o)}
         title="Edit source rates"
-        className={cx('rounded p-1', open ? 'bg-[#1a3654] text-white' : 'text-amber-600 hover:bg-amber-100')}
+        className={cx('rounded p-1', open ? 'bg-[#132a52] text-white' : 'text-amber-400 hover:bg-amber-500/20')}
       >
         <RatesIcon />
       </button>
@@ -98,15 +98,15 @@ function RatesDropdown({ campaign, pos, onClose, onSaved }: {
     } catch (err) { setError((err as Error).message) } finally { setSaving(false) }
   }
 
-  const rateCls = 'w-16 rounded border border-slate-300 px-1.5 py-0.5 text-right text-xs tabular-nums text-[#0f172a] focus:border-[#1a3654] focus:outline-none'
+  const rateCls = 'w-16 rounded border border-white/15 px-1.5 py-0.5 text-right text-xs tabular-nums text-slate-100 focus:border-blue-500/60 focus:outline-none'
 
   return (
     <div
       data-rates-popover
       style={{ position: 'absolute', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999 }}
-      className="overflow-hidden rounded-lg border border-[#1a3654]/25 bg-white shadow-xl shadow-slate-900/20"
+      className="overflow-hidden rounded-lg border border-blue-500/60/25 bg-[#0a0e17] shadow-xl shadow-slate-900/20"
     >
-      <div className="flex items-center justify-between bg-[#1a3654] px-2.5 py-1.5 text-white">
+      <div className="flex items-center justify-between bg-[#132a52] px-2.5 py-1.5 text-white">
         <span className="truncate text-[11px] font-semibold uppercase tracking-wide">Rates — {campaign.code}</span>
         <button type="button" onClick={onClose} className="rounded p-0.5 text-white/80 hover:bg-white/20 hover:text-white">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
@@ -121,8 +121,8 @@ function RatesDropdown({ campaign, pos, onClose, onSaved }: {
         ) : (
           <div className="flex flex-col gap-1">
             {list.map((s) => (
-              <div key={s.name} className="flex items-center gap-2 border-b border-slate-100 py-0.5 last:border-0">
-                <span className="flex-1 truncate text-xs font-medium text-[#0f172a]" title={s.name}>{s.name}</span>
+              <div key={s.name} className="flex items-center gap-2 border-b border-white/[0.06] py-0.5 last:border-0">
+                <span className="flex-1 truncate text-xs font-medium text-slate-100" title={s.name}>{s.name}</span>
                 <span className="tabular-nums text-[10px] text-slate-400" title="Leads">{num(s.counted)}</span>
                 <input
                   type="number" min="0" step="0.01" value={rateValue(s)} disabled={s.destination_id == null}
@@ -135,27 +135,27 @@ function RatesDropdown({ campaign, pos, onClose, onSaved }: {
               <div key={`new-${i}`} className="flex items-center gap-2 py-0.5">
                 <input
                   placeholder="New source" value={row.name} onChange={(e) => patchRow(i, { name: e.target.value })}
-                  className="min-w-0 flex-1 rounded border border-slate-300 px-1.5 py-0.5 text-xs text-[#0f172a] focus:border-[#1a3654] focus:outline-none"
+                  className="min-w-0 flex-1 rounded border border-white/15 px-1.5 py-0.5 text-xs text-slate-100 focus:border-blue-500/60 focus:outline-none"
                 />
                 <input
                   type="number" min="0" step="0.01" placeholder="0.00" value={row.rate} onChange={(e) => patchRow(i, { rate: e.target.value })}
                   className={rateCls}
                 />
-                <button type="button" onClick={() => removeRow(i)} title="Remove" className="rounded p-0.5 text-slate-400 hover:text-red-600">
+                <button type="button" onClick={() => removeRow(i)} title="Remove" className="rounded p-0.5 text-slate-400 hover:text-red-400">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
                 </button>
               </div>
             ))}
           </div>
         )}
-        {error && <p className="mt-1 text-[11px] text-red-600">{error}</p>}
+        {error && <p className="mt-1 text-[11px] text-red-400">{error}</p>}
       </div>
 
-      <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-2 py-1.5">
-        <button type="button" onClick={addRow} className="text-[11px] font-medium text-[#1a3654] hover:underline">+ Source</button>
+      <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] px-2 py-1.5">
+        <button type="button" onClick={addRow} className="text-[11px] font-medium text-blue-300 hover:underline">+ Source</button>
         <button
           type="button" onClick={save} disabled={saving}
-          className="inline-flex items-center gap-1 rounded bg-[#1a3654] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#24476b] disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded bg-[#132a52] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#1b3a6b] disabled:opacity-50"
         >
           {saving && <Spinner className="h-3 w-3 text-white" />}Save
         </button>

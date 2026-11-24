@@ -218,7 +218,7 @@ function Cells({
           <select
             value={draft.staff_id}
             onChange={(e) => setPerson(e.target.value === '' ? '' : Number(e.target.value))}
-            className={cx(fieldCls, 'font-semibold', draft.staff_id === '' && 'text-slate-500')}
+            className={cx(fieldCls, 'font-semibold', draft.staff_id === '' && 'text-slate-400')}
           >
             <option value="">Select name</option>
             {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -235,7 +235,7 @@ function Cells({
             onDraft({ ...draft, department_id: id })
             onPick?.({ department_id: id })
           }}
-          className={cx(fieldCls, draft.department_id === '' && 'text-slate-500')}
+          className={cx(fieldCls, draft.department_id === '' && 'text-slate-400')}
           title={person === null ? 'Pick a name first' : undefined}
         >
           <option value="">{departments.length === 0 ? 'No department' : '—'}</option>
@@ -263,7 +263,7 @@ function Cells({
           value={draft.actual_return}
           min={draft.leave_date || undefined}
           onChange={(e) => setReturn('actual_return', e.target.value)}
-          className={cx(dateFieldCls, actualVerdict?.id === 'late' && 'border-rose-400 font-semibold text-rose-800')}
+          className={cx(dateFieldCls, actualVerdict?.id === 'late' && 'border-rose-400 font-semibold text-rose-300')}
           title="The day they actually came back"
         />
         {actualVerdict && <Badge verdict={actualVerdict} />}
@@ -279,7 +279,7 @@ function SpanCaption({ span }: { span: LeaveSpan }) {
     ? `On leave ${shortDay(span.first)} only — set Expected Return to cover more days`
     : `On leave ${shortDay(span.first)} to ${shortDay(span.last)} — not counted as absent or late`
   return (
-    <span title={title} className="mt-0.5 inline-block rounded border border-violet-300 bg-violet-50 px-1 text-[10px] font-bold leading-4 text-violet-800">
+    <span title={title} className="mt-0.5 inline-block rounded border border-violet-500/40 bg-violet-500/15 px-1 text-[10px] font-bold leading-4 text-violet-300">
       {leaveSpanLabel(span)}
     </span>
   )

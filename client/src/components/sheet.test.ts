@@ -18,14 +18,14 @@ describe('sheet class strings', () => {
       expect(s).not.toMatch(/ {2}/)
     }
     expect(classes(tableCls)).toContain('[&_th]:border')
-    expect(classes(fieldCls)).toContain('placeholder:text-slate-400')
-    expect(classes(addBtnCls)).toContain('hover:bg-[#24466b]')
+    expect(classes(fieldCls)).toContain('placeholder:text-slate-500')
+    expect(classes(addBtnCls)).toContain('hover:bg-blue-500')
     expect(classes(removeBtnCls)).toContain('transition-colors')
   })
 
-  it('builds the Sr. No. cell from the base cell padding plus the darker band', () => {
+  it('builds the Sr. No. cell from the base cell padding plus the raised band', () => {
     expect(idxCell.startsWith(cellCls + ' ')).toBe(true)
-    expect(classes(idxCell)).toContain('bg-[#bfdeeb]')
+    expect(classes(idxCell)).toContain('bg-[#0f1a2e]')
     expect(classes(idxCell)).toContain('font-bold')
   })
 
@@ -36,14 +36,14 @@ describe('sheet class strings', () => {
   })
 
   it('shares the navy between the head row and the band', () => {
-    expect(classes(theadCls)).toContain('bg-[#1a3654]')
-    expect(classes(bandCls)).toContain('bg-[#1a3654]')
+    expect(classes(theadCls)).toContain('bg-[#132a52]')
+    expect(classes(bandCls)).toContain('bg-[#132a52]')
     expect(classes(headCls)).toContain('uppercase')
   })
 
   it('shades the add row lighter than a saved row', () => {
-    expect(rowCls).toContain('bg-[#d4e9f2]')
-    expect(addRowCls).toContain('bg-[#eaf5fa]')
+    expect(rowCls).toContain('bg-[#0a0e17]')
+    expect(addRowCls).toContain('bg-[#0d1322]')
     expect(rowCls).not.toBe(addRowCls)
   })
 })

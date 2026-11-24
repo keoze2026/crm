@@ -371,7 +371,7 @@ export default function Reports() {
       </PageHeader>
 
       {/* Complete report — the full-system formatted export */}
-      <Card className="mb-6 flex flex-col items-start gap-4 border-white/20 bg-linear-to-br from-slate-800 to-blue-900 p-5 text-white shadow-xl shadow-blue-900/25 sm:flex-row sm:items-center sm:justify-between">
+      <Card className="mb-6 flex flex-col items-start gap-4 border-white/20 bg-linear-to-br from-[#0d1322] to-blue-900 p-5 text-white shadow-xl shadow-blue-900/25 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -467,7 +467,7 @@ export default function Reports() {
             formatPeriod(m.period),
             money(m.revenue),
             money(m.cost),
-            <span key="margin" className={m.margin >= 0 ? 'font-semibold text-emerald-600' : 'font-semibold text-red-500'}>{money(m.margin)}</span>,
+            <span key="margin" className={m.margin >= 0 ? 'font-semibold text-emerald-400' : 'font-semibold text-red-400'}>{money(m.margin)}</span>,
             num(m.counted),
             num(m.answered),
             num(m.missed),
@@ -526,7 +526,7 @@ export default function Reports() {
         />
       </Card>
 
-      {summary.error && <p className="mt-4 text-sm text-red-600">{summary.error}</p>}
+      {summary.error && <p className="mt-4 text-sm text-red-400">{summary.error}</p>}
     </div>
   )
 }
@@ -601,15 +601,15 @@ function DownloadCard({
   return (
     <Card className="flex flex-col p-5">
       <div className="flex items-center gap-2">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/15 text-blue-400">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
             <path d="M14 2v6h6" />
           </svg>
         </span>
-        <h3 className="font-semibold text-slate-900">{title}</h3>
+        <h3 className="font-semibold text-slate-100">{title}</h3>
       </div>
-      <p className="mt-2 flex-1 text-sm text-slate-500">{desc}</p>
+      <p className="mt-2 flex-1 text-sm text-slate-400">{desc}</p>
       <div className="mt-4 flex flex-wrap gap-2">
         <DownloadButton href={csvHref} filename={csvName}>CSV</DownloadButton>
         <XlsxButton onClick={onXlsx} loading={xlsxLoading} />
@@ -638,7 +638,7 @@ function Table({
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
+          <tr className="border-b border-white/[0.06] text-xs uppercase tracking-wide text-slate-400">
             {head.map((h, i) => (
               <th key={h} className={i >= numericFrom ? 'px-4 py-3 text-right font-medium' : 'px-4 py-3 text-left font-medium'}>{h}</th>
             ))}
@@ -646,9 +646,9 @@ function Table({
         </thead>
         <tbody>
           {rows.map((r, ri) => (
-            <tr key={ri} className="border-b border-slate-50 hover:bg-slate-50/60">
+            <tr key={ri} className="border-b border-white/[0.06] hover:bg-white/[0.03]">
               {r.map((cell, ci) => (
-                <td key={ci} className={ci >= numericFrom ? 'px-4 py-3 text-right tabular-nums text-slate-700' : 'px-4 py-3 font-medium text-slate-800'}>{cell}</td>
+                <td key={ci} className={ci >= numericFrom ? 'px-4 py-3 text-right tabular-nums text-slate-200' : 'px-4 py-3 font-medium text-slate-100'}>{cell}</td>
               ))}
             </tr>
           ))}

@@ -128,7 +128,7 @@ function Cells({
               onDraft({ ...draft, staff_id: id })
               onPick?.({ staff_id: id })
             }}
-            className={cx(fieldCls, 'font-semibold', draft.staff_id === '' && 'text-slate-500')}
+            className={cx(fieldCls, 'font-semibold', draft.staff_id === '' && 'text-slate-400')}
           >
             <option value="">Select name</option>
             {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}

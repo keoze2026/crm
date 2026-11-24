@@ -83,6 +83,225 @@ export function splitEnds<T>(rows: T[], n = 5): { head: T[]; middle: T[]; tail: 
   return { head: rows.slice(0, n), middle: rows.slice(n, rows.length - n), tail: rows.slice(rows.length - n) }
 }
 
+/**
+ * A bucket's row label in the Revenue-by-day table: "Mon, Nov 02" for a day, "Nov 02 – Nov 05"
+ * for a 4-day window, "Week of Nov 02" for a week. Built from UTC parts, so it never drifts.
+ */
+export function bucketLabel(period: string, g: Granularity): string {
+  const n = epochDay(period)
+  if (!Number.isFinite(n)) return period
+  const md = (k: number) => new Date(k * DAY_MS).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: '2-digit' })
+  if (g === 'week') return `Week of ${md(n)}`
+  if (g === '4day') return `${md(n)} – ${md(n + 3)}`
+  const wd = new Date(n * DAY_MS).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short' })
+  return `${wd}, ${md(n)}`
+}
+
+/**
+ * A typed amount ("1,250.50", "$300", "") as a number: blank is 0, anything that isn't a
+ * non-negative number is null so the field can show it is wrong.
+ */
+export function parseAmount(text: string): number | null {
+  const t = text.replace(/[$,\s]/g, '')
+  if (t === '') return 0
+  if (!/^\d*\.?\d*$/.test(t) || t === '.') return null
+  return Number(t)
+}
+
+/** Per-lead economics on the traffic-spend basis the KPI row and "What changed" use. */
+export interface Basis {
+  revenue: number
+  cost: number
+  counted: number
+}
+
+export function unitEconomics(b: Basis) {
+  const profit = b.revenue - b.cost
+  return {
+    profit,
+    /** % of revenue, null with nothing billed. */
+    marginPct: b.revenue !== 0 ? (profit / b.revenue) * 100 : null,
+    revenuePerLead: b.counted > 0 ? b.revenue / b.counted : null,
+    costPerLead: b.counted > 0 ? b.cost / b.counted : null,
+    profitPerLead: b.counted > 0 ? profit / b.counted : null,
+  }
+}
+
+/** % change, null without a baseline to measure from. */
+export function pctChange(prev: number | null, curr: number | null): number | null {
+  if (prev === null || curr === null || prev === 0) return null
+  return ((curr - prev) / Math.abs(prev)) * 100
+}
+
+/**
+ * The one-sentence read of the period at the top of "What changed", e.g.
+ * "Margin fell 6.4 pts. Revenue per lead held at about $50, but cost per lead rose 8.0% to
+ * $44.06 and volume fell 21%." A movement under 1% (0.1 pts for margin) counts as "held".
+ */
+export function whatChanged(curr: Basis, prev: Basis, prevLabel: string): string {
+  if (curr.counted === 0 && curr.revenue === 0) return 'Nothing was billed in this period.'
+  if (prev.counted === 0 || prev.revenue === 0) return `Nothing was billed in the ${prevLabel}, so there is no baseline to compare against.`
+  const c = unitEconomics(curr)
+  const p = unitEconomics(prev)
+  const usd = (v: number) => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  const parts: string[] = []
+  if (c.marginPct !== null && p.marginPct !== null) {
+    const d = c.marginPct - p.marginPct
+    parts.push(Math.abs(d) < 0.1 ? `Margin held at ${c.marginPct.toFixed(1)}%.` : `Margin ${d > 0 ? 'rose' : 'fell'} ${Math.abs(d).toFixed(1)} pts.`)
+  }
+
+  // Each clause and whether its movement is good (1), neutral (0) or bad (-1) news.
+  const perLead = (what: string, prevV: number | null, currV: number | null, upGood: boolean): [string, number] => {
+    const ch = pctChange(prevV, currV)
+    if (ch === null || currV === null) return [`${what} is not comparable`, 0]
+    if (Math.abs(ch) < 1) return [`${what} held at about $${Math.round(currV).toLocaleString('en-US')}`, 0]
+    return [`${what} ${ch > 0 ? 'rose' : 'fell'} ${Math.abs(ch).toFixed(1)}% to ${usd(currV)}`, (ch > 0) === upGood ? 1 : -1]
+  }
+  const [rev, revTone] = perLead('revenue per lead', p.revenuePerLead, c.revenuePerLead, true)
+  const [cost, costTone] = perLead('cost per lead', p.costPerLead, c.costPerLead, false)
+  const vol = pctChange(prev.counted, curr.counted)
+  const volume = vol === null || Math.abs(vol) < 1 ? 'volume held steady' : `volume ${vol > 0 ? 'rose' : 'fell'} ${Math.round(Math.abs(vol))}%`
+
+  const joiner = revTone !== costTone ? ', but ' : ', '
+  parts.push(`${rev.charAt(0).toUpperCase()}${rev.slice(1)}${joiner}${cost} and ${volume}.`)
+  return parts.join(' ')
+}
+
+/** A buyer row as the price grouping needs it. */
+export interface PricedRow {
+  label: string
+  value: number
+  counted: number
+}
+
+export interface PriceGroup {
+  /** The price per counted lead, to the cent; null for revenue with no counted leads. */
+  price: number | null
+  value: number
+  counted: number
+  /** Buyer labels at this price, biggest first. */
+  members: string[]
+}
+
+/**
+ * Buyers grouped by what they pay per counted lead (revenue ÷ leads, to the cent), biggest
+ * revenue first — the "By price" tab of the ranking.
+ */
+export function groupByPrice(rows: PricedRow[]): PriceGroup[] {
+  const map = new Map<string, PriceGroup>()
+  for (const r of rows) {
+    const price = r.counted > 0 ? Math.round((r.value / r.counted) * 100) / 100 : null
+    const key = price === null ? 'none' : price.toFixed(2)
+    const g = map.get(key) ?? { price, value: 0, counted: 0, members: [] }
+    g.value += r.value
+    g.counted += r.counted
+    g.members.push(r.label)
+    map.set(key, g)
+  }
+  return [...map.values()].sort((a, b) => b.value - a.value || (b.price ?? 0) - (a.price ?? 0))
+}
+
+/**
+ * The amount a non-peak bar label stands for once rounded the way `barLabel` rounds it:
+ * whole dollars under $1K, whole thousands under $1M, tenths of a million above.
+ */
+export function roundedLike(v: number): number {
+  const a = Math.abs(v)
+  const r = a < 1000 ? Math.round(a) : a < 1_000_000 ? Math.round(a / 1000) * 1000 : Math.round(a / 100_000) * 100_000
+  return v < 0 ? -r : r
+}
+
+/**
+ * How far the printed figures of a "Revenue by day" table (the peak exact, the rest rounded)
+ * add up from the true total — the "within about $3K" in the footnote.
+ */
+export function roundingDrift(values: number[], peakIdx: number, total: number): number {
+  const shown = values.reduce((s, v, i) => s + (i === peakIdx ? v : roundedLike(v)), 0)
+  return Math.abs(shown - total)
+}
+
+/** CSV text → rows of cells. Handles quoted cells with commas, newlines and "" escapes. */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let cell = ''
+  let quoted = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++ }
+      else if (ch === '"') quoted = false
+      else cell += ch
+    } else if (ch === '"') quoted = true
+    else if (ch === ',') { row.push(cell); cell = '' }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++
+      row.push(cell); rows.push(row); row = []; cell = ''
+    } else cell += ch
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row) }
+  return rows.map((r) => r.map((c) => c.trim())).filter((r) => r.some((c) => c !== ''))
+}
+
+/** One buyer or campaign line from an imported CSV. */
+export interface ImportedRow {
+  label: string
+  /** The buyer a campaign sells to; null on a buyer list. */
+  buyer: string | null
+  value: number
+  counted: number
+  first: string
+  last: string
+}
+
+export interface RankImport {
+  kind: 'buyers' | 'campaigns'
+  rows: ImportedRow[]
+}
+
+/**
+ * A pasted buyer list (buyer, revenue, leads, first, last) or campaign list (campaign, buyer,
+ * revenue, leads, first, last), biggest revenue first. The header row names the columns in any
+ * order; first/last are optional. Anything unreadable comes back as an `error` sentence.
+ */
+export function parseRankCsv(text: string): RankImport | { error: string } {
+  const rows = parseCsv(text)
+  if (rows.length === 0) return { error: 'Paste a CSV with a header row first.' }
+  const head = rows[0].map((h) => h.toLowerCase())
+  const kind = head.includes('campaign') ? 'campaigns' : head.includes('buyer') ? 'buyers' : null
+  if (!kind) return { error: 'The first row must name the columns: buyer, revenue, leads, first, last — or campaign, buyer, revenue, leads, first, last.' }
+  const nameCol = kind === 'campaigns' ? 'campaign' : 'buyer'
+  for (const need of [nameCol, 'revenue', 'leads']) {
+    if (!head.includes(need)) return { error: `The header row is missing the “${need}” column.` }
+  }
+  const col = (r: string[], name: string) => {
+    const i = head.indexOf(name)
+    return i >= 0 ? (r[i] ?? '').trim() : ''
+  }
+  const out: ImportedRow[] = []
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i]
+    const label = col(r, nameCol)
+    if (!label) return { error: `Row ${i + 1} has no ${nameCol} name.` }
+    const value = parseAmount(col(r, 'revenue'))
+    if (value === null) return { error: `Row ${i + 1}: revenue “${col(r, 'revenue')}” is not an amount.` }
+    const leads = parseAmount(col(r, 'leads'))
+    if (leads === null || !Number.isInteger(leads)) return { error: `Row ${i + 1}: leads “${col(r, 'leads')}” is not a whole number.` }
+    out.push({
+      label,
+      buyer: kind === 'campaigns' ? col(r, 'buyer') || null : null,
+      value,
+      counted: leads,
+      first: col(r, 'first'),
+      last: col(r, 'last'),
+    })
+  }
+  if (out.length === 0) return { error: 'There are no rows under the header.' }
+  out.sort((a, b) => b.value - a.value)
+  return { kind, rows: out }
+}
+
 /** Percent of a whole, safe for a zero whole. */
 export const shareOf = (part: number, whole: number): number => (whole > 0 ? (part / whole) * 100 : 0)
 

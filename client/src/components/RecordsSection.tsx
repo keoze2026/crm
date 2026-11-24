@@ -416,18 +416,18 @@ export default function RecordsSection({
   return (
     <section>
       {compact ? (
-        <div className="mb-4 mt-10 flex flex-col gap-3 border-t border-white/50 pt-8 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-4 mt-10 flex flex-col gap-3 border-t border-white/10 pt-8 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h2>
-            <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>
+            <h2 className="text-lg font-semibold tracking-tight text-slate-100">{title}</h2>
+            <p className="mt-0.5 text-sm text-slate-400">{subtitle}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">{actions}</div>
         </div>
       ) : (
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
-            <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+            <h1 className="text-xl font-bold tracking-tight text-slate-100 sm:text-2xl">{title}</h1>
+            <p className="mt-1 text-sm text-slate-400">{subtitle}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">{actions}</div>
         </div>
@@ -440,7 +440,7 @@ export default function RecordsSection({
           <div className="flex flex-wrap items-end gap-3">
             {dateControl && (
               <label className="block">
-                <span className="mb-1 block text-sm font-medium text-slate-700">Date</span>
+                <span className="mb-1 block text-sm font-medium text-slate-200">Date</span>
                 {dateControl}
               </label>
             )}
@@ -464,13 +464,13 @@ export default function RecordsSection({
       <Card className={cx(!isBuyer && 'overflow-hidden rounded-md!')}>
         {!isFiltered ? (
           <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/15 text-blue-400">
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
               </svg>
             </div>
-            <p className="text-base font-semibold text-slate-700">Select a date to view records</p>
-            <p className="max-w-sm text-sm text-slate-400">Pick a day or date range with the <span className="font-medium text-slate-500">Date</span> picker above to load Lead records.</p>
+            <p className="text-base font-semibold text-slate-200">Select a date to view records</p>
+            <p className="max-w-sm text-sm text-slate-400">Pick a day or date range with the <span className="font-medium text-slate-400">Date</span> picker above to load Lead records.</p>
           </div>
         ) : isSingleDay ? (
           allRecords.loading ? (
@@ -493,7 +493,7 @@ export default function RecordsSection({
           <EmptyState message="No records match these filters." />
         ) : (
           <div className="overflow-x-auto rounded-t-2xl">
-            <table className={cx('w-full min-w-[900px] table-fixed text-sm', navy && 'border-collapse [&_td]:border [&_td]:border-white [&_th]:border [&_th]:border-white')}>
+            <table className={cx('w-full min-w-[900px] table-fixed text-sm', navy && 'border-collapse [&_td]:border [&_td]:border-white/[0.08] [&_th]:border [&_th]:border-white/[0.08]')}>
               <colgroup>
                 {showSerial && <col className="w-[6%]" />}{/* # */}
                 {showDate && <col className="w-[11%]" />}{/* Date */}
@@ -508,7 +508,7 @@ export default function RecordsSection({
                 <col className="w-[8%]" />{/* Actions */}
               </colgroup>
               <thead>
-                <tr className={cx('text-center text-xs font-semibold uppercase tracking-wide', navy ? 'bg-[#1a3654] text-white' : 'bg-blue-600 text-blue-50')}>
+                <tr className={cx('text-center text-xs font-semibold uppercase tracking-wide', navy ? 'bg-[#132a52] text-white' : 'bg-blue-600 text-blue-50')}>
                   {showSerial && <th className="px-4 py-3 font-medium">#</th>}
                   {showDate && <Th onClick={() => set({ sort: 'record_date', dir: nextDir(filters, 'record_date') })} active={filters.sort === 'record_date'} dir={filters.dir}>Date</Th>}
                   <th className="px-4 py-3 font-medium">{entityLabel}</th>
@@ -525,46 +525,46 @@ export default function RecordsSection({
               <tbody>
                 {bundled
                   ? bundledRows.map((b, i) => (
-                    <tr key={b.key} className={cx(navy ? 'bg-[#d4e9f2] text-[#0f172a]' : 'border-b border-slate-100/70 odd:bg-white/40 even:bg-blue-50/40 hover:bg-blue-100/50')}>
+                    <tr key={b.key} className={cx(navy ? 'bg-[#0a0e17] text-slate-100' : 'border-b border-white/[0.06] odd:bg-white/[0.05] even:bg-blue-500/10 hover:bg-blue-500/15')}>
                       {showDate && (
-                        <td className="whitespace-nowrap px-4 py-3 text-center font-medium text-slate-600">
+                        <td className="whitespace-nowrap px-4 py-3 text-center font-medium text-slate-300">
                           {i === 0 ? formatDate(filters.from ?? null) : i === bundledRows.length - 1 ? formatDate(filters.to ?? null) : ''}
                         </td>
                       )}
-                      <td className="py-3 pl-10 pr-2 text-center font-medium text-slate-800"><Box w="w-16" align="left">{b.camp}</Box></td>
-                      <td className="py-3 pl-6 pr-2 text-center text-slate-600"><FitText>{b.source}</FitText></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(b.answered)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-10">{num(b.missed)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-12">{num(b.replacement)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(b.counted)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-16">{money2(b.rate)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center font-semibold tabular-nums text-slate-900"><Box w="w-28">{money2(b.total_bill)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center font-medium text-slate-100"><Box w="w-16" align="left">{b.camp}</Box></td>
+                      <td className="py-3 pl-6 pr-2 text-center text-slate-300"><FitText>{b.source}</FitText></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-200"><Box w="w-12">{num(b.answered)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-400"><Box w="w-10">{num(b.missed)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-400"><Box w="w-12">{num(b.replacement)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-200"><Box w="w-12">{num(b.counted)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-400"><Box w="w-16">{money2(b.rate)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center font-semibold tabular-nums text-slate-100"><Box w="w-28">{money2(b.total_bill)}</Box></td>
                       <td className="px-4 py-3 text-center">
                         {b.count > 1 && <span className="text-xs tabular-nums text-slate-400" title={`${b.count} records merged into this row`}>{b.count}×</span>}
                       </td>
                     </tr>
                   ))
                   : rows.map((r, i) => (
-                    <tr key={r.id} className={cx(navy ? 'bg-[#d4e9f2] text-[#0f172a]' : 'border-b border-slate-100/70 odd:bg-white/40 even:bg-blue-50/40 hover:bg-blue-100/50')}>
+                    <tr key={r.id} className={cx(navy ? 'bg-[#0a0e17] text-slate-100' : 'border-b border-white/[0.06] odd:bg-white/[0.05] even:bg-blue-500/10 hover:bg-blue-500/15')}>
                       {showSerial && <td className="px-4 py-3 text-center tabular-nums text-slate-400">{(meta ? (meta.page - 1) * meta.per_page : 0) + i + 1}</td>}
                       {showDate && (isFiltered
-                        ? <td className="whitespace-nowrap px-4 py-3 text-center text-slate-600 font-medium">
+                        ? <td className="whitespace-nowrap px-4 py-3 text-center text-slate-300 font-medium">
                             {i === 0 ? formatDate(r.record_date) : i === rows.length - 1 ? formatDate(r.record_date) : ''}
                           </td>
-                        : <td className="whitespace-nowrap px-4 py-3 text-center text-slate-600">{formatDate(r.record_date)}</td>
+                        : <td className="whitespace-nowrap px-4 py-3 text-center text-slate-300">{formatDate(r.record_date)}</td>
                       )}
-                      <td className="py-3 pl-10 pr-2 text-center font-medium text-slate-800"><Box w="w-16" align="left">{(isBuyer ? r.buyer_code : r.campaign_code) ?? '—'}</Box></td>
-                      {!isBuyer && <td className="py-3 pl-6 pr-2 text-center text-slate-600"><FitText>{r.source ?? '—'}</FitText></td>}
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(r.answered)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-10">{num(r.missed)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-12">{num(r.replacement)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-700"><Box w="w-12">{num(r.counted)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-500"><Box w="w-16">{money2(r.rate)}</Box></td>
-                      <td className="py-3 pl-10 pr-2 text-center font-semibold tabular-nums text-slate-900"><Box w="w-28">{money2(r.total_bill)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center font-medium text-slate-100"><Box w="w-16" align="left">{(isBuyer ? r.buyer_code : r.campaign_code) ?? '—'}</Box></td>
+                      {!isBuyer && <td className="py-3 pl-6 pr-2 text-center text-slate-300"><FitText>{r.source ?? '—'}</FitText></td>}
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-200"><Box w="w-12">{num(r.answered)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-400"><Box w="w-10">{num(r.missed)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-400"><Box w="w-12">{num(r.replacement)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-200"><Box w="w-12">{num(r.counted)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center tabular-nums text-slate-400"><Box w="w-16">{money2(r.rate)}</Box></td>
+                      <td className="py-3 pl-10 pr-2 text-center font-semibold tabular-nums text-slate-100"><Box w="w-28">{money2(r.total_bill)}</Box></td>
                       <td className="px-4 py-3">
                         <div className="flex justify-center gap-1">
-                          <button onClick={() => openEdit(r)} className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600" title="Edit"><EditIcon /></button>
-                          <button onClick={() => onDelete(r)} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Delete"><TrashIcon /></button>
+                          <button onClick={() => openEdit(r)} className="rounded p-1.5 text-slate-400 hover:bg-blue-500/15 hover:text-blue-400" title="Edit"><EditIcon /></button>
+                          <button onClick={() => onDelete(r)} className="rounded p-1.5 text-slate-400 hover:bg-red-500/15 hover:text-red-400" title="Delete"><TrashIcon /></button>
                         </div>
                       </td>
                     </tr>
@@ -572,8 +572,8 @@ export default function RecordsSection({
               </tbody>
               {totals && (
                 <tfoot>
-                  <tr className={cx('font-semibold', navy ? 'bg-[#1a3654] font-bold text-white' : 'border-t-2 border-blue-200 bg-blue-50 text-slate-900')}>
-                    <td className={cx('px-4 py-3 text-center text-xs font-bold uppercase tracking-wide', navy ? 'text-white' : 'text-blue-700')} colSpan={showSerial && showDate ? 2 : 1}>
+                  <tr className={cx('font-semibold', navy ? 'bg-[#132a52] font-bold text-white' : 'border-t-2 border-blue-500/30 bg-blue-500/15 text-slate-100')}>
+                    <td className={cx('px-4 py-3 text-center text-xs font-bold uppercase tracking-wide', navy ? 'text-white' : 'text-blue-300')} colSpan={showSerial && showDate ? 2 : 1}>
                       TOTAL
                     </td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-16" align="left">{num(totals.count)}</Box></td>
@@ -582,8 +582,8 @@ export default function RecordsSection({
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-10">{num(totals.missed)}</Box></td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-12">{num(totals.replacement)}</Box></td>
                     <td className="py-3 pl-10 pr-2 text-center tabular-nums"><Box w="w-12">{num(totals.counted)}</Box></td>
-                    <td className={cx('py-3 pl-10 pr-2 text-center tabular-nums', navy ? 'text-white/90' : 'text-blue-700')} title="Average rate = Total ÷ Counted"><Box w="w-16">{totals.counted > 0 ? money2(totals.total_bill / totals.counted) : '—'}</Box></td>
-                    <td className={cx('py-3 pl-10 pr-2 text-center tabular-nums', navy ? 'text-white' : 'text-blue-700')}><Box w="w-28">{money2(totals.total_bill)}</Box></td>
+                    <td className={cx('py-3 pl-10 pr-2 text-center tabular-nums', navy ? 'text-white/90' : 'text-blue-300')} title="Average rate = Total ÷ Counted"><Box w="w-16">{totals.counted > 0 ? money2(totals.total_bill / totals.counted) : '—'}</Box></td>
+                    <td className={cx('py-3 pl-10 pr-2 text-center tabular-nums', navy ? 'text-white' : 'text-blue-300')}><Box w="w-28">{money2(totals.total_bill)}</Box></td>
                     <td />
                   </tr>
                 </tfoot>
@@ -595,7 +595,7 @@ export default function RecordsSection({
         {/* Buyer view is server-paginated. The bundled campaign view already collapses
             the full record set into merged rows, so it shows a one-line summary instead. */}
         {!bundled && isFiltered && !isSingleDay && meta && meta.total > 0 && (
-          <div className="flex flex-col items-center justify-between gap-2 border-t border-slate-100 px-4 py-3 text-sm text-slate-500 sm:flex-row">
+          <div className="flex flex-col items-center justify-between gap-2 border-t border-white/[0.06] px-4 py-3 text-sm text-slate-400 sm:flex-row">
             <span>Showing {(meta.page - 1) * meta.per_page + 1}–{Math.min(meta.page * meta.per_page, meta.total)} of {num(meta.total)}</span>
             <div className="flex items-center gap-1">
               <Button variant="secondary" size="sm" disabled={meta.page <= 1}          onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) - 1 }))}>Prev</Button>
@@ -605,13 +605,13 @@ export default function RecordsSection({
           </div>
         )}
         {bundled && isFiltered && !isSingleDay && bundledRows.length > 0 && (
-          <div className="border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
+          <div className="border-t border-white/[0.06] px-4 py-3 text-sm text-slate-400">
             {num(bundledRows.length)} bundled campaign {bundledRows.length === 1 ? 'row' : 'rows'} from {num(allRecords.data?.data?.length ?? 0)} records
           </div>
         )}
       </Card>
 
-      {records.error && <p className="mt-4 text-sm text-red-600">{records.error}</p>}
+      {records.error && <p className="mt-4 text-sm text-red-400">{records.error}</p>}
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit record' : `Add ${isBuyer ? 'revenue' : 'cost'} record`}>
         <RecordForm type={type} editing={editing} entities={entities.data ?? []} destinations={destinations.data ?? []} onSaved={onSaved} onCancel={() => setModalOpen(false)} />
@@ -764,7 +764,7 @@ function RecordForm({ type, editing, entities, destinations, onSaved, onCancel }
         <span className="text-sm font-medium text-blue-50">{isBuyer ? 'Total revenue' : 'Total cost'}</span>
         <span className="text-lg font-bold">{money2(total)}</span>
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-400">{error}</p>}
       <div className="flex justify-end gap-2 pt-1">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
         <Button type="submit" disabled={saving}>

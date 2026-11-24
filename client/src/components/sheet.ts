@@ -2,10 +2,24 @@ import type { KeyboardEvent } from 'react'
 import { cx } from './ui'
 
 /**
- * The spreadsheet look the Queues, Review and Staff sheets share: navy head, cyan body,
- * white gridlines, a darker Sr. No. band. Kept in one place so a new sheet can't drift
- * from the ones already printed.
+ * The spreadsheet look the Queues, Review and Staff sheets share, in the Keoze dark theme:
+ * a navy head, near-black body rows, hairline gridlines, a slightly raised Sr. No. band.
+ * Kept in one place so a new sheet can't drift from the ones already printed.
  */
+
+/** The sheet palette, named so a sheet that paints its own cells uses the same values. */
+export const SHEET = {
+  /** Head row and the bands between runs of rows. */
+  head: '#132a52',
+  /** The head's hover shade (action buttons). */
+  headHover: '#1b3a6b',
+  /** A saved row. */
+  row: '#0a0e17',
+  /** The trailing add row, a shade lighter so it reads as not-yet-saved. */
+  addRow: '#0d1322',
+  /** The Sr. No. column. */
+  idx: '#0f1a2e',
+} as const
 
 /**
  * The table itself. `table-fixed` is the important part: with it the `<colgroup>` widths
@@ -14,28 +28,28 @@ import { cx } from './ui'
  * below which it should scroll rather than crush.
  */
 export const tableCls =
-  'w-full table-fixed border-collapse text-xs [&_td]:border [&_td]:border-white '
-  + '[&_th]:border [&_th]:border-white [&_td]:break-words'
+  'w-full table-fixed border-collapse text-xs [&_td]:border [&_td]:border-white/[0.08] '
+  + '[&_th]:border [&_th]:border-white/[0.08] [&_td]:break-words'
 
 export const headCls = 'px-2 py-1.5 text-center text-[11px] font-bold uppercase tracking-wide'
 export const cellCls = 'px-1.5 py-0.5'
 
-/** The Sr. No. column — the darker label band down the left edge. */
-export const idxCell = cx(cellCls, 'bg-[#bfdeeb] text-center text-xs font-bold text-[#1a3654]')
+/** The Sr. No. column — the label band down the left edge. */
+export const idxCell = cx(cellCls, 'bg-[#0f1a2e] text-center text-xs font-bold text-blue-200')
 
 /** A saved row. */
-export const rowCls = 'bg-[#d4e9f2] text-[#0f172a]'
+export const rowCls = 'bg-[#0a0e17] text-slate-100'
 /** The trailing "add one" row, a shade lighter so it reads as not-yet-saved. */
-export const addRowCls = 'bg-[#eaf5fa] text-[#0f172a]'
+export const addRowCls = 'bg-[#0d1322] text-slate-100'
 /** A full-width band naming the run of rows beneath it. */
-export const bandCls = 'bg-[#1a3654] text-white'
+export const bandCls = 'bg-[#132a52] text-white'
 /** The head row. */
-export const theadCls = 'bg-[#1a3654] text-center text-[11px] font-bold uppercase tracking-wide text-white'
+export const theadCls = 'bg-[#132a52] text-center text-[11px] font-bold uppercase tracking-wide text-white'
 
 /** Any editable cell control. */
 export const fieldCls =
-  'w-full rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900 '
-  + 'placeholder:text-slate-400 focus:border-[#1a3654] focus:outline-none focus:ring-1 focus:ring-[#1a3654]/30'
+  'w-full rounded border border-white/10 bg-[#05070c] px-1.5 py-0.5 text-xs text-slate-100 '
+  + 'placeholder:text-slate-500 focus:border-blue-500/70 focus:outline-none focus:ring-1 focus:ring-blue-500/30'
 
 /**
  * A date cell. A native date field is wider than it looks — "mm/dd/yyyy" plus the calendar
@@ -53,11 +67,11 @@ export const dateFieldCls = cx(
 
 /** The small square action button at the end of a row. */
 export const addBtnCls =
-  'flex h-5 w-5 items-center justify-center rounded bg-[#1a3654] text-white transition-colors '
-  + 'hover:bg-[#24466b] disabled:bg-slate-300'
+  'flex h-5 w-5 items-center justify-center rounded bg-blue-600 text-white transition-colors '
+  + 'hover:bg-blue-500 disabled:bg-white/10 disabled:text-slate-500'
 export const removeBtnCls =
-  'flex h-5 w-5 items-center justify-center rounded border border-slate-400 bg-white text-slate-600 '
-  + 'transition-colors hover:border-red-600 hover:bg-red-600 hover:text-white'
+  'flex h-5 w-5 items-center justify-center rounded border border-white/15 bg-white/[0.04] text-slate-300 '
+  + 'transition-colors hover:border-red-500 hover:bg-red-600 hover:text-white'
 
 const stroke = {
   fill: 'none' as const, stroke: 'currentColor', strokeWidth: 2.4,

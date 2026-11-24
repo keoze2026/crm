@@ -12,9 +12,9 @@ import type { Incentive, IncentiveStatus } from '../types'
  * owed, green once paid, red when it was called off.
  */
 export const INCENTIVE_STATUSES: { id: IncentiveStatus; label: string; cell: string; dot: string }[] = [
-  { id: 'Pending', label: 'Pending', cell: 'bg-amber-50 text-amber-800 border-amber-300', dot: 'bg-amber-500' },
-  { id: 'Fulfilled', label: 'Fulfilled', cell: 'bg-emerald-50 text-emerald-800 border-emerald-300', dot: 'bg-emerald-500' },
-  { id: 'Cancelled', label: 'Cancelled', cell: 'bg-red-50 text-red-800 border-red-300', dot: 'bg-red-500' },
+  { id: 'Pending', label: 'Pending', cell: 'bg-amber-500/15 text-amber-300 border-amber-500/40', dot: 'bg-amber-500' },
+  { id: 'Fulfilled', label: 'Fulfilled', cell: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40', dot: 'bg-emerald-500' },
+  { id: 'Cancelled', label: 'Cancelled', cell: 'bg-red-500/15 text-red-300 border-red-500/40', dot: 'bg-red-500' },
 ]
 
 export const incentiveStatus = (id: string) =>

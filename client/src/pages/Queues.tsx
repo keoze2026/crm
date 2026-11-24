@@ -146,7 +146,7 @@ export default function Queues() {
         </>
       )}
 
-      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
     </div>
   )
 }
@@ -171,39 +171,39 @@ function History({ days }: { days: HistoryDay[] }) {
       <button
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-white/60"
+        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-white/[0.05]"
       >
         <div className="flex min-w-0 flex-wrap items-center gap-2.5">
           <svg
             width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-            className={cx('shrink-0 text-slate-600 transition-transform', open && 'rotate-90')}
+            className={cx('shrink-0 text-slate-300 transition-transform', open && 'rotate-90')}
           >
             <path d="m9 18 6-6-6-6" />
           </svg>
-          <h3 className="font-semibold text-slate-900">History</h3>
+          <h3 className="font-semibold text-slate-100">History</h3>
           <Badge>{days.length === 0 ? 'empty' : `last ${days.length}`}</Badge>
         </div>
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
           {open ? 'Hide' : 'Show'}
         </span>
       </button>
 
       {open && (
-        <div className="border-t border-white/50 p-4">
+        <div className="border-t border-white/10 p-4">
           {day === null ? (
             <EmptyState message="No history yet." />
           ) : (
             <>
               {/* Pager: Back steps further into the past, Next comes forward again. */}
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 shadow-sm">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/15 bg-[#0a0e17] px-3 py-2 shadow-sm">
                 <div className="flex items-center gap-2">
                   <PagerButton onClick={() => setIndex(at + 1)} disabled={at >= days.length - 1} side="back" />
                   <PagerButton onClick={() => setIndex(at - 1)} disabled={at <= 0} side="next" />
                   <select
                     value={day.day}
                     onChange={(e) => setIndex(days.findIndex((d) => d.day === e.target.value))}
-                    className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm font-semibold text-slate-900 focus:border-[#1a3654] focus:outline-none focus:ring-2 focus:ring-[#1a3654]/25"
+                    className="rounded-lg border border-white/15 bg-[#0a0e17] px-2 py-1.5 text-sm font-semibold text-slate-100 focus:border-blue-500/60 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   >
                     {days.map((d) => (
                       <option key={d.day} value={d.day}>{formatDate(d.day)}</option>
@@ -211,7 +211,7 @@ function History({ days }: { days: HistoryDay[] }) {
                   </select>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  <span className="text-xs font-bold uppercase tracking-wide text-slate-400">
                     {at + 1} of {days.length}
                   </span>
                   <Badge>{`${num(day.rows.length)} entr${day.rows.length === 1 ? 'y' : 'ies'}`}</Badge>
@@ -219,10 +219,10 @@ function History({ days }: { days: HistoryDay[] }) {
                 </div>
               </div>
 
-              <div className="overflow-x-auto rounded-xl border border-slate-300 bg-white shadow-sm">
+              <div className="overflow-x-auto rounded-xl border border-white/15 bg-[#0a0e17] shadow-sm">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-slate-100 text-left text-[11px] font-bold uppercase tracking-wide text-slate-600">
+                    <tr className="bg-white/[0.06] text-left text-[11px] font-bold uppercase tracking-wide text-slate-300">
                       <th className="px-2 py-1.5">Name</th>
                       <th className="px-2 py-1.5">Queues</th>
                       <th className="px-2 py-1.5 text-center">Total</th>
@@ -233,8 +233,8 @@ function History({ days }: { days: HistoryDay[] }) {
                     {day.rows.map((row) => {
                       const edited = entryDay(row.updated_at) !== entryDay(row.created_at)
                       return (
-                        <tr key={row.id} className="border-t border-slate-200 align-top">
-                          <td className="px-2 py-1 font-semibold text-slate-900">
+                        <tr key={row.id} className="border-t border-white/10 align-top">
+                          <td className="px-2 py-1 font-semibold text-slate-100">
                             <span className="flex items-center gap-1">
                               {row.name}
                               <PerformerBadge staffId={row.person_id} compact />
@@ -246,18 +246,18 @@ function History({ days }: { days: HistoryDay[] }) {
                             ) : (
                               <div className="flex flex-wrap gap-0.5">
                                 {row.codes.map((c) => (
-                                  <span key={c.id} className="rounded border border-blue-300 bg-blue-50 px-1 text-[10px] font-bold leading-4 text-[#1d4ed8]">
+                                  <span key={c.id} className="rounded border border-blue-500/40 bg-blue-500/15 px-1 text-[10px] font-bold leading-4 text-blue-400">
                                     {c.code}
                                   </span>
                                 ))}
                               </div>
                             )}
                           </td>
-                          <td className="px-2 py-1 text-center font-bold tabular-nums text-slate-900">{row.codes.length}</td>
-                          <td className="whitespace-nowrap px-2 py-1 text-right text-[11px] font-medium text-slate-600">
+                          <td className="px-2 py-1 text-center font-bold tabular-nums text-slate-100">{row.codes.length}</td>
+                          <td className="whitespace-nowrap px-2 py-1 text-right text-[11px] font-medium text-slate-300">
                             {entryTime(row.created_at)}
                             {edited && (
-                              <span className="ml-1.5 text-amber-700">· edited {formatDate(entryDay(row.updated_at))}</span>
+                              <span className="ml-1.5 text-amber-300">· edited {formatDate(entryDay(row.updated_at))}</span>
                             )}
                           </td>
                         </tr>
@@ -280,7 +280,7 @@ function PagerButton({ onClick, disabled, side }: { onClick: () => void; disable
     <button
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-semibold text-slate-800 transition-colors hover:border-[#1a3654] hover:bg-[#1a3654] hover:text-white disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:hover:bg-slate-50"
+      className="flex items-center gap-1 rounded-lg border border-white/15 bg-[#0a0e17] px-2.5 py-1.5 text-sm font-semibold text-slate-100 transition-colors hover:border-blue-500/60 hover:bg-[#132a52] hover:text-white disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-slate-400 disabled:hover:bg-white/[0.03]"
     >
       {back && <Chevron dir="left" />}
       {back ? 'Back' : 'Next'}

@@ -17,8 +17,8 @@ export const SALARY_STATUSES = ['Received', 'Pending', 'Not Paid', 'On Hold']
  * value stored IS the wording shown.
  */
 export const SALARY_HOLD_STATUSES: { id: string; label: string; cell: string; dot: string }[] = [
-  { id: 'On Hold', label: 'On Hold', cell: 'bg-amber-50 text-amber-800 border-amber-300', dot: 'bg-amber-500' },
-  { id: 'Disbursed', label: 'Disbursed', cell: 'bg-emerald-50 text-emerald-800 border-emerald-300', dot: 'bg-emerald-500' },
+  { id: 'On Hold', label: 'On Hold', cell: 'bg-amber-500/15 text-amber-300 border-amber-500/40', dot: 'bg-amber-500' },
+  { id: 'Disbursed', label: 'Disbursed', cell: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40', dot: 'bg-emerald-500' },
 ]
 
 export const salaryHoldStatus = (id: string) =>
@@ -26,9 +26,9 @@ export const salaryHoldStatus = (id: string) =>
 
 /** Where a staff member stands, and the colour that says so at a glance. */
 export const STAFF_STATUSES: { id: StaffStatus; label: string; cell: string; dot: string }[] = [
-  { id: 'active', label: 'Active', cell: 'bg-emerald-50 text-emerald-800 border-emerald-300', dot: 'bg-emerald-500' },
-  { id: 'inactive', label: 'Inactive', cell: 'bg-red-50 text-red-800 border-red-300', dot: 'bg-red-500' },
-  { id: 'leave', label: 'Leave', cell: 'bg-amber-50 text-amber-800 border-amber-300', dot: 'bg-amber-500' },
+  { id: 'active', label: 'Active', cell: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40', dot: 'bg-emerald-500' },
+  { id: 'inactive', label: 'Inactive', cell: 'bg-red-500/15 text-red-300 border-red-500/40', dot: 'bg-red-500' },
+  { id: 'leave', label: 'Leave', cell: 'bg-amber-500/15 text-amber-300 border-amber-500/40', dot: 'bg-amber-500' },
 ]
 
 export const staffStatus = (id: StaffStatus) =>
@@ -81,8 +81,8 @@ export function returnVerdict(
     return {
       id: 'overdue', days,
       label: `${plural(days, 'day')} overdue`,
-      cls: 'border-amber-300 bg-amber-50 text-amber-800',
-      cell: 'bg-amber-100/70',
+      cls: 'border-amber-500/40 bg-amber-500/15 text-amber-300',
+      cell: 'bg-amber-500/15',
     }
   }
   const back = dayNumber(actual)
@@ -91,18 +91,18 @@ export function returnVerdict(
   if (diff > 0) {
     return {
       id: 'late', days: diff, label: `${plural(diff, 'day')} late`,
-      cls: 'border-rose-300 bg-rose-100 text-rose-800', cell: 'bg-rose-100/80',
+      cls: 'border-rose-500/40 bg-rose-500/20 text-rose-300', cell: 'bg-rose-500/15',
     }
   }
   if (diff < 0) {
     return {
       id: 'early', days: -diff, label: `${plural(-diff, 'day')} early`,
-      cls: 'border-sky-300 bg-sky-50 text-sky-800', cell: 'bg-sky-50/80',
+      cls: 'border-sky-500/40 bg-sky-500/15 text-sky-300', cell: 'bg-sky-500/10',
     }
   }
   return {
     id: 'on-time', days: 0, label: 'On time',
-    cls: 'border-emerald-300 bg-emerald-50 text-emerald-800', cell: 'bg-emerald-50/80',
+    cls: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300', cell: 'bg-emerald-500/10',
   }
 }
 
@@ -372,17 +372,17 @@ export function punctuality(lateMin: number | null, earlyMin: number | null): Pu
       label: 'Late in + early out',
       short: 'Late + early',
       marks: 2,
-      cls: 'border-rose-300 bg-rose-100 text-rose-800',
+      cls: 'border-rose-500/40 bg-rose-500/20 text-rose-300',
       detail,
     }
   }
   if (late) {
-    return { id: 'late', label: 'Late in', short: 'Late in', marks: 1, cls: 'border-amber-300 bg-amber-50 text-amber-800', detail }
+    return { id: 'late', label: 'Late in', short: 'Late in', marks: 1, cls: 'border-amber-500/40 bg-amber-500/15 text-amber-300', detail }
   }
   if (early) {
-    return { id: 'early', label: 'Early out', short: 'Early out', marks: 1, cls: 'border-amber-300 bg-amber-50 text-amber-800', detail }
+    return { id: 'early', label: 'Early out', short: 'Early out', marks: 1, cls: 'border-amber-500/40 bg-amber-500/15 text-amber-300', detail }
   }
-  return { id: 'on-time', label: 'On time', short: 'On time', marks: 0, cls: 'border-emerald-300 bg-emerald-50 text-emerald-800', detail }
+  return { id: 'on-time', label: 'On time', short: 'On time', marks: 0, cls: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300', detail }
 }
 
 /**

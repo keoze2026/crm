@@ -49,13 +49,13 @@ export default function Vendors() {
                 onClick={() => setSelected(v.name)}
                 className={cx(
                   'flex shrink-0 items-center gap-1.5 rounded-xl px-4 py-1.5 text-sm font-medium transition-all',
-                  v.name === active?.name ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-300 hover:bg-white/10 hover:text-white',
+                  v.name === active?.name ? 'bg-[#0a0e17] text-slate-100 shadow-sm' : 'text-slate-300 hover:bg-white/10 hover:text-white',
                 )}
               >
                 {v.name}
                 {v.is_manual && (
                   <span className={cx('rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
-                    v.name === active?.name ? 'bg-blue-100 text-blue-700' : 'bg-white/10 text-slate-300')}>
+                    v.name === active?.name ? 'bg-blue-500/20 text-blue-300' : 'bg-white/10 text-slate-300')}>
                     manual
                   </span>
                 )}
@@ -96,7 +96,7 @@ export default function Vendors() {
         </>
       )}
 
-      {vendors.error && <p className="mt-4 text-sm text-red-600">{vendors.error}</p>}
+      {vendors.error && <p className="mt-4 text-sm text-red-400">{vendors.error}</p>}
 
       {/* Compact dropdown anchored under the + button; mounted only while open. */}
       {addRect && (
@@ -154,8 +154,8 @@ function AddVendorPopover({
 
   return createPortal(
     <div ref={card} style={style}
-      className="glass-strong animate-fade-in-up z-50 rounded-xs border border-white/50 p-2.5 shadow-2xl shadow-slate-900/20">
-      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#1a3654]">
+      className="glass-strong animate-fade-in-up z-50 rounded-xs border border-white/10 p-2.5 shadow-2xl shadow-slate-900/20">
+      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-blue-300">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 3h18v4H3z" /><path d="M3 7v13a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V7" /><path d="M9 11h6" />
         </svg>
@@ -165,12 +165,12 @@ function AddVendorPopover({
         <input
           value={name} placeholder="Vendor name" autoFocus
           onChange={(e) => { setName(e.target.value); setError(null) }}
-          className="glass-input w-full rounded-xs border border-white/70 px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#1a3654] focus:outline-none focus:ring-2 focus:ring-[#1a3654]/25"
+          className="glass-input w-full rounded-xs border border-white/10 px-2.5 py-1.5 text-sm text-slate-100 placeholder:text-slate-400 focus:border-blue-500/60 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
         />
-        {error && <p className="text-[11px] text-red-600">{error}</p>}
+        {error && <p className="text-[11px] text-red-400">{error}</p>}
         <button
           type="submit" disabled={busy || name.trim() === ''}
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-xs bg-[#1a3654] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#24466b] focus:outline-none focus:ring-2 focus:ring-[#1a3654]/40 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-xs bg-[#132a52] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#24466b] focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy && <Spinner className="h-4 w-4 text-white" />}Add vendor
         </button>

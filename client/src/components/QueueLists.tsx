@@ -33,27 +33,27 @@ export default function QueueLists({
       <button
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors hover:bg-white/60"
+        className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors hover:bg-white/[0.05]"
       >
         <div className="flex min-w-0 flex-wrap items-center gap-2.5">
           <svg
             width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-            className={cx('shrink-0 text-slate-600 transition-transform', open && 'rotate-90')}
+            className={cx('shrink-0 text-slate-300 transition-transform', open && 'rotate-90')}
           >
             <path d="m9 18 6-6-6-6" />
           </svg>
-          <h3 className="font-semibold text-slate-900">Queues</h3>
+          <h3 className="font-semibold text-slate-100">Queues</h3>
           <Badge color="blue">{`${codes.length} queues`}</Badge>
           <Badge>{`${people.length} staff`}</Badge>
         </div>
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
           {open ? 'Hide' : 'Show'}
         </span>
       </button>
 
       {open && (
-        <div className="grid gap-4 border-t border-white/50 p-4 lg:grid-cols-2">
+        <div className="grid gap-4 border-t border-white/10 p-4 lg:grid-cols-2">
           <List
             label="Queues"
             placeholder="Add queue codes…"
@@ -75,19 +75,19 @@ export default function QueueLists({
             onChanged={onChanged}
           />
 
-          <div className="rounded-xl border border-slate-300 bg-white p-3 shadow-sm">
+          <div className="rounded-xl border border-white/15 bg-[#0a0e17] p-3 shadow-sm">
             <div className="mb-2 flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-700">Names</span>
-              <span className="text-xs font-medium text-slate-500">{people.length}</span>
+              <span className="text-xs font-bold uppercase tracking-wide text-slate-200">Names</span>
+              <span className="text-xs font-medium text-slate-400">{people.length}</span>
             </div>
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-slate-300">
               Managed on the{' '}
-              <Link to="/staff" className="font-semibold text-[#1a3654] underline underline-offset-2 hover:text-[#24466b]">
+              <Link to="/staff" className="font-semibold text-blue-300 underline underline-offset-2 hover:text-blue-300">
                 Staff page
               </Link>, with their departments.
             </p>
             {people.length > 0 && (
-              <p className="mt-2 text-xs font-medium text-slate-500">
+              <p className="mt-2 text-xs font-medium text-slate-400">
                 {`${unassigned} of ${people.length} not on the sheet yet.`}
               </p>
             )}
@@ -160,10 +160,10 @@ function List({
   }
 
   return (
-    <div className="rounded-xl border border-slate-300 bg-white p-3 shadow-sm">
+    <div className="rounded-xl border border-white/15 bg-[#0a0e17] p-3 shadow-sm">
       <div className="mb-2 flex items-center gap-2">
-        <span className="text-xs font-bold uppercase tracking-wide text-slate-700">{label}</span>
-        <span className="text-xs font-medium text-slate-500">{entries.length}</span>
+        <span className="text-xs font-bold uppercase tracking-wide text-slate-200">{label}</span>
+        <span className="text-xs font-medium text-slate-400">{entries.length}</span>
       </div>
 
       <div className="flex items-center gap-1.5">
@@ -179,20 +179,20 @@ function List({
           disabled={draft.trim() === '' || busy}
           title={`Add to ${label}`}
           aria-label={`Add to ${label}`}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#1a3654] text-white shadow-sm transition-colors hover:bg-[#24466b] disabled:bg-slate-300"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#132a52] text-white shadow-sm transition-colors hover:bg-[#24466b] disabled:bg-white/15"
         >
           {busy ? <Spinner className="h-4 w-4 text-white" /> : <PlusIcon />}
         </button>
       </div>
 
       {message && (
-        <p className={cx('mt-1 text-[11px] font-medium', message.bad ? 'text-red-600' : 'text-emerald-700')}>
+        <p className={cx('mt-1 text-[11px] font-medium', message.bad ? 'text-red-400' : 'text-emerald-300')}>
           {message.text}
         </p>
       )}
 
       {entries.length > 0 && (
-        <div className="mt-2 flex max-h-36 flex-wrap content-start gap-1.5 overflow-y-auto border-t border-slate-200 pt-2">
+        <div className="mt-2 flex max-h-36 flex-wrap content-start gap-1.5 overflow-y-auto border-t border-white/10 pt-2">
           {entries.map((entry) => renaming?.id === entry.id ? (
             <span key={entry.id} className="flex items-center gap-1">
               <input
@@ -210,9 +210,9 @@ function List({
             </span>
           ) : (
             <span key={entry.id}
-              className="flex items-center gap-0.5 rounded-lg border border-slate-300 bg-white py-0.5 pl-2 pr-0.5 text-xs font-bold text-slate-800 shadow-sm">
+              className="flex items-center gap-0.5 rounded-lg border border-white/15 bg-[#0a0e17] py-0.5 pl-2 pr-0.5 text-xs font-bold text-slate-100 shadow-sm">
               {entry.label}
-              {entry.note && <span className="ml-0.5 font-medium text-slate-500">{entry.note}</span>}
+              {entry.note && <span className="ml-0.5 font-medium text-slate-400">{entry.note}</span>}
               <IconButton label={`Rename ${entry.label}`} onClick={() => setRenaming({ id: entry.id, value: entry.label })}>
                 <PencilIcon />
               </IconButton>
@@ -228,16 +228,16 @@ function List({
 }
 
 const inputCls =
-  'w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-inner shadow-slate-900/5 '
-  + 'placeholder:text-slate-400 focus:border-[#1a3654] focus:outline-none focus:ring-2 focus:ring-[#1a3654]/25'
+  'w-full rounded-lg border border-white/15 bg-[#0a0e17] px-2.5 py-1.5 text-sm text-slate-100 shadow-inner shadow-slate-900/5 '
+  + 'placeholder:text-slate-400 focus:border-blue-500/60 focus:outline-none focus:ring-2 focus:ring-blue-500/25'
 
 function IconButton({
   label, onClick, tone = 'plain', children,
 }: { label: string; onClick: () => void; tone?: 'plain' | 'danger' | 'save'; children: ReactNode }) {
   const tones = {
-    plain: 'text-slate-600 hover:bg-slate-200 hover:text-slate-900',
-    danger: 'text-slate-600 hover:bg-red-600 hover:text-white',
-    save: 'bg-emerald-600 text-white hover:bg-emerald-700',
+    plain: 'text-slate-300 hover:bg-white/10 hover:text-slate-100',
+    danger: 'text-slate-300 hover:bg-red-600 hover:text-white',
+    save: 'bg-emerald-600 text-white hover:bg-emerald-600',
   }
   return (
     <button

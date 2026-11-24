@@ -8,8 +8,8 @@ const chevron = (dir: 'left' | 'right') => (
 )
 
 const stepBtn =
-  'glass-input flex h-9 w-9 items-center justify-center rounded-lg border border-white/70 text-slate-600 '
-  + 'transition-colors hover:bg-white/80 hover:text-slate-900 disabled:text-slate-300 disabled:hover:bg-transparent'
+  'glass-input flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-300 '
+  + 'transition-colors hover:bg-white/[0.05] hover:text-slate-100 disabled:text-slate-300 disabled:hover:bg-transparent'
 
 /** Shift a "YYYY-MM-DD" value by n days, using local parts so it never skips a day. */
 function shiftDay(value: string, n: number): string {
@@ -49,7 +49,7 @@ export function DaySelector({ value, onChange, today: todayIso }: {
         value={value}
         max={now}
         onChange={(e) => { if (e.target.value) onChange(e.target.value) }}
-        className="glass-input min-w-0 flex-1 rounded-xl border border-white/70 px-3 py-2 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30 sm:flex-none"
+        className="glass-input min-w-0 flex-1 rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 sm:flex-none"
       />
 
       <button

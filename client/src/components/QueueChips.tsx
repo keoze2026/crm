@@ -131,9 +131,9 @@ export default function QueueChips({
           title={disabled ? chip.code : `${chip.code} — drag to reorder`}
           className={cx(
             'select-none rounded border px-1 text-[10px] font-bold leading-4',
-            'border-blue-300 bg-blue-50 text-[#1d4ed8]',
+            'border-blue-500/40 bg-blue-500/15 text-blue-400',
             !disabled && chips.length > 1 && 'cursor-grab touch-none',
-            heldId === chip.id && 'scale-110 cursor-grabbing border-[#1a3654] bg-[#1a3654] text-white shadow',
+            heldId === chip.id && 'scale-110 cursor-grabbing border-blue-500/60 bg-[#132a52] text-white shadow',
             dragging && heldId !== chip.id && 'opacity-70',
           )}
         >

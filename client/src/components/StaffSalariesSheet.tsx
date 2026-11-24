@@ -64,9 +64,9 @@ export default function StaffSalariesSheet({
         </thead>
         <tbody>
           {/* The month, stamped once under the header the way the sheet does it. */}
-          <tr className="bg-[#bfdeeb]">
+          <tr className="bg-[#0f1a2e]">
             <td className="px-2 py-1" />
-            <td className="px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-[#1a3654]" colSpan={3}>
+            <td className="px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-blue-300" colSpan={3}>
               {formatMonth(month)}
             </td>
           </tr>
@@ -142,7 +142,7 @@ function Row({ sr, salary, onChanged }: { sr: number; salary: StaffSalary; onCha
         <select
           value={status}
           onChange={(e) => { setStatus(e.target.value); save(e.target.value) }}
-          className={cx(fieldCls, 'font-semibold', status === '' && 'text-slate-500')}
+          className={cx(fieldCls, 'font-semibold', status === '' && 'text-slate-400')}
         >
           <option value="">Select</option>
           {SALARY_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -198,7 +198,7 @@ function AddRow({
           value={staffId}
           disabled={free.length === 0}
           onChange={(e) => setStaffId(e.target.value === '' ? '' : Number(e.target.value))}
-          className={cx(fieldCls, 'font-semibold', staffId === '' && 'text-slate-500')}
+          className={cx(fieldCls, 'font-semibold', staffId === '' && 'text-slate-400')}
         >
           <option value="">{free.length === 0 ? 'Everyone here is on the sheet' : 'Select name'}</option>
           {free.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}

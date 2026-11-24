@@ -111,9 +111,9 @@ export default function NamePicker({
         onClick={() => (open ? close() : openPanel())}
         title={value || placeholder}
         className={cx(
-          'flex w-full items-center justify-between gap-1 rounded border bg-white px-1.5 py-0.5 text-left text-xs transition-colors',
-          open ? 'border-[#1a3654] ring-1 ring-[#1a3654]/30' : 'border-slate-300 hover:border-[#1a3654]',
-          value === '' ? 'text-slate-400' : 'font-semibold text-slate-900',
+          'flex w-full items-center justify-between gap-1 rounded border bg-[#0a0e17] px-1.5 py-0.5 text-left text-xs transition-colors',
+          open ? 'border-blue-500/60 ring-1 ring-blue-500/30' : 'border-white/15 hover:border-blue-500/60',
+          value === '' ? 'text-slate-400' : 'font-semibold text-slate-100',
         )}
       >
         <span className="truncate">{value || placeholder}</span>
@@ -126,7 +126,7 @@ export default function NamePicker({
         <div
           data-name-picker
           style={{ position: 'absolute', top: pos.top, left: pos.left, width: pos.width }}
-          className="z-50 rounded-xl border border-slate-300 bg-white p-2 shadow-2xl shadow-slate-900/20"
+          className="z-50 rounded-xl border border-white/15 bg-[#0a0e17] p-2 shadow-2xl shadow-slate-900/20"
         >
           <input
             ref={searchRef}
@@ -137,11 +137,11 @@ export default function NamePicker({
           />
 
           {people.length === 0 ? (
-            <p className="py-4 text-center text-[11px] font-medium text-slate-500">
+            <p className="py-4 text-center text-[11px] font-medium text-slate-400">
               No staff yet.
             </p>
           ) : shown.length === 0 ? (
-            <p className="py-4 text-center text-[11px] font-medium text-slate-500">No match.</p>
+            <p className="py-4 text-center text-[11px] font-medium text-slate-400">No match.</p>
           ) : (
             <ul className="mt-1.5 max-h-56 space-y-0.5 overflow-y-auto">
               {shown.map((p) => {
@@ -151,8 +151,8 @@ export default function NamePicker({
                     <div className={cx(
                       'flex items-center gap-1 rounded border px-1.5 py-1 transition-colors',
                       selected
-                        ? 'border-[#1a3654] bg-[#1a3654]'
-                        : 'border-transparent hover:border-slate-300 hover:bg-slate-100',
+                        ? 'border-blue-500/60 bg-[#132a52]'
+                        : 'border-transparent hover:border-white/15 hover:bg-white/[0.06]',
                     )}>
                       <button
                         onClick={() => pick(p)}
@@ -160,7 +160,7 @@ export default function NamePicker({
                       >
                         <span className={cx(
                           'flex items-center gap-1 text-xs font-semibold',
-                          selected ? 'text-white' : 'text-slate-800',
+                          selected ? 'text-white' : 'text-slate-100',
                         )}>
                           <span className="truncate">{p.name}</span>
                           <PerformerBadge staffId={p.id} compact />
@@ -169,7 +169,7 @@ export default function NamePicker({
                             never picked without seeing which band the person belongs to. */}
                         <span className={cx(
                           'block truncate text-[10px] font-medium',
-                          selected ? 'text-white/70' : 'text-slate-500',
+                          selected ? 'text-white/70' : 'text-slate-400',
                         )}>
                           {p.departments.length === 0
                             ? 'No department'
@@ -182,7 +182,7 @@ export default function NamePicker({
                         aria-label={`Remove ${p.name} from the staff list`}
                         className={cx(
                           'flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors hover:bg-red-600 hover:text-white',
-                          selected ? 'text-white/70' : 'text-slate-500',
+                          selected ? 'text-white/70' : 'text-slate-400',
                         )}
                       >
                         <TrashIcon />
@@ -194,7 +194,7 @@ export default function NamePicker({
             </ul>
           )}
 
-          <div className="mt-2 flex items-center gap-1.5 border-t border-slate-200 pt-2">
+          <div className="mt-2 flex items-center gap-1.5 border-t border-white/10 pt-2">
             <input
               value={draft}
               placeholder="Add a name…"
@@ -207,12 +207,12 @@ export default function NamePicker({
               disabled={draft.trim() === '' || busy}
               title="Add to the staff list"
               aria-label="Add to the staff list"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#1a3654] text-white transition-colors hover:bg-[#24466b] disabled:bg-slate-300"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#132a52] text-white transition-colors hover:bg-[#24466b] disabled:bg-white/15"
             >
               {busy ? <Spinner className="h-4 w-4 text-white" /> : <PlusIcon />}
             </button>
           </div>
-          {error && <p className="mt-1 text-[11px] font-medium text-red-600">{error}</p>}
+          {error && <p className="mt-1 text-[11px] font-medium text-red-400">{error}</p>}
         </div>,
         document.body,
       )}
@@ -221,8 +221,8 @@ export default function NamePicker({
 }
 
 const inputCls =
-  'w-full rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 '
-  + 'placeholder:text-slate-400 focus:border-[#1a3654] focus:outline-none focus:ring-2 focus:ring-[#1a3654]/25'
+  'w-full rounded-lg border border-white/15 bg-[#0a0e17] px-2 py-1 text-xs text-slate-100 '
+  + 'placeholder:text-slate-400 focus:border-blue-500/60 focus:outline-none focus:ring-2 focus:ring-blue-500/25'
 
 const stroke = {
   fill: 'none' as const, stroke: 'currentColor', strokeWidth: 2.4,
@@ -239,7 +239,7 @@ const TrashIcon = () => (
 )
 const CaretIcon = ({ open }: { open: boolean }) => (
   <svg width="12" height="12" viewBox="0 0 24 24" {...stroke}
-    className={cx('shrink-0 text-slate-600 transition-transform', open && 'rotate-180')}>
+    className={cx('shrink-0 text-slate-300 transition-transform', open && 'rotate-180')}>
     <path d="m6 9 6 6 6-6" />
   </svg>
 )

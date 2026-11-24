@@ -2,6 +2,8 @@
 /* Inter — used on the Dashboard page only (applied via an inline font-family on that page's
    root, per the dashboard design in docs/design); the rest of the app stays on Poppins. */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* JetBrains Mono — the Dashboard's figures and small-caps labels (`font-figures`). */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 /*
@@ -21,12 +23,14 @@
    */
   --breakpoint-wide: 90rem;
   /*
-   * The brand blue the Dashboard, Staff Management, Review and Attendance pages accent
-   * with (buttons, chart lines, avatars, selected days). One value to change if the
-   * client's swatch is read differently; -dark is its pressed/hover shade.
+   * The accent blue every page uses (buttons, chart lines, avatars, selected days) — the
+   * Keoze design's blue-500, since the whole app sits on a near-black page now; -dark is
+   * its pressed/hover shade. Keep in step with lib/theme.ts.
    */
-  --color-brand: #1f4e8c;
-  --color-brand-dark: #173d70;
+  --color-brand: #3b82f6;
+  --color-brand-dark: #2563eb;
+  /* Monospace for the Dashboard's figures, so columns of money line up digit for digit. */
+  --font-figures: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
 }
 
 html,
@@ -37,36 +41,31 @@ body,
 
 body {
   font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif;
-  color: #0f172a;
-  /* Soft colour blobs behind the frosted-glass UI */
+  color: #e2e8f0;
+  /* Keoze dark: near-black with a faint blue glow along the top, like the navbar. Native
+     controls (date pickers, selects, scrollbars) follow the dark scheme too. */
+  color-scheme: dark;
   background:
-    radial-gradient(38rem 38rem at 105% -8%, rgba(37, 99, 235, 0.20), transparent 60%),
-    radial-gradient(34rem 34rem at -8% 18%, rgba(99, 102, 241, 0.18), transparent 60%),
-    radial-gradient(30rem 30rem at 55% 118%, rgba(14, 165, 233, 0.16), transparent 60%),
-    linear-gradient(135deg, #eef2ff 0%, #f8fafc 50%, #eff6ff 100%);
+    radial-gradient(60rem 28rem at 50% -12rem, rgba(37, 99, 235, 0.16), transparent 70%),
+    #04060b;
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 @layer utilities {
-  /* Frosted glass surfaces */
+  /* Panel surfaces — the dark cards of the Keoze design (the Dashboard's tokens). The
+     class names predate the dark theme; every page builds on them, so they stay. */
   .glass {
-    background-color: rgba(255, 255, 255, 0.55);
-    backdrop-filter: blur(16px) saturate(160%);
-    -webkit-backdrop-filter: blur(16px) saturate(160%);
-    border: 1px solid rgba(255, 255, 255, 0.6);
+    background-color: #0a0e17;
+    border: 1px solid rgba(255, 255, 255, 0.07);
   }
   .glass-strong {
-    background-color: rgba(255, 255, 255, 0.72);
-    backdrop-filter: blur(22px) saturate(170%);
-    -webkit-backdrop-filter: blur(22px) saturate(170%);
-    border: 1px solid rgba(255, 255, 255, 0.7);
+    background-color: #0b101b;
+    border: 1px solid rgba(255, 255, 255, 0.10);
   }
   .glass-input {
-    background-color: rgba(255, 255, 255, 0.55);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background-color: #05070c;
   }
   /* Dark frosted sidebar — deep navy/indigo gradient over the light backdrop. */
   .sidebar-dark {

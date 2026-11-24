@@ -163,7 +163,7 @@ export default function Users() {
         <SegmentedTabs tabs={FILTERS} value={filter} onChange={setFilter} />
         {stats.pending > 0 && (
           <Button variant="secondary" size="sm" disabled={bulkBusy} onClick={refreshAllPending}>
-            {bulkBusy && <Spinner className="h-4 w-4 text-slate-800" />} Refresh all pending links ({stats.pending})
+            {bulkBusy && <Spinner className="h-4 w-4 text-slate-100" />} Refresh all pending links ({stats.pending})
           </Button>
         )}
       </div>
@@ -172,14 +172,14 @@ export default function Users() {
         {list.loading ? (
           <PageLoader label="Loading users…" />
         ) : list.error ? (
-          <p className="py-10 text-center text-sm text-red-600">{list.error}</p>
+          <p className="py-10 text-center text-sm text-red-400">{list.error}</p>
         ) : shown.length === 0 ? (
           <EmptyState message={users.length === 0 ? 'No users yet. Add your first user to get started.' : 'No users match this filter.'} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] text-sm">
               <thead>
-                <tr className="border-b border-white/50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <tr className="border-b border-white/10 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                   <th className="px-5 py-3">User</th>
                   <th className="px-5 py-3">Role</th>
                   <th className="px-5 py-3">Access</th>
@@ -190,15 +190,15 @@ export default function Users() {
               </thead>
               <tbody>
                 {shown.map((u) => (
-                  <tr key={u.id} className="border-b border-white/30 last:border-0 transition-colors hover:bg-white/50">
+                  <tr key={u.id} className="border-b border-white/10 last:border-0 transition-colors hover:bg-white/[0.05]">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center text-sm font-bold text-blue-900">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center text-sm font-bold text-blue-300">
                           {displayNameOf(u).charAt(0).toUpperCase()}
                         </span>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="truncate font-medium text-slate-800">{displayNameOf(u)}</span>
+                            <span className="truncate font-medium text-slate-100">{displayNameOf(u)}</span>
                             <PerformerBadge staffId={u.staff_id} name={u.name} compact />
                           </div>
                           {u.name && (
@@ -220,7 +220,7 @@ export default function Users() {
                         : (
                           <div className="space-y-0.5">
                             <Badge color="amber">Pending setup</Badge>
-                            <div className={cx('text-[11px]', u.enroll_link_active ? 'text-slate-400' : 'font-medium text-rose-600')}>
+                            <div className={cx('text-[11px]', u.enroll_link_active ? 'text-slate-400' : 'font-medium text-rose-400')}>
                               {u.enroll_link_active && u.enroll_expires_at
                                 ? `Link valid until ${new Date(u.enroll_expires_at).toLocaleString()}`
                                 : 'Link expired, refresh it'}
@@ -228,7 +228,7 @@ export default function Users() {
                           </div>
                         )}
                     </td>
-                    <td className="whitespace-nowrap px-5 py-3 text-slate-500">
+                    <td className="whitespace-nowrap px-5 py-3 text-slate-400">
                       {u.last_login_at ? new Date(u.last_login_at).toLocaleString() : '—'}
                     </td>
                     <td className="px-5 py-3">
@@ -322,16 +322,16 @@ function AccessCell({ user }: { user: ManagedUser }) {
 
   return (
     <div className="leading-tight">
-      <span className="text-xs font-medium text-slate-600" title={granted.map((p) => p.label).join(', ') || 'No pages'}>
+      <span className="text-xs font-medium text-slate-300" title={granted.map((p) => p.label).join(', ') || 'No pages'}>
         {granted.length} of {PAGES.length} pages
       </span>
       {user.preset_name && (
-        <div className="text-[11px] font-medium text-blue-700" title="Follows this preset — editing it changes their access">
+        <div className="text-[11px] font-medium text-blue-300" title="Follows this preset — editing it changes their access">
           via {user.preset_name}
         </div>
       )}
       {missing.length > 0 && (
-        <div className="text-[11px] font-medium text-amber-700" title={`Not granted: ${missing.join(', ')}`}>
+        <div className="text-[11px] font-medium text-amber-300" title={`Not granted: ${missing.join(', ')}`}>
           off: {missing.slice(0, 2).join(', ')}{missing.length > 2 ? ` +${missing.length - 2}` : ''}
         </div>
       )}
@@ -416,7 +416,7 @@ function AddUser({ open, onToggle, onClose, onCreated, takenStaffIds, presets }:
       </Button>
 
       {open && (
-        <div className="animate-fade-in-up absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-xl shadow-slate-900/15">
+        <div className="animate-fade-in-up absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-white/10 bg-[#0a0e17] p-3 shadow-xl shadow-slate-900/15">
           <form onSubmit={submit} className="space-y-2">
             <SegmentedTabs
               tabs={ADD_MODES}
@@ -474,9 +474,9 @@ function AddUser({ open, onToggle, onClose, onCreated, takenStaffIds, presets }:
               {role !== 'admin' && presetId && ' They follow this preset — pages added to it later reach them too.'}
             </p>
 
-            {error && <p className="text-xs text-red-600">{error}</p>}
+            {error && <p className="text-xs text-red-400">{error}</p>}
             <Button type="submit" className="w-full justify-center hover:brightness-95" style={greenBtn} disabled={busy || !identifier}>
-              {busy && <Spinner className="h-4 w-4 text-slate-800" />} Create &amp; get link
+              {busy && <Spinner className="h-4 w-4 text-slate-100" />} Create &amp; get link
             </Button>
           </form>
         </div>
@@ -515,26 +515,26 @@ function AccessPresetsModal({ presets, memberCounts, loading, onChanged, onClose
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="animate-fade-in-up flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/25"
+        className="animate-fade-in-up flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0a0e17] shadow-2xl shadow-slate-900/25"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-4">
+        <div className="flex items-start justify-between gap-3 border-b border-white/[0.06] p-4">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900">Access presets</h3>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <h3 className="text-sm font-semibold text-slate-100">Access presets</h3>
+            <p className="mt-0.5 text-xs text-slate-400">
               Shared page bundles. Editing one changes access for everyone on it — they see it
               after a refresh.
             </p>
           </div>
-          <button onClick={onClose} aria-label="Close" className="-mr-1 -mt-1 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+          <button onClick={onClose} aria-label="Close" className="-mr-1 -mt-1 rounded-lg p-1 text-slate-400 hover:bg-white/[0.06] hover:text-slate-300">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
         </div>
 
         <div className="flex-1 space-y-2 overflow-y-auto p-4">
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && <p className="text-xs text-red-400">{error}</p>}
 
           {editing === 'new' ? (
             <PresetEditor
@@ -554,7 +554,7 @@ function AccessPresetsModal({ presets, memberCounts, loading, onChanged, onClose
             <EmptyState message="No presets yet. Create one to reuse a set of pages." />
           ) : (
             presets.map((p) => (
-              <div key={p.id} className="rounded-xl border border-slate-200 p-2.5">
+              <div key={p.id} className="rounded-xl border border-white/10 p-2.5">
                 {editing === p.id ? (
                   <PresetEditor
                     preset={p}
@@ -564,7 +564,7 @@ function AccessPresetsModal({ presets, memberCounts, loading, onChanged, onClose
                 ) : (
                   <div className="flex items-center gap-2">
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-slate-800">{p.name}</div>
+                      <div className="truncate text-sm font-medium text-slate-100">{p.name}</div>
                       <div className="truncate text-xs text-slate-400"
                         title={p.pages.map((k) => PAGES.find((x) => x.key === k)?.label ?? k).join(', ')}>
                         {p.pages.length === 0 ? 'No pages' : `${p.pages.length} of ${PAGES.length} pages`}
@@ -621,21 +621,21 @@ function PresetEditor({ preset, onSave, onCancel }: {
 
       <div>
         <div className="mb-1 flex items-center justify-between gap-2">
-          <span className="text-xs font-medium text-slate-700">
+          <span className="text-xs font-medium text-slate-200">
             Pages <span className="text-slate-400">({pages.size}/{PAGES.length})</span>
           </span>
           <div className="flex items-center gap-1">
             <button type="button" onClick={() => setPages(new Set(PAGES.map((p) => p.key)))}
-              className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100">All</button>
+              className="rounded border border-white/15 bg-[#0a0e17] px-1.5 py-0.5 text-[11px] font-semibold text-slate-200 hover:bg-white/[0.06]">All</button>
             <button type="button" onClick={() => setPages(new Set(DEFAULT_USER_PAGES))} title="The pages a new user gets"
-              className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100">Default</button>
+              className="rounded border border-white/15 bg-[#0a0e17] px-1.5 py-0.5 text-[11px] font-semibold text-slate-200 hover:bg-white/[0.06]">Default</button>
             <button type="button" onClick={() => setPages(new Set())}
-              className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100">None</button>
+              className="rounded border border-white/15 bg-[#0a0e17] px-1.5 py-0.5 text-[11px] font-semibold text-slate-200 hover:bg-white/[0.06]">None</button>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-x-2 gap-y-1 rounded-lg border border-slate-200 p-2">
+        <div className="grid grid-cols-2 gap-x-2 gap-y-1 rounded-lg border border-white/10 p-2">
           {PAGES.map((p) => (
-            <label key={p.key} className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-700">
+            <label key={p.key} className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-200">
               <input type="checkbox" checked={pages.has(p.key)} onChange={() => toggle(p.key)}
                 className="h-3.5 w-3.5 rounded" style={{ accentColor: GREEN }} />
               {p.label}
@@ -644,12 +644,12 @@ function PresetEditor({ preset, onSave, onCancel }: {
         </div>
       </div>
 
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs text-red-400">{error}</p>}
 
       <div className="flex gap-2">
         <Button type="button" variant="secondary" size="sm" className="flex-1 justify-center" onClick={onCancel}>Cancel</Button>
         <Button type="submit" size="sm" className="flex-1 justify-center hover:brightness-95" style={greenBtn} disabled={busy || !name.trim()}>
-          {busy && <Spinner className="h-4 w-4 text-slate-800" />} {preset ? 'Save' : 'Create'}
+          {busy && <Spinner className="h-4 w-4 text-slate-100" />} {preset ? 'Save' : 'Create'}
         </Button>
       </div>
     </form>
@@ -733,10 +733,10 @@ function EditUserPopover({ user, rect, me, presets, onClose, onSaved }: {
 
   return createPortal(
     <div ref={card} style={style}
-      className="animate-fade-in-up z-50 flex flex-col overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 shadow-2xl shadow-slate-900/20">
+      className="animate-fade-in-up z-50 flex flex-col overflow-y-auto rounded-xl border border-white/10 bg-[#0a0e17] p-3 shadow-2xl shadow-slate-900/20">
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-900">Edit user</h3>
-        <button onClick={onClose} aria-label="Close" className="-mr-1 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+        <h3 className="text-sm font-semibold text-slate-100">Edit user</h3>
+        <button onClick={onClose} aria-label="Close" className="-mr-1 rounded-lg p-1 text-slate-400 hover:bg-white/[0.06] hover:text-slate-300">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
         </button>
       </div>
@@ -753,12 +753,12 @@ function EditUserPopover({ user, rect, me, presets, onClose, onSaved }: {
 
         {!isSelf && (
           <div>
-            <span className="mb-1 block text-xs font-medium text-slate-700">Role</span>
-            <div className="flex gap-1 rounded-lg bg-slate-100 p-0.5">
+            <span className="mb-1 block text-xs font-medium text-slate-200">Role</span>
+            <div className="flex gap-1 rounded-lg bg-white/[0.06] p-0.5">
               {(['member', 'admin'] as Role[]).map((r) => (
                 <button key={r} type="button" onClick={() => setRole(r)}
                   className={cx('flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
-                    role === r ? 'bg-white text-slate-900 shadow' : 'text-slate-500 hover:text-slate-700')}>
+                    role === r ? 'bg-[#0a0e17] text-slate-100 shadow' : 'text-slate-400 hover:text-slate-200')}>
                   {r === 'admin' ? 'Admin' : 'User'}
                 </button>
               ))}
@@ -776,7 +776,7 @@ function EditUserPopover({ user, rect, me, presets, onClose, onSaved }: {
         )}
 
         {!isSelf && role !== 'admin' && presetId && (
-          <p className="rounded-lg bg-blue-50 px-2 py-1.5 text-[11px] leading-snug text-blue-800">
+          <p className="rounded-lg bg-blue-500/15 px-2 py-1.5 text-[11px] leading-snug text-blue-300">
             Access follows this preset. Change the preset and it changes here too — switch to
             <span className="font-medium"> Custom</span> to give this account its own pages.
           </p>
@@ -785,28 +785,28 @@ function EditUserPopover({ user, rect, me, presets, onClose, onSaved }: {
         {!isSelf && role !== 'admin' && !presetId && (
           <div>
             <div className="mb-1 flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-slate-700">
+              <span className="text-xs font-medium text-slate-200">
                 Page access <span className="text-slate-400">({perms.size}/{PAGES.length})</span>
               </span>
               <div className="flex items-center gap-1">
                 <button type="button" onClick={() => setPerms(new Set(PAGES.map((p) => p.key)))}
-                  className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100">
+                  className="rounded border border-white/15 bg-[#0a0e17] px-1.5 py-0.5 text-[11px] font-semibold text-slate-200 hover:bg-white/[0.06]">
                   All
                 </button>
                 <button type="button" onClick={() => setPerms(new Set(DEFAULT_USER_PAGES))}
                   title="The pages a new user gets"
-                  className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100">
+                  className="rounded border border-white/15 bg-[#0a0e17] px-1.5 py-0.5 text-[11px] font-semibold text-slate-200 hover:bg-white/[0.06]">
                   Default
                 </button>
                 <button type="button" onClick={() => setPerms(new Set())}
-                  className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100">
+                  className="rounded border border-white/15 bg-[#0a0e17] px-1.5 py-0.5 text-[11px] font-semibold text-slate-200 hover:bg-white/[0.06]">
                   None
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-x-2 gap-y-1 rounded-lg border border-slate-200 p-2">
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1 rounded-lg border border-white/10 p-2">
               {PAGES.map((p) => (
-                <label key={p.key} className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-700">
+                <label key={p.key} className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-200">
                   <input type="checkbox" checked={perms.has(p.key)} onChange={() => toggle(p.key)}
                     className="h-3.5 w-3.5 rounded" style={{ accentColor: GREEN }} />
                   {p.label}
@@ -817,13 +817,13 @@ function EditUserPopover({ user, rect, me, presets, onClose, onSaved }: {
         )}
 
         {isSelf && <p className="text-[11px] text-slate-400">You can’t change your own role or access.</p>}
-        {error && <p className="text-xs text-red-600">{error}</p>}
+        {error && <p className="text-xs text-red-400">{error}</p>}
 
         <div className="flex gap-2 pt-0.5">
           <Button type="button" variant="secondary" size="sm" className="flex-1 justify-center" onClick={onClose}>Cancel</Button>
           <Button type="submit" size="sm" className="flex-1 justify-center hover:brightness-95" style={greenBtn}
             disabled={busy || (!email.trim() && !username.trim())}>
-            {busy && <Spinner className="h-4 w-4 text-slate-800" />} Save
+            {busy && <Spinner className="h-4 w-4 text-slate-100" />} Save
           </Button>
         </div>
       </form>
@@ -847,7 +847,7 @@ function IconButton({ title, onClick, disabled, danger, children }: {
       disabled={disabled}
       className={
         'rounded-lg p-1.5 text-slate-400 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ' +
-        (danger ? 'hover:bg-red-50 hover:text-red-600' : 'hover:bg-slate-100 hover:text-blue-900')
+        (danger ? 'hover:bg-red-500/15 hover:text-red-400' : 'hover:bg-white/[0.06] hover:text-blue-300')
       }
     >
       {children}
@@ -872,24 +872,24 @@ function EnrollLinkPopup({ info, onClose }: { info: { label: string; enroll: Enr
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="animate-fade-in-up w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-900/25"
+        className="animate-fade-in-up w-full max-w-sm rounded-2xl border border-white/10 bg-[#0a0e17] p-5 shadow-2xl shadow-slate-900/25"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900">
+            <h3 className="text-sm font-semibold text-slate-100">
               {info.refreshed ? 'New link issued — send them this one' : 'User added — send them this link'}
             </h3>
-            <p className="mt-0.5 truncate text-xs text-slate-500">{info.label}</p>
+            <p className="mt-0.5 truncate text-xs text-slate-400">{info.label}</p>
           </div>
-          <button onClick={onClose} aria-label="Close" className="-mr-1 -mt-1 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+          <button onClick={onClose} aria-label="Close" className="-mr-1 -mt-1 rounded-lg p-1 text-slate-400 hover:bg-white/[0.06] hover:text-slate-300">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
         </div>
 
-        <ol className="mb-3 list-decimal space-y-1 pl-4 text-xs text-slate-600 marker:text-slate-400">
+        <ol className="mb-3 list-decimal space-y-1 pl-4 text-xs text-slate-300 marker:text-slate-400">
           <li>
             Send this link to the user (it's one-time, valid until {expires}).
             {info.refreshed && ' Any link sent to them before no longer works.'}
@@ -904,7 +904,7 @@ function EnrollLinkPopup({ info, onClose }: { info: { label: string; enroll: Enr
             readOnly
             value={url}
             onFocus={(e) => e.currentTarget.select()}
-            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-[11px] text-slate-700"
+            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 font-mono text-[11px] text-slate-200"
           />
           <Button type="button" variant="secondary" onClick={copy}>{copied ? 'Copied' : 'Copy'}</Button>
         </div>
@@ -938,25 +938,25 @@ function BulkEnrollLinksPopup({ links, onClose }: { links: RefreshedLink[]; onCl
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="animate-fade-in-up flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-900/25"
+        className="animate-fade-in-up flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl border border-white/10 bg-[#0a0e17] p-5 shadow-2xl shadow-slate-900/25"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900">
+            <h3 className="text-sm font-semibold text-slate-100">
               {links.length === 0
                 ? 'Nobody is pending setup'
                 : `${links.length} new link${links.length === 1 ? '' : 's'} — send each person their own`}
             </h3>
             {links.length > 0 && (
-              <p className="mt-0.5 text-xs text-slate-500">
+              <p className="mt-0.5 text-xs text-slate-400">
                 One-time, valid until {expires}. Links sent before this no longer work.
               </p>
             )}
           </div>
-          <button onClick={onClose} aria-label="Close" className="-mr-1 -mt-1 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+          <button onClick={onClose} aria-label="Close" className="-mr-1 -mt-1 rounded-lg p-1 text-slate-400 hover:bg-white/[0.06] hover:text-slate-300">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
         </div>
@@ -966,14 +966,14 @@ function BulkEnrollLinksPopup({ links, onClose }: { links: RefreshedLink[]; onCl
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
               {links.map((l) => (
                 <div key={l.id} className="flex items-center gap-2">
-                  <span className="w-28 shrink-0 truncate text-xs font-medium text-slate-700 sm:w-40" title={nameOf(l)}>
+                  <span className="w-28 shrink-0 truncate text-xs font-medium text-slate-200 sm:w-40" title={nameOf(l)}>
                     {nameOf(l)}
                   </span>
                   <input
                     readOnly
                     value={urlOf(l)}
                     onFocus={(e) => e.currentTarget.select()}
-                    className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 font-mono text-[11px] text-slate-700"
+                    className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 font-mono text-[11px] text-slate-200"
                   />
                   <Button type="button" variant="secondary" size="sm" onClick={() => copy(urlOf(l), l.id)}>
                     {copied === l.id ? 'Copied' : 'Copy'}
@@ -981,7 +981,7 @@ function BulkEnrollLinksPopup({ links, onClose }: { links: RefreshedLink[]; onCl
                 </div>
               ))}
             </div>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] pt-3">
               <p className="text-[11px] text-slate-400">Copy all pastes as name ⇥ link, one person per line.</p>
               <Button
                 type="button"

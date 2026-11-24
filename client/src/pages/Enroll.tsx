@@ -2,10 +2,9 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { FullPageSpinner } from '../auth/RequireAuth'
-import { Button, Input, PageLoader, Spinner } from '../components/ui'
+import { AuthButton, AuthError, AuthField, AuthLoading, AuthShell } from '../components/AuthShell'
+import { Spinner } from '../components/ui'
 import type { EnrollInfo } from '../types'
-import { Shell } from './Login'
 
 /**
  * First-time TOTP setup, reached via the one-time enrolment link an admin hands out
@@ -33,12 +32,14 @@ export default function Enroll() {
       .catch((err: Error) => setStartError(err.message))
   }, [authEnabled, token, enrollStart])
 
-  if (loading) return <FullPageSpinner />
+  if (loading) return <AuthLoading />
   if (!authEnabled) return <Navigate to="/" replace />
   if (!token) {
-    return <Shell title="Enrolment" subtitle="Set up your authenticator">
-      <p className="text-center text-sm text-red-600">Missing enrolment link. Ask your admin for a new one.</p>
-    </Shell>
+    return (
+      <AuthShell title="Set up sign-in" subtitle="Set up your authenticator">
+        <AuthError>Missing enrolment link. Ask your admin for a new one.</AuthError>
+      </AuthShell>
+    )
   }
 
   const submit = async (e: FormEvent) => {
@@ -55,27 +56,28 @@ export default function Enroll() {
   }
 
   return (
-    <Shell title="Set up sign-in" subtitle="Scan this with Google Authenticator">
+    <AuthShell title="Set up sign-in" subtitle="Scan this with Google Authenticator">
       {startError ? (
-        <p className="text-center text-sm text-red-600">{startError}</p>
+        <AuthError>{startError}</AuthError>
       ) : !info ? (
-        <PageLoader label="" size={44} className="py-8" />
+        <div className="flex justify-center py-8"><Spinner className="h-6 w-6 text-blue-400" /></div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="flex flex-col items-center gap-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <QRCodeSVG value={info.otpauth_uri} size={196} />
+            {/* The code stays black on white — authenticator apps read that most reliably. */}
+            <div className="rounded-xl bg-white p-3 shadow-[0_0_0_1px_rgba(147,187,255,0.25),0_0_30px_rgba(59,130,246,0.25)]">
+              <QRCodeSVG value={info.otpauth_uri} size={168} />
             </div>
-            <p className="text-center text-xs text-slate-400">
+            <p className="text-center text-[11.5px] text-slate-400">
               Can’t scan? Enter this key manually:
               <br />
-              <code className="mt-1 inline-block break-all rounded bg-slate-100 px-2 py-1 font-mono text-[11px] text-slate-700">
+              <code className="mt-1.5 inline-block break-all rounded-md border border-white/10 bg-[#05080f] px-2 py-1 font-figures text-[11px] text-slate-200">
                 {info.secret}
               </code>
             </p>
           </div>
           <form onSubmit={submit} className="space-y-3">
-            <Input
+            <AuthField
               label="Enter the 6-digit code to confirm"
               placeholder="123456"
               inputMode="numeric"
@@ -84,15 +86,15 @@ export default function Enroll() {
               value={code}
               onChange={(e) => { setCode(e.target.value.replace(/\D/g, '')); setError(null) }}
               autoComplete="one-time-code"
-              className="text-center text-lg tracking-[0.4em]"
+              className="text-center font-figures text-lg tracking-[0.45em]"
             />
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <Button type="submit" className="w-full justify-center" disabled={busy || code.length < 6}>
-              {busy && <Spinner className="h-4 w-4 text-white" />} Confirm &amp; finish
-            </Button>
+            {error && <AuthError>{error}</AuthError>}
+            <AuthButton type="submit" className="!mt-6" busy={busy} disabled={code.length < 6}>
+              Confirm &amp; finish
+            </AuthButton>
           </form>
         </div>
       )}
-    </Shell>
+    </AuthShell>
   )
 }
