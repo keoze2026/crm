@@ -58,7 +58,7 @@ export function AuthShell({ children, title = 'Welcome back', subtitle = 'Sign i
   subtitle?: string
 }) {
   return (
-    <div className="relative flex min-h-screen flex-col items-center overflow-hidden bg-black px-4 font-sans text-slate-200">
+    <div className="force-dark relative flex min-h-screen flex-col items-center overflow-hidden bg-black px-4 font-sans text-slate-200">
       <Backdrop />
 
       <header className="relative z-10 pt-7">

@@ -6,6 +6,11 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CRM</title>
+    <!-- The stored theme goes on <html> before anything paints, so a light session never
+         flashes dark. Kept in step with lib/useTheme.ts (same key, same class). -->
+    <script>
+      try { if (localStorage.getItem('keoze-theme') === 'light') document.documentElement.classList.add('light') } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

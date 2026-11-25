@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { cx } from './ui'
 import { KeozeLogo } from './Brand'
+import ThemeToggle from './ThemeToggle'
 import { useAuth } from '../auth/AuthContext'
 import { PerformerBadge } from '../lib/performers'
 import { AUTH_ONLY_PAGES } from '../auth/pages'
@@ -207,13 +208,10 @@ export default function Layout() {
 
   return (
     <div className="flex min-h-screen flex-col text-slate-100">
-      <header
-        ref={headerRef}
-        className="relative z-30 text-slate-200"
-        // Near-black with a soft blue glow along the top edge; it fades out well before the
-        // bar's bottom edge, so it meets a dark page (the Dashboard) without a seam.
-        style={{ background: 'radial-gradient(ellipse 55% 130% at 50% -55%, rgba(37, 99, 235, 0.28), transparent 70%), #04060b' }}
-      >
+      {/* Near-black with a soft blue glow along the top edge (`.app-header` in index.css,
+          which also carries its light-theme look); the glow fades out well before the bar's
+          bottom edge, so it meets a dark page (the Dashboard) without a seam. */}
+      <header ref={headerRef} className="app-header relative z-30 text-slate-200">
         <div className="grid grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 sm:px-6 lg:px-8 xl:grid-cols-[1fr_auto_1fr] xl:py-4">
           <Link to="/" className="justify-self-start rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50" aria-label="Keoze — home">
             <KeozeLogo />
@@ -232,6 +230,7 @@ export default function Layout() {
           </nav>
 
           <div className="flex items-center gap-2 justify-self-end">
+            <ThemeToggle />
             <AccountMenu />
             <LogoutButton />
             <button

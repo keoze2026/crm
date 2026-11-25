@@ -271,3 +271,203 @@ table.table-dash td :where(input, select, textarea) {
   box-shadow: revert-layer;
   backdrop-filter: revert-layer;
 }
+
+/* ── The top bar ─────────────────────────────────────────────────────────── */
+/* Near-black with a soft blue glow along the top edge; it fades out well before the bar's
+   bottom edge, so it meets a dark page without a seam. */
+.app-header {
+  background: radial-gradient(ellipse 55% 130% at 50% -55%, rgba(37, 99, 235, 0.28), transparent 70%), #04060b;
+}
+
+/* ── Light theme ─────────────────────────────────────────────────────────── */
+/*
+ * The app is painted with Tailwind colour utilities, and Tailwind 4 emits each colour as a
+ * CSS variable (text-slate-400 is `color: var(--color-slate-400)`), so the light theme is
+ * one class on <html> (lib/useTheme.ts, toggled in the top bar) that re-points the palette:
+ *
+ *   - the slate scale flips, so the pale text of the dark theme becomes ink and vice versa —
+ *     and the ink is a very dark blue (#0b1a3b), not black, so the page reads as one hue;
+ *   - `white` becomes that ink, so every white/10 border, white/[0.06] surface and white
+ *     text turns into the same tint of it — and is put back to white inside the solid fills
+ *     (sheet heads, blue buttons, brand chips) that really are dark in both themes;
+ *   - nothing is a gradient: the page and the bar are flat, and the few gradient panels of
+ *     the dark theme are flattened to a plain tint;
+ *   - the pale hue text (emerald-300, red-400, blue-300…) that reads on near-black is
+ *     deepened to the shade that reads on white;
+ *   - the few literal hex surfaces (the sheet rows, inputs, the nav pill) are restyled by
+ *     their class, and the `.glass` panels and the page background follow.
+ *
+ * Anything that must stay dark on a light page (the sign-in pages) wears `.force-dark`.
+ */
+html.light {
+  color-scheme: light;
+
+  --color-slate-50: #0b1a3b;
+  --color-slate-100: #0f2149;
+  --color-slate-200: #1a3059;
+  --color-slate-300: #2f4571;
+  --color-slate-400: #4f6490;
+  --color-slate-500: #7d90b4;
+  --color-slate-600: #b3c0d8;
+
+  --color-white: #0b1a3b;
+
+  --color-blue-100: #1e3a8a;
+  --color-blue-200: #1e40af;
+  --color-blue-300: #1d4ed8;
+  --color-blue-400: #2563eb;
+  --color-emerald-200: #065f46;
+  --color-emerald-300: #047857;
+  --color-emerald-400: #059669;
+  --color-green-400: #16a34a;
+  --color-sky-300: #0369a1;
+  --color-red-200: #b91c1c;
+  --color-red-300: #b91c1c;
+  --color-red-400: #dc2626;
+  --color-rose-300: #be123c;
+  --color-rose-400: #e11d48;
+  --color-amber-200: #92400e;
+  --color-amber-300: #b45309;
+  --color-amber-400: #d97706;
+  --color-violet-300: #6d28d9;
+  --color-violet-400: #7c3aed;
+}
+
+/* Solid fills that stay dark in both themes keep their white text and white overlays. */
+html.light :is(
+  .bg-\[\#132a52\], .bg-\[\#24466b\], .bg-\[\#1b3a6b\], .hover\:bg-\[\#1b3a6b\],
+  .bg-blue-500, .bg-blue-600, .bg-blue-700, .bg-brand, .bg-brand-dark,
+  .bg-red-600, .bg-rose-600, .bg-emerald-500, .bg-emerald-600, .bg-amber-600
+) {
+  --color-white: #ffffff;
+}
+/* The navy of the sheet heads, bands and TOTAL rows is the same very dark blue as the ink. */
+html.light .bg-\[\#132a52\] { background-color: #0b1a3b; }
+html.light .bg-\[\#24466b\] { background-color: #1a3366; }
+html.light .bg-\[\#1b3a6b\],
+html.light .hover\:bg-\[\#1b3a6b\]:hover { background-color: #17305f; }
+/* Pages and pieces that are dark whatever the theme (the sign-in pages' starfield). */
+html.light .force-dark {
+  color-scheme: dark;
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-white: #ffffff;
+  --color-blue-100: #dbeafe;
+  --color-blue-200: #bfdbfe;
+  --color-blue-300: #93c5fd;
+  --color-blue-400: #60a5fa;
+  --color-emerald-200: #a7f3d0;
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-400: #34d399;
+  --color-green-400: #4ade80;
+  --color-sky-300: #7dd3fc;
+  --color-red-200: #fecaca;
+  --color-red-300: #fca5a5;
+  --color-red-400: #f87171;
+  --color-rose-300: #fda4af;
+  --color-rose-400: #fb7185;
+  --color-amber-200: #fde68a;
+  --color-amber-300: #fcd34d;
+  --color-amber-400: #fbbf24;
+  --color-violet-300: #c4b5fd;
+  --color-violet-400: #a78bfa;
+}
+
+html.light body {
+  color: #0b1a3b;
+  background: #eef2f7;
+}
+html.light .app-header {
+  background: #ffffff;
+  box-shadow: 0 1px 0 rgba(11, 26, 59, 0.10);
+}
+html.light .app-header nav {
+  box-shadow: 0 1px 2px rgba(11, 26, 59, 0.06);
+}
+
+/* No gradients in the light theme: the gradient panels of the dark theme become a flat tint. */
+html.light :is(.bg-linear-to-b, .bg-linear-to-br, .bg-linear-to-r, .bg-gradient-to-r, .bg-gradient-to-br) {
+  background-image: none;
+}
+html.light .bg-linear-to-b.from-blue-500\/\[0\.14\] { background-color: #eef4ff; }   /* Dashboard accent tile */
+html.light .bg-linear-to-b.from-\[\#131b31\] { background-color: #e2e8f0; }         /* Traffic Source tab strip */
+html.light .bg-gradient-to-r.from-emerald-500\/10 { background-color: #ecfdf5; }      /* Top performer frame */
+html.light .bg-gradient-to-r.from-rose-500\/10 { background-color: #fff1f2; }         /* Low performer frame */
+html.light .force-dark .bg-linear-to-b { background-color: #2f60da; }                /* sign-in button */
+
+/* Panels */
+html.light .glass {
+  background-color: #ffffff;
+  border-color: rgba(11, 26, 59, 0.10);
+  box-shadow: none;
+}
+html.light .glass-strong {
+  background-color: #ffffff;
+  border-color: rgba(11, 26, 59, 0.14);
+}
+html.light .glass-input {
+  background-color: #ffffff;
+}
+html.light .glass-dark {
+  background-color: rgba(255, 255, 255, 0.75);
+  border-color: rgba(11, 26, 59, 0.10);
+}
+
+/* The literal dark surfaces: sheet rows, the add row, the Sr. No. band, inputs, the nav
+   pill and the account chips. Navy (#132a52 and its shades) is kept — it is the printed
+   sheet's head colour in both themes. */
+html.light .bg-\[\#0a0e17\] { background-color: #ffffff; }
+html.light .bg-\[\#0d1322\] { background-color: #f8fafc; }
+html.light .bg-\[\#0f1a2e\] { background-color: #e2e8f0; color: #0b1a3b; }
+html.light .bg-\[\#05070c\],
+html.light .bg-\[\#05080f\] { background-color: #ffffff; }
+html.light .bg-\[\#0a1122\]\/75 { background-color: rgba(255, 255, 255, 0.85); }
+html.light .bg-\[\#0b1222\]\/80 { background-color: rgba(255, 255, 255, 0.9); }
+html.light .bg-\[\#0b1428\],
+html.light .bg-\[\#070a12\],
+html.light .bg-\[\#04060b\] { background-color: #f8fafc; }
+html.light .to-\[\#0a0e17\] { --tw-gradient-to: #ffffff; }
+html.light .ring-\[\#0a0e17\] { --tw-ring-color: #ffffff; }
+html.light .text-\[\#b6c4e2\] { color: #2f4571; }
+/* `bg-white` is only the QR code's box, which must stay white for the code to scan. */
+html.light .bg-white { background-color: #ffffff; }
+
+/* Charts: axis labels, gridlines and the hover cursor are set as attributes in the dark
+   palette; a CSS property wins over an attribute, so they can follow the theme here. */
+html.light .recharts-cartesian-axis-tick-value { fill: #2f4571; }
+html.light .recharts-cartesian-grid line { stroke: rgba(11, 26, 59, 0.08); }
+html.light .recharts-tooltip-cursor { fill: rgba(11, 26, 59, 0.04); }
+
+/* ── Theme toggle: the sun that turns into a moon ─────────────────────────── */
+.theme-icon {
+  overflow: visible;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.theme-sun,
+.theme-moon,
+.theme-rays {
+  transform-origin: center;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+}
+.theme-moon { transform-box: fill-box; transform-origin: center; }
+/* Dark theme shows the moon: the disc swells, the mask slides in to carve the crescent,
+   the rays spin in and vanish, and the glyph rolls with them. */
+.theme-toggle[data-theme="dark"] .theme-icon { transform: rotate(-30deg); }
+.theme-toggle[data-theme="dark"] .theme-sun  { transform: scale(1.55); }
+.theme-toggle[data-theme="dark"] .theme-moon { transform: translate(-9px, 1px); }
+.theme-toggle[data-theme="dark"] .theme-rays { transform: rotate(-60deg) scale(0); opacity: 0; }
+/* Light theme shows the sun: everything back in place, rays out. */
+.theme-toggle[data-theme="light"] .theme-icon { transform: rotate(0deg); }
+.theme-toggle[data-theme="light"] .theme-sun  { transform: scale(1); }
+.theme-toggle[data-theme="light"] .theme-moon { transform: translate(0, 0); }
+.theme-toggle[data-theme="light"] .theme-rays { transform: rotate(0deg) scale(1); opacity: 1; }
+.theme-toggle:hover .theme-icon { transform: rotate(15deg) scale(1.08); }
+.theme-toggle[data-theme="dark"]:hover .theme-icon { transform: rotate(-45deg) scale(1.08); }
+@media (prefers-reduced-motion: reduce) {
+  .theme-icon, .theme-sun, .theme-moon, .theme-rays { transition: none; }
+}
