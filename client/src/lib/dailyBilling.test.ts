@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CallRecord } from '../types'
 import {
-  aggregateClientRows, aggregateTrafficRows, campCount, campsInCode,
+  aggregateClientRows, aggregateTrafficRows, campCount, campsInCode, carryForward,
   clientCount, clientCountFollowsFormula, clientFinalCount, clientRows, finalProfit, marginPct,
   sortByPrice, sourceCount, totalBill, totalsOf, trafficFinalCount, trafficRows,
 } from './dailyBilling'
@@ -139,5 +139,46 @@ describe('heading counts', () => {
     ]
     expect(campCount(recs)).toBe(13)
     expect(sourceCount(recs)).toBe(8)
+  })
+})
+
+describe('carryForward', () => {
+  const d = (date: string, over: Partial<CallRecord>) => rec({ record_date: date, ...over })
+
+  it('offers nothing when there is no earlier day', () => {
+    expect(carryForward('client', [], [])).toEqual({ from: null, rows: [] })
+  })
+
+  it('carries the most recent earlier day, one line per client, at that day’s rate, price high to low', () => {
+    const previous = [
+      d('2026-11-21', { buyer_id: 1, buyer_code: 'RTG 04', counted: 10, rate: 50 }),   // older day — ignored
+      d('2026-11-24', { buyer_id: 1, buyer_code: 'RTG 04', counted: 301, rate: 55 }),
+      d('2026-11-24', { buyer_id: 2, buyer_code: 'CDM', counted: 52, rate: 48.5 }),
+      d('2026-11-24', { buyer_id: 3, buyer_code: 'A49', counted: 153, rate: 49 }),
+    ]
+    const c = carryForward('client', previous, [])
+    expect(c.from).toBe('2026-11-24')
+    expect(c.rows.map((r) => [r.code, r.rate])).toEqual([['RTG 04', 55], ['A49', 49], ['CDM', 48.5]])
+    expect(c.rows[0].source).toBe('')
+  })
+
+  it('leaves out what today already has, matching codes loosely', () => {
+    const previous = [
+      d('2026-11-24', { buyer_id: 1, buyer_code: 'RTG 04', counted: 1, rate: 55 }),
+      d('2026-11-24', { buyer_id: 2, buyer_code: 'CDM', counted: 1, rate: 48.5 }),
+    ]
+    const today = [d('2026-11-25', { buyer_id: 9, buyer_code: 'rtg04', counted: 5, rate: 55 })]
+    expect(carryForward('client', previous, today).rows.map((r) => r.code)).toEqual(['CDM'])
+  })
+
+  it('carries camp + source pairs on the traffic side, once each', () => {
+    const previous = [
+      d('2026-11-24', { record_type: 'campaign', campaign_id: 1, campaign_code: 'L-11', source: 'TB-00', counted: 294, rate: 48 }),
+      d('2026-11-24', { record_type: 'campaign', campaign_id: 1, campaign_code: 'L-11', source: 'tb 00', counted: 6, rate: 48 }),
+      d('2026-11-24', { record_type: 'campaign', campaign_id: 2, campaign_code: 'Z-00', source: 'DD-00', counted: 82, rate: 14 }),
+      d('2026-11-24', { record_type: 'campaign', campaign_id: 3, campaign_code: 'L-10', source: 'MT-00', counted: 128, rate: 49 }),
+    ]
+    const c = carryForward('traffic', previous, [])
+    expect(c.rows.map((r) => `${r.code}/${r.source}/${r.rate}`)).toEqual(['L-10/MT-00/49', 'L-11/TB-00/48', 'Z-00/DD-00/14'])
   })
 })

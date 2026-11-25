@@ -184,6 +184,51 @@ export function totalsOf(rows: BillingRow[]): BillingTotals {
   return { ...t, avgRate: t.finalCount > 0 ? t.totalBill / t.finalCount : 0 }
 }
 
+// ── Carry-forward: a new day starts from the last one ─────────────────────────
+
+/** A client or camp + source carried from the last day that had records, at its rate. */
+export interface CarriedRow {
+  key: string
+  code: string
+  source: string
+  rate: number
+}
+
+export interface CarryForward {
+  /** The day the rows were carried from; null when there is nothing to carry. */
+  from: string | null
+  rows: CarriedRow[]
+}
+
+const carryKey = (side: 'client' | 'traffic', r: CallRecord) =>
+  side === 'client' ? normalizeCode(r.buyer_code) : `${normalizeCode(r.campaign_code)} ${normalizeCode(r.source)}`
+
+/**
+ * The rows a new day opens with: every client (or camp + source) of the most recent
+ * earlier day that has records, at the rate it was billed that day, with blank counts —
+ * so the team types the day's figures instead of retyping forty codes. Anything already
+ * recorded today is left out, so a half-filled day only offers what is still missing.
+ */
+export function carryForward(side: 'client' | 'traffic', previous: CallRecord[], today: CallRecord[]): CarryForward {
+  if (previous.length === 0) return { from: null, rows: [] }
+  const from = previous.reduce((m, r) => (r.record_date > m ? r.record_date : m), previous[0].record_date)
+  const done = new Set(today.map((r) => carryKey(side, r)))
+  const seen = new Map<string, CarriedRow>()
+  for (const r of previous) {
+    if (r.record_date !== from) continue
+    const key = carryKey(side, r)
+    if (key.trim() === '' || done.has(key) || seen.has(key)) continue
+    seen.set(key, {
+      key,
+      code: side === 'client' ? (r.buyer_code ?? '') : (r.campaign_code ?? ''),
+      source: side === 'client' ? '' : (r.source ?? ''),
+      rate: Number(r.rate) || 0,
+    })
+  }
+  const rows = [...seen.values()].sort((a, b) => b.rate - a.rate || a.code.localeCompare(b.code) || a.source.localeCompare(b.source))
+  return { from, rows }
+}
+
 // ── Counts for the section headings ───────────────────────────────────────────
 
 /** Distinct clients (buyers) on the sheet. */

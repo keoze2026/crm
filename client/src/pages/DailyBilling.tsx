@@ -6,11 +6,11 @@ import { DateRangeControl, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
 import { Button, Card, PageLoader, cx } from '../components/ui'
 import {
-  aggregateClientRows, aggregateTrafficRows, campCount, clientCount, clientRows,
+  aggregateClientRows, aggregateTrafficRows, campCount, carryForward, clientCount, clientRows,
   finalProfit, marginPct, sourceCount, totalsOf, trafficRows,
 } from '../lib/dailyBilling'
 import { buildDailyBillingPdf } from '../lib/dailyBillingPdf'
-import { fileDateRange, formatRangeLong, money2, num, todayRange } from '../lib/format'
+import { daysBeforeIso, fileDateRange, formatDate, formatRangeLong, money2, num, todayRange } from '../lib/format'
 import { useAsync } from '../lib/useAsync'
 import type { Buyer, CallRecord, Campaign, Destination } from '../types'
 
@@ -19,14 +19,21 @@ import type { Buyer, CallRecord, Campaign, Destination } from '../types'
  * source cost) on one page, laid out as the client's printed billing sheet: three
  * figures up top, the two tables, and the Final Profit line underneath.
  *
- * A single day is edited in place; a date range reads as a roll-up. The cost side and
- * the profit need the Campaigns permission, as the Campaigns sheet did — without it the
- * page is the client billing alone.
+ * A single day is edited in place and opens with the last day's clients and sources
+ * carried forward at their rates, counts blank, so the team only types the day's figures.
+ * A date range reads as a roll-up. The cost side and the profit need the Campaigns
+ * permission, as the Campaigns sheet did — without it the page is the client billing alone.
  */
+
+/** How far back a day looks for the last one with records to carry forward. */
+const CARRY_LOOKBACK_DAYS = 14
 
 interface Loaded {
   clientRecords: CallRecord[]
   trafficRecords: CallRecord[]
+  /** Records of the days before this one (single-day view only), for the carry-forward. */
+  previousClient: CallRecord[]
+  previousTraffic: CallRecord[]
   buyers: Buyer[]
   campaigns: Campaign[]
   destinations: Destination[]
@@ -42,9 +49,13 @@ export default function DailyBillingPage() {
   // campaigns or sources re-runs this quietly (lib/live).
   const data = useAsync<Loaded>(async () => {
     const filters = { from: range.from, to: range.to, page: 1, per_page: 9999 }
-    const [clientPage, trafficPage, buyers, campaigns, destinations] = await Promise.all([
+    const before = { from: daysBeforeIso(range.from, CARRY_LOOKBACK_DAYS), to: daysBeforeIso(range.from, 1), page: 1, per_page: 9999 }
+    const none = Promise.resolve(null)
+    const [clientPage, trafficPage, prevClient, prevTraffic, buyers, campaigns, destinations] = await Promise.all([
       api.records({ ...filters, type: 'buyer' }),
-      showCost ? api.records({ ...filters, type: 'campaign' }) : Promise.resolve(null),
+      showCost ? api.records({ ...filters, type: 'campaign' }) : none,
+      single ? api.records({ ...before, type: 'buyer' }) : none,
+      single && showCost ? api.records({ ...before, type: 'campaign' }) : none,
       api.buyers(),
       showCost ? api.campaigns() : Promise.resolve([] as Campaign[]),
       showCost ? api.destinations() : Promise.resolve([] as Destination[]),
@@ -52,19 +63,23 @@ export default function DailyBillingPage() {
     return {
       clientRecords: clientPage.data,
       trafficRecords: trafficPage?.data ?? [],
+      previousClient: prevClient?.data ?? [],
+      previousTraffic: prevTraffic?.data ?? [],
       buyers, campaigns, destinations,
     }
-  }, [range.from, range.to, showCost])
+  }, [range.from, range.to, showCost, single])
 
   const view = useMemo(() => {
     if (!data.data) return null
-    const { clientRecords, trafficRecords } = data.data
+    const { clientRecords, trafficRecords, previousClient, previousTraffic } = data.data
     const client = single ? clientRows(clientRecords) : aggregateClientRows(clientRecords)
     const traffic = single ? trafficRows(trafficRecords) : aggregateTrafficRows(trafficRecords)
     const clientTotals = totalsOf(client)
     const trafficTotals = totalsOf(traffic)
     return {
       client, traffic, clientTotals, trafficTotals,
+      carriedClient: single ? carryForward('client', previousClient, clientRecords) : { from: null, rows: [] },
+      carriedTraffic: single ? carryForward('traffic', previousTraffic, trafficRecords) : { from: null, rows: [] },
       clients: clientCount(clientRecords),
       camps: campCount(trafficRecords),
       sources: sourceCount(trafficRecords),
@@ -126,6 +141,7 @@ export default function DailyBillingPage() {
               note={<span>{num(view.clients)} {view.clients === 1 ? 'client' : 'clients'} · price high to low</span>}
             >
               {!single && <span className="text-slate-500">pick one day to edit</span>}
+              <Carried carry={view.carriedClient} />
             </SheetHeading>
             <Card className="overflow-hidden">
               <DailyBillingSheet
@@ -135,6 +151,7 @@ export default function DailyBillingPage() {
                 records={data.data!.clientRecords}
                 rows={view.client}
                 totals={view.clientTotals}
+                carried={view.carriedClient.rows}
                 entities={entities}
                 destinations={[]}
                 campaigns={[]}
@@ -151,6 +168,7 @@ export default function DailyBillingPage() {
                 note={<span>{num(view.camps)} {view.camps === 1 ? 'camp' : 'camps'} · {num(view.sources)} {view.sources === 1 ? 'source' : 'sources'} · price high to low</span>}
               >
                 {!single && <span className="text-slate-500">pick one day to edit</span>}
+                <Carried carry={view.carriedTraffic} />
               </SheetHeading>
               <Card className="overflow-hidden">
                 <DailyBillingSheet
@@ -160,6 +178,7 @@ export default function DailyBillingPage() {
                   records={data.data!.trafficRecords}
                   rows={view.traffic}
                   totals={view.trafficTotals}
+                  carried={view.carriedTraffic.rows}
                   entities={[]}
                   destinations={data.data!.destinations}
                   campaigns={data.data!.campaigns}
@@ -193,6 +212,16 @@ export default function DailyBillingPage() {
         </div>
       )}
     </div>
+  )
+}
+
+/** The note beside a table's heading saying what was carried forward and from when. */
+function Carried({ carry }: { carry: { from: string | null; rows: unknown[] } }) {
+  if (!carry.from || carry.rows.length === 0) return null
+  return (
+    <span className="text-blue-300">
+      {num(carry.rows.length)} {carry.rows.length === 1 ? 'line' : 'lines'} carried from {formatDate(carry.from)} — type today's counts
+    </span>
   )
 }
 

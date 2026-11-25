@@ -4,7 +4,7 @@ import { autoReplacement, replacementIsManual, standardizeCampaignCode } from '.
 import { saveBuyer } from '../lib/buyers'
 import {
   clientCountFollowsFormula, clientFinalCount, totalBill, trafficFinalCount,
-  type BillingRow, type BillingTotals,
+  type BillingRow, type BillingTotals, type CarriedRow,
 } from '../lib/dailyBilling'
 import { money2, num } from '../lib/format'
 import { useServerDraft } from '../lib/useServerDraft'
@@ -21,8 +21,11 @@ import { Spinner, cx } from './ui'
  *   Camp · Source · Rate · Answered · Missed · Replaced · Final Count · Total Bill · Status
  *
  * On a single day every row is edited in place (auto-saved when focus leaves it) and a
- * trailing empty row takes a new record, as the Daily Sheet and Campaigns sheet did. Over
- * a date range the tables show the roll-up (lib/dailyBilling) read-only.
+ * trailing empty row takes a new record, as the Daily Sheet and Campaigns sheet did. A day
+ * also opens with the last day's clients and sources carried forward at their rates with
+ * blank counts (lib/dailyBilling carryForward): each saves once its count is typed, and
+ * one left blank is simply not recorded. Over a date range the tables show the roll-up
+ * read-only.
  */
 
 export type Side = 'client' | 'traffic'
@@ -39,6 +42,8 @@ export interface SheetProps {
   /** The lines to print (read-only mode), already rolled up and sorted. */
   rows: BillingRow[]
   totals: BillingTotals
+  /** Last day's clients / camp + source lines not yet recorded today (editable mode). */
+  carried: CarriedRow[]
   entities: Entity[]
   destinations: Destination[]
   campaigns: Campaign[]
@@ -118,6 +123,18 @@ export default function DailyBillingSheet(p: SheetProps) {
               />
             ))
             : p.rows.map((r) => <PrintedRow key={r.key} side={p.side} row={r} />)}
+          {p.editable && p.carried.map((c) => (
+            <DraftRow
+              key={`carried-${c.key}`}
+              side={p.side}
+              date={p.date}
+              entities={p.entities}
+              destinations={p.destinations}
+              initial={c}
+              onActivate={() => {}}
+              onSaved={p.onChanged}
+            />
+          ))}
           {p.editable && draftKeys.map((key) => (
             <DraftRow
               key={`draft-${key}`}
@@ -392,24 +409,28 @@ function ExistingRow({ side, record, campaign, onChanged }: {
 
 // ── New (draft) row ───────────────────────────────────────────────────────────
 
-function DraftRow({ side, date, entities, destinations, onActivate, onSaved }: {
+function DraftRow({ side, date, entities, destinations, initial, onActivate, onSaved }: {
   side: Side; date: string; entities: Entity[]; destinations: Destination[]
+  /** A line carried from the last day: code, source and rate come filled, the counts blank. */
+  initial?: CarriedRow
   onActivate: () => void; onSaved: () => void
 }) {
   const client = side === 'client'
-  const [code, setCode] = useState('')          // destination (client) or camp (traffic)
-  const [source, setSource] = useState('')      // traffic source
+  const carried = initial !== undefined
+  const [code, setCode] = useState(initial?.code ?? '')          // destination (client) or camp (traffic)
+  const [source, setSource] = useState(initial?.source ?? '')    // traffic source
   const [answered, setAnswered] = useState('')
   const [missed, setMissed] = useState('')
   const [replacement, setReplacement] = useState('')
   const [counted, setCounted] = useState('')
-  const [rate, setRate] = useState('')
+  const [rate, setRate] = useState(initial ? String(initial.rate) : '')
   const [busy, setBusy] = useState(false)
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
   // Final Count and Rate auto-fill until typed into; after that the typed value stands.
   const [countedTouched, setCountedTouched] = useState(false)
-  const rateTouched = useRef(false)
+  // A carried rate stands until typed over — it is not re-looked-up when the code is edited.
+  const rateTouched = useRef(carried)
 
   const typedCode = code.trim()
   const manualRep = client || replacementIsManual(source)
@@ -438,8 +459,10 @@ function DraftRow({ side, date, entities, destinations, onActivate, onSaved }: {
   }
 
   // A client needs a volume to bill; a camp only needs its code — typing a new one
-  // registers the campaign, and the source, count and rate can follow on the row.
-  const complete = client ? (typedCode !== '' && effCounted > 0) : typedCode !== ''
+  // registers the campaign, and the source, count and rate can follow on the row. A
+  // carried line is already known, so it only saves once a count is typed — one left
+  // blank is not a record.
+  const complete = typedCode !== '' && (client || carried ? effCounted > 0 : true)
 
   const save = async () => {
     if (saving.current || !complete) return
@@ -462,7 +485,8 @@ function DraftRow({ side, date, entities, destinations, onActivate, onSaved }: {
   }, 0)
 
   return (
-    <tr ref={rowRef} onBlur={onRowBlur} onKeyDown={(e) => { if (isEnterSubmit(e)) save() }} className={addRowCls}>
+    <tr ref={rowRef} onBlur={onRowBlur} onKeyDown={(e) => { if (isEnterSubmit(e)) save() }} className={addRowCls}
+      title={carried ? 'Carried from the last day — type today\'s counts to record it' : undefined}>
       <td className={cellCls}>
         <Field value={code} onChange={onCodeType} placeholder={client ? 'Destination' : 'Camp'}
           onBlur={() => { if (!client && code.trim()) setCode(standardizeCampaignCode(code)) }} />
