@@ -203,21 +203,46 @@ export interface CarryForward {
 const carryKey = (side: 'client' | 'traffic', r: CallRecord) =>
   side === 'client' ? normalizeCode(r.buyer_code) : `${normalizeCode(r.campaign_code)} ${normalizeCode(r.source)}`
 
+/** What identifies a line: the destination on the client side, camp + source on the traffic side. */
+export interface LineIdentity { code: string | null | undefined; source?: string | null | undefined }
+
+export const recordIdentity = (side: 'client' | 'traffic', r: CallRecord): LineIdentity =>
+  side === 'client' ? { code: r.buyer_code } : { code: r.campaign_code, source: r.source }
+
+/**
+ * Whether two lines name the same destination, loosely enough to catch how the team
+ * actually types: case, spaces and punctuation are ignored (lib/bundle normalizeCode), and
+ * on the traffic side a source that was keyed short one day and in full the next ("PD",
+ * then "PD-02 & AA") still counts as the same line under the same camp — one is a prefix of
+ * the other. A blank code never matches anything.
+ */
+export function sameLine(side: 'client' | 'traffic', a: LineIdentity, b: LineIdentity): boolean {
+  const ca = normalizeCode(a.code)
+  if (ca === '' || ca !== normalizeCode(b.code)) return false
+  if (side === 'client') return true
+  const sa = normalizeCode(a.source)
+  const sb = normalizeCode(b.source)
+  return sa === sb || sa.startsWith(sb) || sb.startsWith(sa)
+}
+
 /**
  * The rows a new day opens with: every client (or camp + source) of the most recent
  * earlier day that has records, at the rate it was billed that day, with blank counts —
  * so the team types the day's figures instead of retyping forty codes. Anything already
- * recorded today is left out, so a half-filled day only offers what is still missing.
+ * recorded today is left out (matched with {@link sameLine}), so a half-filled day only
+ * offers what is still missing.
  */
 export function carryForward(side: 'client' | 'traffic', previous: CallRecord[], today: CallRecord[]): CarryForward {
   if (previous.length === 0) return { from: null, rows: [] }
   const from = previous.reduce((m, r) => (r.record_date > m ? r.record_date : m), previous[0].record_date)
-  const done = new Set(today.map((r) => carryKey(side, r)))
+  const done = today.map((r) => recordIdentity(side, r))
   const seen = new Map<string, CarriedRow>()
   for (const r of previous) {
     if (r.record_date !== from) continue
     const key = carryKey(side, r)
-    if (key.trim() === '' || done.has(key) || seen.has(key)) continue
+    if (key.trim() === '' || seen.has(key)) continue
+    const id = recordIdentity(side, r)
+    if (done.some((t) => sameLine(side, t, id))) continue
     seen.set(key, {
       key,
       code: side === 'client' ? (r.buyer_code ?? '') : (r.campaign_code ?? ''),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CallRecord } from '../types'
 import {
-  aggregateClientRows, aggregateTrafficRows, campCount, campsInCode, carryForward,
+  aggregateClientRows, aggregateTrafficRows, campCount, campsInCode, carryForward, sameLine,
   clientCount, clientCountFollowsFormula, clientFinalCount, clientRows, finalProfit, marginPct,
   sortByPrice, sourceCount, totalBill, totalsOf, trafficFinalCount, trafficRows,
 } from './dailyBilling'
@@ -180,5 +180,33 @@ describe('carryForward', () => {
     ]
     const c = carryForward('traffic', previous, [])
     expect(c.rows.map((r) => `${r.code}/${r.source}/${r.rate}`)).toEqual(['L-10/MT-00/49', 'L-11/TB-00/48', 'Z-00/DD-00/14'])
+  })
+})
+
+describe('sameLine', () => {
+  it('matches a client by code, ignoring case, spaces and punctuation', () => {
+    expect(sameLine('client', { code: 'RTG 04' }, { code: 'rtg04' })).toBe(true)
+    expect(sameLine('client', { code: 'RTG 04' }, { code: 'RTG 05' })).toBe(false)
+    expect(sameLine('client', { code: '' }, { code: '' })).toBe(false)
+  })
+
+  it('matches a traffic line by camp and source, and a source keyed short one day and in full the next', () => {
+    expect(sameLine('traffic', { code: 'H-02 & 03', source: 'PD' }, { code: 'H-02 & 03', source: 'PD-02 & AA' })).toBe(true)
+    expect(sameLine('traffic', { code: 'H-04, 05, 06, & 07', source: 'DS' }, { code: 'H-04, 05, 06 & 07', source: 'DS-01, 02, 03 & 04' })).toBe(true)
+    expect(sameLine('traffic', { code: 'L-11', source: 'TB-00' }, { code: 'L-11', source: 'tb 00' })).toBe(true)
+    expect(sameLine('traffic', { code: 'C-03', source: 'Priority Y' }, { code: 'C-03', source: 'PDSO' })).toBe(false)
+    expect(sameLine('traffic', { code: 'L-11', source: 'TB-00' }, { code: 'L-12', source: 'TB-00' })).toBe(false)
+  })
+})
+
+describe('carryForward clears lines today already covers', () => {
+  it('drops a carried traffic line whose camp was filled today under the fuller source name', () => {
+    const d = (date: string, over: Partial<CallRecord>) => rec({ record_date: date, record_type: 'campaign', campaign_id: 1, ...over })
+    const previous = [
+      d('2026-11-19', { campaign_code: 'H-02 & 03', source: 'PD', counted: 1, rate: 48 }),
+      d('2026-11-19', { campaign_code: 'L-12', source: 'CG-00', counted: 1, rate: 50 }),
+    ]
+    const today = [d('2026-11-24', { campaign_code: 'H-02 & 03', source: 'PD-02 & AA', counted: 228, rate: 48 })]
+    expect(carryForward('traffic', previous, today).rows.map((r) => `${r.code}/${r.source}`)).toEqual(['L-12/CG-00'])
   })
 })

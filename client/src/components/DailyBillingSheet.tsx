@@ -3,8 +3,8 @@ import { api } from '../api/client'
 import { autoReplacement, replacementIsManual, standardizeCampaignCode } from '../lib/bundle'
 import { saveBuyer } from '../lib/buyers'
 import {
-  clientCountFollowsFormula, clientFinalCount, totalBill, trafficFinalCount,
-  type BillingRow, type BillingTotals, type CarriedRow,
+  clientCountFollowsFormula, clientFinalCount, sameLine, totalBill, trafficFinalCount,
+  type BillingRow, type BillingTotals, type CarriedRow, type LineIdentity,
 } from '../lib/dailyBilling'
 import { money2, num } from '../lib/format'
 import { useServerDraft } from '../lib/useServerDraft'
@@ -24,8 +24,9 @@ import { Spinner, cx } from './ui'
  * trailing empty row takes a new record, as the Daily Sheet and Campaigns sheet did. A day
  * also opens with the last day's clients and sources carried forward at their rates with
  * blank counts (lib/dailyBilling carryForward): each saves once its count is typed, and
- * one left blank is simply not recorded. Over a date range the tables show the roll-up
- * read-only.
+ * one left blank is simply not recorded. A carried line clears by itself the moment the
+ * same destination is typed on another row, and it can be dismissed for the day with its
+ * ×. Over a date range the tables show the roll-up read-only.
  */
 
 export type Side = 'client' | 'traffic'
@@ -63,6 +64,17 @@ export default function DailyBillingSheet(p: SheetProps) {
   const addRow = () => setDraftKeys((k) => [...k, nextKey.current++])
   const dropDraft = (key: number) =>
     setDraftKeys((k) => { const r = k.filter((x) => x !== key); return r.length ? r : [nextKey.current++] })
+
+  // What each unsaved row currently names, so a carried line clears as soon as the same
+  // destination is typed elsewhere — and the lines dismissed with their × for this day.
+  const [typed, setTyped] = useState<Record<string, LineIdentity>>({})
+  const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
+  const onTyped = (id: string, identity: LineIdentity) => setTyped((t) => ({ ...t, [id]: identity }))
+  const forgetTyped = (id: string) => setTyped((t) => { const rest = { ...t }; delete rest[id]; return rest })
+  const dismiss = (key: string) => setDismissed((d) => new Set(d).add(key))
+  const carried = p.carried.filter((c) =>
+    !dismissed.has(c.key)
+    && !Object.entries(typed).some(([id, t]) => id !== `carried-${c.key}` && sameLine(p.side, t, c)))
 
   const sorted = [...p.records].sort((a, b) => b.rate - a.rate || b.total_bill - a.total_bill)
   const columns = client ? 8 : 10
@@ -123,7 +135,7 @@ export default function DailyBillingSheet(p: SheetProps) {
               />
             ))
             : p.rows.map((r) => <PrintedRow key={r.key} side={p.side} row={r} />)}
-          {p.editable && p.carried.map((c) => (
+          {p.editable && carried.map((c) => (
             <DraftRow
               key={`carried-${c.key}`}
               side={p.side}
@@ -132,7 +144,9 @@ export default function DailyBillingSheet(p: SheetProps) {
               destinations={p.destinations}
               initial={c}
               onActivate={() => {}}
-              onSaved={p.onChanged}
+              onTyped={(identity) => onTyped(`carried-${c.key}`, identity)}
+              onDismiss={() => { dismiss(c.key); forgetTyped(`carried-${c.key}`) }}
+              onSaved={() => { forgetTyped(`carried-${c.key}`); p.onChanged() }}
             />
           ))}
           {p.editable && draftKeys.map((key) => (
@@ -143,7 +157,8 @@ export default function DailyBillingSheet(p: SheetProps) {
               entities={p.entities}
               destinations={p.destinations}
               onActivate={() => requestNewRow(key)}
-              onSaved={() => { dropDraft(key); p.onChanged() }}
+              onTyped={(identity) => onTyped(`draft-${key}`, identity)}
+              onSaved={() => { forgetTyped(`draft-${key}`); dropDraft(key); p.onChanged() }}
             />
           ))}
           {!p.editable && p.rows.length === 0 && (
@@ -186,6 +201,7 @@ export default function DailyBillingSheet(p: SheetProps) {
 const PlusIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
 const TrashIcon = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
 const CheckIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+const CrossIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
 
 // A campaign record always has a campaign_id, so its Status and rates controls show the
 // moment the row exists, even before the campaigns list has (re)loaded. Edits send only
@@ -409,11 +425,16 @@ function ExistingRow({ side, record, campaign, onChanged }: {
 
 // ── New (draft) row ───────────────────────────────────────────────────────────
 
-function DraftRow({ side, date, entities, destinations, initial, onActivate, onSaved }: {
+function DraftRow({ side, date, entities, destinations, initial, onActivate, onTyped, onDismiss, onSaved }: {
   side: Side; date: string; entities: Entity[]; destinations: Destination[]
   /** A line carried from the last day: code, source and rate come filled, the counts blank. */
   initial?: CarriedRow
-  onActivate: () => void; onSaved: () => void
+  onActivate: () => void
+  /** Called with what the row names whenever its code or source changes. */
+  onTyped: (identity: LineIdentity) => void
+  /** Carried lines only: hide this line for the day without recording anything. */
+  onDismiss?: () => void
+  onSaved: () => void
 }) {
   const client = side === 'client'
   const carried = initial !== undefined
@@ -443,6 +464,7 @@ function DraftRow({ side, date, entities, destinations, initial, onActivate, onS
 
   const onCodeType = (v: string) => {
     setCode(v)
+    onTyped({ code: v, source })
     if (v.trim()) onActivate()
     if (client && !rateTouched.current) {
       const match = entities.find((e) => e.code.toLowerCase() === v.trim().toLowerCase())
@@ -451,6 +473,7 @@ function DraftRow({ side, date, entities, destinations, initial, onActivate, onS
   }
   const onSourceType = (v: string) => {
     setSource(v)
+    onTyped({ code, source: v })
     if (v.trim()) onActivate()
     if (!rateTouched.current) {
       const match = destinations.find((d) => d.name.toLowerCase() === v.trim().toLowerCase())
@@ -512,7 +535,12 @@ function DraftRow({ side, date, entities, destinations, initial, onActivate, onS
       <td className={cx(numCell, 'font-semibold')}>{money2(total)}</td>
       {!client && <td className={cellCls} />}
       <td className={cx(cellCls, 'text-center')}>
-        {busy ? <Spinner className="h-4 w-4" /> : (
+        {busy ? <Spinner className="h-4 w-4" /> : carried && !complete && onDismiss ? (
+          <button type="button" onClick={onDismiss} title="Not today — hide this carried line"
+            className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-white">
+            <CrossIcon />
+          </button>
+        ) : (
           <button type="button" onClick={save} disabled={!complete} title="Save row"
             className={cx('rounded p-1', complete ? 'text-green-400 hover:bg-green-500/15' : 'cursor-not-allowed text-slate-500')}>
             <CheckIcon />
