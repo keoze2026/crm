@@ -112,8 +112,8 @@ export default function VendorSheet({
             <span className="font-semibold text-slate-300">Amount paid</span> is the only figure typed here
             {' '}(plus the opening balance below). Converted Lead, Price and Payments are read from this
             source&apos;s records on the{' '}
-            <Link to="/campaigns" className="font-medium text-blue-400 underline decoration-blue-300 underline-offset-2 hover:text-blue-300">
-              Campaigns sheet
+            <Link to="/daily-billing" className="font-medium text-blue-400 underline decoration-blue-300 underline-offset-2 hover:text-blue-300">
+              AHT Daily Billing sheet
             </Link>
             {' '}— enter them there. The balances are calculated and never typed.
           </p>

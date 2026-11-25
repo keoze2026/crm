@@ -21,9 +21,10 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', perm: 'dashboard', row: 1 },
-  { to: '/records', label: 'Daily Sheet', row: 1 },
+  // The Daily Sheet and the Campaigns sheet, on one page since 25 Nov 2026. Always
+  // reachable, as the Daily Sheet was; the page gates its cost side on 'campaigns'.
+  { to: '/daily-billing', label: 'AHT Daily Billing', row: 1 },
   { to: '/buyers', label: 'Buyers', perm: 'buyers', row: 1 },
-  { to: '/campaigns', label: 'Campaigns', perm: 'campaigns', row: 1 },
   { to: '/vendors', label: 'Traffic Source', perm: 'vendors', row: 1 },
   { to: '/portal-expenses', label: 'Portal Expenses', perm: 'portal-expenses', row: 1 },
   { to: '/queues', label: 'Queues', perm: 'queues', row: 1 },

@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import './index.css'
 import { AuthProvider } from './auth/AuthContext'
 import { PerformerProvider } from './lib/performers'
@@ -8,9 +8,8 @@ import RequireAuth from './auth/RequireAuth'
 import RequirePage from './auth/RequirePage'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
-import Records from './pages/Records'
+import DailyBilling from './pages/DailyBilling'
 import Buyers from './pages/Buyers'
-import Campaigns from './pages/Campaigns'
 import Vendors from './pages/Vendors'
 import PortalExpenses from './pages/PortalExpenses'
 import QueuesPage from './pages/Queues'
@@ -39,9 +38,13 @@ const router = createBrowserRouter([
         element: <Layout />,
         children: [
           { index: true, element: <RequirePage page="dashboard"><Dashboard /></RequirePage> },
-          { path: 'records', element: <Records /> },
+          // AHT Daily Billing is the Daily Sheet and the Campaigns sheet on one page. It is
+          // always reachable, as the Daily Sheet was; its cost side needs the Campaigns
+          // permission. The old addresses still land here.
+          { path: 'daily-billing', element: <DailyBilling /> },
+          { path: 'records', element: <Navigate to="/daily-billing" replace /> },
+          { path: 'campaigns', element: <Navigate to="/daily-billing" replace /> },
           { path: 'buyers', element: <RequirePage page="buyers"><Buyers /></RequirePage> },
-          { path: 'campaigns', element: <RequirePage page="campaigns"><Campaigns /></RequirePage> },
           { path: 'vendors', element: <RequirePage page="vendors"><Vendors /></RequirePage> },
           { path: 'portal-expenses', element: <RequirePage page="portal-expenses"><PortalExpenses /></RequirePage> },
           { path: 'queues', element: <RequirePage page="queues"><QueuesPage /></RequirePage> },

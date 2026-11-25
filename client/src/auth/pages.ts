@@ -15,7 +15,9 @@ export interface PageDef {
 export const PAGES: PageDef[] = [
   { key: 'dashboard', label: 'Dashboard', path: '/' },
   { key: 'buyers', label: 'Buyers', path: '/buyers' },
-  { key: 'campaigns', label: 'Campaigns', path: '/campaigns' },
+  // The cost side of AHT Daily Billing (the former Campaigns sheet). The page itself is
+  // always reachable; this key shows its Traffic Source Cost table and the profit.
+  { key: 'campaigns', label: 'Traffic Source Cost (AHT Daily Billing)', path: '/daily-billing' },
   { key: 'vendors', label: 'Traffic Source', path: '/vendors' },
   { key: 'portal-expenses', label: 'Portal Expenses', path: '/portal-expenses' },
   { key: 'queues', label: 'Queues', path: '/queues' },

@@ -91,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const firstAllowedPath = useCallback(() => {
     if (!authEnabled) return '/'
     const page = PAGES.find((p) => userCanAccess(user, p.key))
-    return page?.path ?? '/records' // Daily Sheet is always reachable
+    return page?.path ?? '/daily-billing' // AHT Daily Billing is always reachable
   }, [authEnabled, user])
 
   const value = useMemo<AuthState>(() => ({
