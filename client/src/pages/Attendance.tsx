@@ -17,7 +17,8 @@ import StaffAttendanceSheet, { StatusTag } from '../components/StaffAttendanceSh
 import { buildStaffAttendancePdf } from '../lib/sheetPdf'
 import { Button, CardHeader, Modal, PageLoader, Spinner, cx } from '../components/ui'
 import { BRAND } from '../lib/theme'
-import type { Range } from '../components/DateRange'
+import { DateRangeControl, type Range } from '../components/DateRange'
+import { DayField } from '../components/DaySelector'
 import { fileDateRange } from '../lib/format'
 import { AT_WORK, buildDayViews, filterCounts, matchesFilter, type DayFilter } from '../lib/attendanceDay'
 import {
@@ -706,11 +707,7 @@ function RosterView() {
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            type="date" value={date} onChange={(e) => setDate(e.target.value)}
-            aria-label="Day"
-            className="rounded-lg border border-white/10 bg-[#0a0e17] px-3 py-1.5 text-sm text-slate-200 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-          />
+          <DayField value={date} onChange={setDate} />
           <input
             type="search" placeholder="Search name or department" value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -1472,7 +1469,6 @@ function BreakReportsView() {
   const fileTag = fileDateRange(range.from, range.to)
   const periodText = periodLabel(range.from, range.to)
   const hasData = stats.length > 0
-  const maxDate = todayEST()
 
   // Defer the synchronous PDF/Excel build one tick so the button spinner can paint.
   const run = (key: string, fn: () => void) => {
@@ -1520,27 +1516,9 @@ function BreakReportsView() {
               {p.label}
             </button>
           ))}
-          <label className="ml-1 flex items-center gap-1.5 text-xs font-medium text-slate-400">
-            From
-            <input
-              type="date"
-              value={range.from}
-              max={range.to || maxDate}
-              onChange={(e) => { if (e.target.value) setRange((r) => ({ ...r, from: e.target.value })) }}
-              className="bg-[#0a0e17] rounded-lg border border-white/10 px-2.5 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/20"
-            />
-          </label>
-          <label className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
-            To
-            <input
-              type="date"
-              value={range.to}
-              min={range.from}
-              max={maxDate}
-              onChange={(e) => { if (e.target.value) setRange((r) => ({ ...r, to: e.target.value })) }}
-              className="bg-[#0a0e17] rounded-lg border border-white/10 px-2.5 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand/20"
-            />
-          </label>
+          <div className="ml-1">
+            <DateRangeControl value={range} onChange={setRange} />
+          </div>
         </div>
         <span className="text-xs text-slate-400 tabular-nums">
           {periodText} · {operationalDays} operational day{operationalDays === 1 ? '' : 's'}

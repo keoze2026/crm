@@ -14,7 +14,11 @@ export default function RequirePage({ page, children }: { page: string; children
 
   // Users / System Logs don't exist when auth is off — send stray URLs home.
   if (!authEnabled) {
-    return AUTH_ONLY_PAGES.includes(page) ? <Navigate to="/" replace /> : <>{children}</>
+    if (!AUTH_ONLY_PAGES.includes(page)) return <>{children}</>
+    // `authEnabled` starts false until /auth/status answers, so a direct load of /users or
+    // /system-logs must wait for it rather than bounce home before auth has been discovered.
+    if (loading) return <FullPageSpinner />
+    return <Navigate to="/" replace />
   }
   if (loading) return <FullPageSpinner />
   if (!user) return <Navigate to="/login" replace />

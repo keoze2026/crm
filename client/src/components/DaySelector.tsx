@@ -1,4 +1,6 @@
+import { useRef } from 'react'
 import { today } from '../lib/format'
+import { CalendarGlyph, DATE_PILL, PillChevron } from './DateRange'
 import { cx } from './ui'
 
 const chevron = (dir: 'left' | 'right') => (
@@ -8,8 +10,8 @@ const chevron = (dir: 'left' | 'right') => (
 )
 
 const stepBtn =
-  'glass-input flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-300 '
-  + 'transition-colors hover:bg-white/[0.05] hover:text-slate-100 disabled:text-slate-300 disabled:hover:bg-transparent'
+  'flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-[#0a0e17] text-slate-300 '
+  + 'transition-colors hover:border-white/20 hover:text-slate-100 disabled:text-slate-500 disabled:hover:border-white/10'
 
 /** Shift a "YYYY-MM-DD" value by n days, using local parts so it never skips a day. */
 function shiftDay(value: string, n: number): string {
@@ -19,7 +21,47 @@ function shiftDay(value: string, n: number): string {
 }
 
 /**
- * Day picker: prev/next chevrons around a date field, plus a Today shortcut. The
+ * One day as the app-wide date pill (calendar glyph, "YYYY-MM-DD", chevron). The native
+ * date picker sits behind it, so the browser's calendar still does the picking.
+ */
+export function DayField({ value, onChange, max, label = 'Day', className }: {
+  value: string
+  onChange: (iso: string) => void
+  max?: string
+  label?: string
+  className?: string
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const openPicker = () => {
+    const el = inputRef.current
+    if (!el) return
+    // showPicker needs a user gesture, which the click is; older browsers fall back to focus.
+    if (typeof el.showPicker === 'function') { try { el.showPicker(); return } catch { /* fall through */ } }
+    el.focus()
+  }
+  return (
+    <div className={cx('relative', className)}>
+      <button type="button" onClick={openPicker} aria-label={label} className={cx(DATE_PILL, 'w-full')}>
+        <CalendarGlyph />
+        <span className="whitespace-nowrap">{value || 'Select day'}</span>
+        <PillChevron open={false} className="ml-auto" />
+      </button>
+      <input
+        ref={inputRef}
+        type="date"
+        tabIndex={-1}
+        aria-hidden
+        value={value}
+        max={max}
+        onChange={(e) => { if (e.target.value) onChange(e.target.value) }}
+        className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
+      />
+    </div>
+  )
+}
+
+/**
+ * Day picker: prev/next chevrons around a date pill, plus a Today shortcut. The
  * day-scale counterpart to MonthSelector, and styled to match it, so a page that steps
  * through days reads like one that steps through months.
  *
@@ -44,13 +86,7 @@ export function DaySelector({ value, onChange, today: todayIso }: {
         {chevron('left')}
       </button>
 
-      <input
-        type="date"
-        value={value}
-        max={now}
-        onChange={(e) => { if (e.target.value) onChange(e.target.value) }}
-        className="glass-input min-w-0 flex-1 rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 sm:flex-none"
-      />
+      <DayField value={value} onChange={onChange} max={now} className="min-w-0 flex-1 sm:flex-none" />
 
       <button
         onClick={() => onChange(shiftDay(value, 1))}

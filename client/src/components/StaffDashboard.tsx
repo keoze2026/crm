@@ -55,10 +55,10 @@ const leaveNote = (l: StaffLeave): string => {
 
 // ─── Rating colours: green for good, red for bad, navy outline for the middle ─────────
 
-const GOOD = 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-const MID = 'bg-white text-brand ring-brand/30'
-const BAD = 'bg-rose-50 text-rose-700 ring-rose-200'
-const NONE = 'bg-slate-50 text-slate-400 ring-slate-200'
+const GOOD = 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/40'
+const MID = 'bg-[#0a0e17] text-brand ring-brand/30'
+const BAD = 'bg-rose-500/15 text-rose-300 ring-rose-500/40'
+const NONE = 'bg-white/[0.03] text-slate-400 ring-white/10'
 
 function performanceTone(rating: string): string {
   if (/excellent|good/i.test(rating)) return GOOD
@@ -271,12 +271,12 @@ export function StaffDashboard({ onBack }: { onBack: () => void }) {
   const monthIsCurrent = month === currentMonth()
 
   const tiles = [
-    { label: 'Active staff', value: loading ? '…' : `${totals.active}`, sub: `${totals.headcount} on roster · ${totals.onLeave} on leave`, cls: 'text-slate-900' },
+    { label: 'Active staff', value: loading ? '…' : `${totals.active}`, sub: `${totals.headcount} on roster · ${totals.onLeave} on leave`, cls: 'text-slate-100' },
     { label: monthIsCurrent ? 'In today' : 'Present (last day)', value: loading ? '…' : `${totals.inToday}`, sub: `of ${totals.active} active`, cls: 'text-brand' },
-    { label: 'Late today', value: loading ? '…' : `${totals.lateToday}`, sub: 'against expected login', cls: totals.lateToday ? 'text-rose-600' : 'text-emerald-600' },
-    { label: 'Avg performance', value: !canReviews ? '—' : totals.avgScore == null ? '—' : `${totals.avgScore.toFixed(0)}%`, sub: canReviews ? `${totals.reviewed} reviewed · ${formatMonth(reviewMonth).slice(0, 3)}` : 'No Review access', cls: totals.avgScore == null ? 'text-slate-400' : totals.avgScore >= 75 ? 'text-emerald-600' : totals.avgScore >= 50 ? 'text-brand' : 'text-rose-600' },
-    { label: 'Salaries received', value: loading ? '…' : `${totals.received}/${totals.paid}`, sub: `${formatMonth(month).slice(0, 3)} salary sheet`, cls: totals.paid && totals.received === totals.paid ? 'text-emerald-600' : 'text-slate-900' },
-    { label: 'Leaves this month', value: loading ? '…' : `${(leaves.data ?? []).length}`, sub: 'leave sheet rows', cls: 'text-slate-900' },
+    { label: 'Late today', value: loading ? '…' : `${totals.lateToday}`, sub: 'against expected login', cls: totals.lateToday ? 'text-rose-400' : 'text-emerald-400' },
+    { label: 'Avg performance', value: !canReviews ? '—' : totals.avgScore == null ? '—' : `${totals.avgScore.toFixed(0)}%`, sub: canReviews ? `${totals.reviewed} reviewed · ${formatMonth(reviewMonth).slice(0, 3)}` : 'No Review access', cls: totals.avgScore == null ? 'text-slate-400' : totals.avgScore >= 75 ? 'text-emerald-400' : totals.avgScore >= 50 ? 'text-brand' : 'text-rose-400' },
+    { label: 'Salaries received', value: loading ? '…' : `${totals.received}/${totals.paid}`, sub: `${formatMonth(month).slice(0, 3)} salary sheet`, cls: totals.paid && totals.received === totals.paid ? 'text-emerald-400' : 'text-slate-100' },
+    { label: 'Leaves this month', value: loading ? '…' : `${(leaves.data ?? []).length}`, sub: 'leave sheet rows', cls: 'text-slate-100' },
   ]
 
   return (
@@ -289,15 +289,15 @@ export function StaffDashboard({ onBack }: { onBack: () => void }) {
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:border-brand hover:text-brand"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-[#0a0e17] px-2.5 py-1.5 text-xs font-semibold text-slate-200 shadow-sm transition-colors hover:border-brand hover:text-brand"
           aria-label="Back to the dashboard"
         >
           <IconBack /> Dashboard
         </button>
         <div className="min-w-0">
-          <h1 className="text-lg font-bold tracking-tight text-slate-900 sm:text-xl">Staff</h1>
+          <h1 className="text-lg font-bold tracking-tight text-slate-100 sm:text-xl">Staff</h1>
         </div>
-        <p className="hidden text-xs text-slate-500 md:block">
+        <p className="hidden text-xs text-slate-400 md:block">
           Attendance, leaves and salary for {formatMonth(month)} · reviews for {formatMonth(reviewMonth)}
         </p>
         <div className="ml-auto flex items-center gap-2">
@@ -305,7 +305,7 @@ export function StaffDashboard({ onBack }: { onBack: () => void }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search…"
-            className="w-36 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 sm:w-48"
+            className="w-36 rounded-lg border border-white/10 bg-[#0a0e17] px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 sm:w-48"
           />
           <MonthSelector value={month} onChange={setMonth} />
         </div>
@@ -316,8 +316,8 @@ export function StaffDashboard({ onBack }: { onBack: () => void }) {
         {/* Tiles */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           {tiles.map((t) => (
-            <div key={t.label} className="rounded-xl border border-slate-200/80 bg-white px-3 py-2.5 shadow-sm shadow-slate-900/5">
-              <div className="text-[11px] font-medium text-slate-500">{t.label}</div>
+            <div key={t.label} className="rounded-xl border border-white/10 bg-[#0a0e17] px-3 py-2.5 shadow-sm shadow-slate-900/5">
+              <div className="text-[11px] font-medium text-slate-400">{t.label}</div>
               <div className={cx('mt-0.5 text-lg font-bold tabular-nums leading-tight', t.cls)}>{t.value}</div>
               <div className="truncate text-[10px] text-slate-400">{t.sub}</div>
             </div>
@@ -327,10 +327,10 @@ export function StaffDashboard({ onBack }: { onBack: () => void }) {
         {/* Department filter — worded as the Staff page words it. */}
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Department</span>
-          <div className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-0.5">
-            <button onClick={() => setDept('all')} className={cx('rounded-md px-2.5 py-1 text-[11px] font-medium', dept === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800')}>All departments</button>
+          <div className="flex flex-wrap gap-1 rounded-lg bg-white/[0.06] p-0.5">
+            <button onClick={() => setDept('all')} className={cx('rounded-md px-2.5 py-1 text-[11px] font-medium', dept === 'all' ? 'bg-[#0a0e17] text-slate-100 shadow-sm' : 'text-slate-400 hover:text-slate-100')}>All departments</button>
             {deptOptions.map(([id, name]) => (
-              <button key={id} onClick={() => setDept(id)} className={cx('rounded-md px-2.5 py-1 text-[11px] font-medium', dept === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800')}>{name}</button>
+              <button key={id} onClick={() => setDept(id)} className={cx('rounded-md px-2.5 py-1 text-[11px] font-medium', dept === id ? 'bg-[#0a0e17] text-slate-100 shadow-sm' : 'text-slate-400 hover:text-slate-100')}>{name}</button>
             ))}
           </div>
           <span className="ml-auto text-[11px] text-slate-400">{visible.length} of {rows.length} staff</span>
@@ -341,10 +341,10 @@ export function StaffDashboard({ onBack }: { onBack: () => void }) {
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Department reviews · {formatMonth(reviewMonth).slice(0, 3)}</span>
             {(departments.data as ReviewDepartment[]).map((d) => (
-              <span key={d.id} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px]">
-                <span className="font-semibold text-slate-800">{d.name}</span>
+              <span key={d.id} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-[#0a0e17] px-2 py-1 text-[11px]">
+                <span className="font-semibold text-slate-100">{d.name}</span>
                 {d.performance ? <Chip tone={performanceTone(d.performance)}>{d.performance}</Chip> : <span className="text-slate-400">Not reviewed</span>}
-                {d.percentage != null && <span className="font-semibold tabular-nums text-slate-600">{asPercent(d.percentage)}</span>}
+                {d.percentage != null && <span className="font-semibold tabular-nums text-slate-300">{asPercent(d.percentage)}</span>}
               </span>
             ))}
           </div>
@@ -353,10 +353,10 @@ export function StaffDashboard({ onBack }: { onBack: () => void }) {
         {/* One card per person. */}
         {loading ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-            {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => <div key={i} className="h-40 animate-pulse rounded-xl bg-white" />)}
+            {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => <div key={i} className="h-40 animate-pulse rounded-xl bg-[#0a0e17]" />)}
           </div>
         ) : visible.length === 0 ? (
-          <p className="rounded-xl border border-slate-200 bg-white py-10 text-center text-xs text-slate-400">
+          <p className="rounded-xl border border-white/10 bg-[#0a0e17] py-10 text-center text-xs text-slate-400">
             {rows.length === 0 ? 'No staff on the roster yet.' : 'Nobody matches that filter.'}
           </p>
         ) : (
@@ -366,13 +366,13 @@ export function StaffDashboard({ onBack }: { onBack: () => void }) {
               const t = r.today
               const late = r.todayLate ?? 0
               return (
-                <li key={r.member.id} className="flex flex-col rounded-xl border border-slate-200/80 bg-white p-3 shadow-sm shadow-slate-900/5">
+                <li key={r.member.id} className="flex flex-col rounded-xl border border-white/10 bg-[#0a0e17] p-3 shadow-sm shadow-slate-900/5">
                   {/* Identity + today, on one band. */}
                   <div className="flex items-center gap-2.5">
                     <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-[10px] font-bold text-white">{initials(r.member.name)}</span>
                     <div className="min-w-0 flex-1 leading-tight">
                       <div className="flex items-center gap-1.5">
-                        <span className="truncate text-sm font-semibold text-slate-900">{r.member.name}</span>
+                        <span className="truncate text-sm font-semibold text-slate-100">{r.member.name}</span>
                         <PerformerBadge staffId={r.member.id} compact />
                         <span className={cx('inline-block h-1.5 w-1.5 shrink-0 rounded-full', st.dot)} title={st.label} />
                       </div>
@@ -384,23 +384,23 @@ export function StaffDashboard({ onBack }: { onBack: () => void }) {
                     <div className="shrink-0 text-right leading-tight">
                       {t?.login_at ? (
                         <>
-                          <div className="text-[11px] tabular-nums text-slate-800">{clockLabel(t.login_at)}{t.logout_at ? ` → ${clockLabel(t.logout_at)}` : ''}</div>
-                          <div className={cx('text-[10px] font-semibold', late > 0 ? 'text-rose-600' : t.logout_at ? 'text-emerald-600' : 'text-brand')}>{late > 0 ? `${gapLabel(late)} late` : t.logout_at ? 'On time' : 'Still in'}</div>
+                          <div className="text-[11px] tabular-nums text-slate-100">{clockLabel(t.login_at)}{t.logout_at ? ` → ${clockLabel(t.logout_at)}` : ''}</div>
+                          <div className={cx('text-[10px] font-semibold', late > 0 ? 'text-rose-400' : t.logout_at ? 'text-emerald-400' : 'text-brand')}>{late > 0 ? `${gapLabel(late)} late` : t.logout_at ? 'On time' : 'Still in'}</div>
                         </>
                       ) : r.onLeaveToday ? (
-                        <span className="rounded-md bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">On leave</span>
+                        <span className="rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-violet-300">On leave</span>
                       ) : (
-                        <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-600">{t?.status && t.status !== 'absent' ? t.status : 'Not in'}</span>
+                        <span className="rounded-md bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-rose-400">{t?.status && t.status !== 'absent' ? t.status : 'Not in'}</span>
                       )}
                     </div>
                   </div>
 
                   {/* Month figures. */}
-                  <div className="mt-2.5 grid grid-cols-3 divide-x divide-slate-100 rounded-lg bg-slate-50 py-1.5 text-center">
+                  <div className="mt-2.5 grid grid-cols-3 divide-x divide-white/[0.06] rounded-lg bg-white/[0.03] py-1.5 text-center">
                     {[
-                      { label: 'Days in', value: String(r.presentDays), cls: 'text-slate-900' },
-                      { label: 'Late', value: String(r.lateDays), cls: r.lateDays ? 'text-rose-600' : 'text-emerald-600' },
-                      { label: 'Avg hrs', value: r.avgHours == null ? '—' : r.avgHours.toFixed(1), cls: 'text-slate-900' },
+                      { label: 'Days in', value: String(r.presentDays), cls: 'text-slate-100' },
+                      { label: 'Late', value: String(r.lateDays), cls: r.lateDays ? 'text-rose-400' : 'text-emerald-400' },
+                      { label: 'Avg hrs', value: r.avgHours == null ? '—' : r.avgHours.toFixed(1), cls: 'text-slate-100' },
                     ].map((k) => (
                       <div key={k.label} className="px-1">
                         <div className={cx('text-sm font-bold tabular-nums leading-tight', k.cls)}>{k.value}</div>
@@ -414,14 +414,14 @@ export function StaffDashboard({ onBack }: { onBack: () => void }) {
                     {!canReviews ? null : r.performance ? (
                       <span className="inline-flex items-center gap-1" title={`Performance${r.performance.notes ? ` — ${r.performance.notes}` : ''}`}>
                         <Chip tone={performanceTone(r.performance.rating)}>{r.performance.rating || 'Unrated'}</Chip>
-                        {r.performance.percentage != null && <span className="font-semibold tabular-nums text-slate-700">{asPercent(r.performance.percentage)}</span>}
+                        {r.performance.percentage != null && <span className="font-semibold tabular-nums text-slate-200">{asPercent(r.performance.percentage)}</span>}
                       </span>
                     ) : <span className="text-slate-400">Not reviewed</span>}
                     {canReviews && r.behaviour?.rating && <Chip tone={behaviourTone(r.behaviour.rating)} title={`Behaviour${r.behaviour.notes ? ` — ${r.behaviour.notes}` : ''}`}>{r.behaviour.rating}</Chip>}
                     {r.salary && (
                       <span className="inline-flex items-center gap-1" title={`Salary${r.salary.note ? ` — ${r.salary.note}` : ''}`}>
                         <Chip tone={salaryTone(r.salary.status)}>{r.salary.status || 'Salary recorded'}</Chip>
-                        {r.salary.amount != null && <span className="tabular-nums text-slate-600">${r.salary.amount.toLocaleString('en-US')}</span>}
+                        {r.salary.amount != null && <span className="tabular-nums text-slate-300">${r.salary.amount.toLocaleString('en-US')}</span>}
                       </span>
                     )}
                     <span className="ml-auto tabular-nums text-slate-400">
@@ -438,7 +438,7 @@ export function StaffDashboard({ onBack }: { onBack: () => void }) {
         )}
 
         {errors.length > 0 && (
-          <p className="text-[11px] text-rose-600">
+          <p className="text-[11px] text-rose-400">
             Some blocks failed to load: {errors[0].error}{errors.length > 1 && ` (and ${errors.length - 1} more)`}. The rest is still current.
           </p>
         )}

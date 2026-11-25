@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { daysAgo, formatRangeLong, today } from '../lib/format'
+import { daysAgo, today } from '../lib/format'
 import { Button, cx } from './ui'
 
 export interface Range {
@@ -120,20 +120,44 @@ function Calendar({ year, month, selecting, from, to, hover, onDayClick, onDayHo
 
 // ─── DateRangeControl ─────────────────────────────────────────────────────────
 
+/**
+ * The app-wide date pill: calendar glyph, "YYYY-MM-DD ~ YYYY-MM-DD", chevron. Every page's
+ * date filter is one of these (the month and day pickers borrow the same classes), so a
+ * range reads the same wherever it sits. Exported for the sibling pickers.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export const DATE_PILL =
+  'flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-[#0a0e17] px-3 text-sm font-medium '
+  + 'text-slate-100 transition-colors hover:border-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40'
+
+/** The calendar glyph on a date pill. */
+export function CalendarGlyph() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-slate-300" aria-hidden>
+      <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+    </svg>
+  )
+}
+
+/** The chevron on a date pill; it turns when the picker is open. */
+export function PillChevron({ open, className }: { open: boolean; className?: string }) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      className={cx('shrink-0 text-slate-400 transition-transform', open && 'rotate-180', className)} aria-hidden>
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+  )
+}
+
 export function DateRangeControl({ value, onChange, tone = 'light' }: {
   value: Range
   onChange: (r: Range) => void
   /**
-   * Trigger styling. 'light' is the app-wide frosted pill used by Buyers, Vendors,
-   * Complete Report, System Logs and Reports — leave it alone. 'dark' is opt-in: a solid
-   * navy box for the Dashboard, where the client asked for a dark date control on the
-   * otherwise-light header. The calendar popover stays light in both cases — it is a
-   * dense picker and reads better that way. 'field' is a plain white form box with the range
-   * written out ("7 Aug – 4 Nov 2026") and the chevron at the far right — the Dashboard's
-   * filter rail, where it sits among other form fields.
+   * Every tone is the same pill now (the design shows one date control app-wide). 'field'
+   * and 'night' only stretch it to fill its column, for the Dashboard's filter rail; the
+   * others size to their text.
    */
   tone?: 'light' | 'dark' | 'field' | 'night'
-  // 'night' is 'field' for a dark page (the Dashboard): a near-black box with a hairline border.
 }) {
   const [open,        setOpen]        = useState(false)
   const [draft,       setDraft]       = useState<Range>(value)
@@ -226,13 +250,9 @@ export function DateRangeControl({ value, onChange, tone = 'light' }: {
     return r.from === draft.from && r.to === draft.to
   })
 
-  const triggerLabel = (tone === 'field' || tone === 'night') && value.from
-    ? formatRangeLong(value.from, value.to || value.from)
-    : value.from
-    ? value.from === value.to
-      ? value.from
-      : `${value.from} ~ ${value.to || value.from}`
-    : 'Select date range'
+  // Always both ends, even for a single day ("2026-11-24 ~ 2026-11-24"), as the design shows.
+  const triggerLabel = value.from ? `${value.from} ~ ${value.to || value.from}` : 'Select date range'
+  const fill = tone === 'field' || tone === 'night'
 
   const dropdown = (
     <div
@@ -303,29 +323,15 @@ export function DateRangeControl({ value, onChange, tone = 'light' }: {
     <div ref={wrapRef} className="relative">
       <button
         ref={triggerRef}
+        type="button"
         onClick={() => { setDraft(value); setOpen((o) => !o) }}
-        className={cx(
-          'flex items-center gap-2 border font-medium transition-colors',
-          tone === 'night'
-            ? 'h-9 w-full rounded-lg border-white/10 bg-[#05070c] px-3 text-sm text-slate-100 hover:border-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40'
-            : tone === 'field'
-            ? 'w-full rounded-lg border-white/10 bg-[#0a0e17] px-3 py-2 text-sm text-slate-100 hover:border-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/20'
-            : tone === 'dark'
-            // Solid navy, matching the sidebar gradient so the two dark surfaces agree.
-            ? 'rounded-xl border-white/10 bg-linear-to-b from-brand to-brand-dark px-3 py-1.5 text-sm text-slate-100 shadow-md shadow-slate-900/20 hover:from-brand-dark hover:to-brand-dark'
-            : 'glass-input rounded-xl border-white/10 px-3 py-1.5 text-sm text-slate-200 hover:bg-white/[0.05]',
-        )}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className={cx(DATE_PILL, fill && 'w-full')}
       >
-        {tone !== 'field' && (
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={cx('shrink-0', tone === 'night' && 'text-blue-400')} aria-hidden>
-            <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
-          </svg>
-        )}
-        <span className={cx((tone === 'field' || tone === 'night') && 'truncate')}>{triggerLabel}</span>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-          className={cx('shrink-0 transition-transform', (tone === 'field' || tone === 'night') && 'ml-auto text-slate-400', open && 'rotate-180')}>
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
+        <CalendarGlyph />
+        <span className={cx('whitespace-nowrap', fill && 'truncate')}>{triggerLabel}</span>
+        <PillChevron open={open} className={cx(fill && 'ml-auto')} />
       </button>
 
       {open && createPortal(dropdown, document.body)}
