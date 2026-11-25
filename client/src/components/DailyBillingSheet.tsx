@@ -3,12 +3,12 @@ import { api } from '../api/client'
 import { autoReplacement, replacementIsManual, standardizeCampaignCode } from '../lib/bundle'
 import { saveBuyer } from '../lib/buyers'
 import {
-  buyerDisplayName, clientCountFollowsFormula, clientFinalCount, totalBill, trafficFinalCount,
+  clientCountFollowsFormula, clientFinalCount, totalBill, trafficFinalCount,
   type BillingRow, type BillingTotals,
 } from '../lib/dailyBilling'
 import { money2, num } from '../lib/format'
 import { useServerDraft } from '../lib/useServerDraft'
-import type { Buyer, CallRecord, Campaign, Destination } from '../types'
+import type { CallRecord, Campaign, Destination } from '../types'
 import { CampaignRatesPopover } from './CampaignRatesPopover'
 import { addRowCls, bandCls, cellCls, fieldCls, headCls, isEnterSubmit, rowCls, tableCls, theadCls } from './sheet'
 import { Spinner, cx } from './ui'
@@ -17,7 +17,7 @@ import { Spinner, cx } from './ui'
  * The two tables of the AHT Daily Billing sheet — Client Billing (buyers, revenue) and
  * Traffic Source Cost (campaigns, cost) — in the printed sheet's column order:
  *
- *   Destination · Buyer · Rate · Answered · Missed · Replaced · Final Count · Total Bill
+ *   Destination · Rate · Answered · Missed · Replaced · Final Count · Total Bill
  *   Camp · Source · Rate · Answered · Missed · Replaced · Final Count · Total Bill · Status
  *
  * On a single day every row is edited in place (auto-saved when focus leaves it) and a
@@ -39,7 +39,6 @@ export interface SheetProps {
   /** The lines to print (read-only mode), already rolled up and sorted. */
   rows: BillingRow[]
   totals: BillingTotals
-  buyers: Map<number, Buyer>
   entities: Entity[]
   destinations: Destination[]
   campaigns: Campaign[]
@@ -61,23 +60,22 @@ export default function DailyBillingSheet(p: SheetProps) {
     setDraftKeys((k) => { const r = k.filter((x) => x !== key); return r.length ? r : [nextKey.current++] })
 
   const sorted = [...p.records].sort((a, b) => b.rate - a.rate || b.total_bill - a.total_bill)
-  const columns = client ? 9 : 10
+  const columns = client ? 8 : 10
 
   return (
     <div className="overflow-x-auto">
-      <table className={cx(tableCls, client ? 'min-w-[880px]' : 'min-w-[980px]')}>
+      <table className={cx(tableCls, client ? 'min-w-[760px]' : 'min-w-[980px]')}>
         <colgroup>
           {client ? (
             <>
-              <col className="w-[13%]" />{/* Destination */}
-              <col className="w-[15%]" />{/* Buyer */}
-              <col className="w-[10%]" />{/* Rate */}
-              <col className="w-[10%]" />{/* Answered */}
-              <col className="w-[9%]" />{/* Missed */}
-              <col className="w-[9%]" />{/* Replaced */}
-              <col className="w-[10%]" />{/* Final Count */}
-              <col className="w-[14%]" />{/* Total Bill */}
-              <col className="w-[10%]" />{/* actions */}
+              <col className="w-[18%]" />{/* Destination */}
+              <col className="w-[11%]" />{/* Rate */}
+              <col className="w-[11%]" />{/* Answered */}
+              <col className="w-[10%]" />{/* Missed */}
+              <col className="w-[10%]" />{/* Replaced */}
+              <col className="w-[11%]" />{/* Final Count */}
+              <col className="w-[18%]" />{/* Total Bill */}
+              <col className="w-[11%]" />{/* actions */}
             </>
           ) : (
             <>
@@ -97,7 +95,7 @@ export default function DailyBillingSheet(p: SheetProps) {
         <thead>
           <tr className={theadCls}>
             <th className={headCls}>{client ? 'Destination' : 'Camp'}</th>
-            <th className={headCls}>{client ? 'Buyer' : 'Source'}</th>
+            {!client && <th className={headCls}>Source</th>}
             <th className={headCls}>Rate</th>
             <th className={headCls}>Answered</th>
             <th className={headCls}>Missed</th>
@@ -115,7 +113,6 @@ export default function DailyBillingSheet(p: SheetProps) {
                 key={r.id}
                 side={p.side}
                 record={r}
-                buyer={r.buyer_id == null ? undefined : p.buyers.get(r.buyer_id)}
                 campaign={client ? undefined : (p.campaigns.find((c) => c.id === r.campaign_id) ?? fallbackCampaign(r))}
                 onChanged={p.onChanged}
               />
@@ -143,9 +140,9 @@ export default function DailyBillingSheet(p: SheetProps) {
         <tfoot>
           <tr className={cx(bandCls, 'font-bold')}>
             <td className={cx(cellCls, 'py-1.5 text-xs uppercase tracking-wide')}>Total</td>
-            <td className={cx(numCell, 'py-1.5')}>
-              {client ? '' : `${num(p.rows.length)} ${p.rows.length === 1 ? 'line' : 'lines'}`}
-            </td>
+            {!client && (
+              <td className={cx(numCell, 'py-1.5')}>{num(p.rows.length)} {p.rows.length === 1 ? 'line' : 'lines'}</td>
+            )}
             <td className={cx(numCell, 'py-1.5 text-white/90')} title="Average rate = Total Bill ÷ Final Count">{money2(p.totals.avgRate)}</td>
             <td className={cx(numCell, 'py-1.5')}>{num(p.totals.answered)}</td>
             <td className={cx(numCell, 'py-1.5')}>{num(p.totals.missed)}</td>
@@ -223,7 +220,7 @@ function PrintedRow({ side, row }: { side: Side; row: BillingRow }) {
   return (
     <tr className={rowCls}>
       <td className={cx(cellCls, 'py-1 font-semibold')}>{row.code}</td>
-      <td className={cx(cellCls, 'py-1 text-slate-300')}>{side === 'client' ? row.name : row.source}</td>
+      {side === 'traffic' && <td className={cx(cellCls, 'py-1 text-slate-300')}>{row.source}</td>}
       <td className={cx(numCell, 'py-1 text-slate-300')}>{money2(row.rate)}</td>
       <td className={cx(numCell, 'py-1')}>{num(row.answered)}</td>
       <td className={cx(numCell, 'py-1 text-slate-300')}>{num(row.missed)}</td>
@@ -240,8 +237,8 @@ function PrintedRow({ side, row }: { side: Side; row: BillingRow }) {
 
 // ── Existing record row (edited in place) ────────────────────────────────────
 
-function ExistingRow({ side, record, buyer, campaign, onChanged }: {
-  side: Side; record: CallRecord; buyer?: Buyer; campaign?: Campaign; onChanged: () => void
+function ExistingRow({ side, record, campaign, onChanged }: {
+  side: Side; record: CallRecord; campaign?: Campaign; onChanged: () => void
 }) {
   const client = side === 'client'
   const [answered, setAnswered] = useServerDraft(String(record.answered))
@@ -252,7 +249,6 @@ function ExistingRow({ side, record, buyer, campaign, onChanged }: {
   const [source, setSource] = useServerDraft(record.source ?? '')
   const [code, setCode] = useServerDraft(campaign?.code ?? record.campaign_code ?? '')
   const [buyerCode, setBuyerCode] = useServerDraft(record.buyer_code ?? '')
-  const [buyerName, setBuyerName] = useServerDraft(buyerDisplayName(buyer))
   const [busy, setBusy] = useState(false)
   const rowRef = useRef<HTMLTableRowElement>(null)
   const saving = useRef(false)
@@ -291,24 +287,19 @@ function ExistingRow({ side, record, buyer, campaign, onChanged }: {
     } finally { saving.current = false; setBusy(false) }
   }
 
-  // Destination and Buyer name live on the buyer, so one request carries both. A rename
-  // onto a code another buyer holds offers to merge them (lib/buyers); declining puts the
-  // old code back. A blank name clears it.
-  const saveBuyerFields = async () => {
+  // The Destination is the buyer itself, so editing it renames the buyer and every record
+  // of that buyer, on every date, follows. Name doubles as the code, as on the Buyers
+  // page. A rename onto a code another buyer holds offers to merge them (lib/buyers);
+  // declining puts the old code back.
+  const saveBuyerCode = async () => {
     if (record.buyer_id == null) return
-    const storedCode = record.buyer_code ?? ''
-    const newCode = buyerCode.trim()
-    const newName = buyerName.trim()
-    const codeChanged = newCode !== '' && newCode !== storedCode
-    const nameChanged = newName !== buyerDisplayName(buyer)
-    if (newCode === '') setBuyerCode(storedCode)
-    if (!codeChanged && !nameChanged) return
+    const stored = record.buyer_code ?? ''
+    const raw = buyerCode.trim()
+    if (raw === stored) return
+    if (raw === '') { setBuyerCode(stored); return }
     try {
-      const ok = await saveBuyer(record.buyer_id, storedCode, {
-        code: codeChanged ? newCode : storedCode,
-        name: newName === '' ? null : newName,
-      })
-      if (ok) onChanged(); else setBuyerCode(storedCode)
+      if (await saveBuyer(record.buyer_id, stored, { code: raw, name: raw })) onChanged()
+      else setBuyerCode(stored)
     } catch (e) { alert((e as Error).message) }
   }
 
@@ -337,7 +328,7 @@ function ExistingRow({ side, record, buyer, campaign, onChanged }: {
   const onRowBlur = () => setTimeout(() => {
     if (rowRef.current && !rowRef.current.contains(document.activeElement)) {
       save()
-      if (client) saveBuyerFields(); else saveCampaignCode()
+      if (client) saveBuyerCode(); else saveCampaignCode()
     }
   }, 0)
 
@@ -349,18 +340,11 @@ function ExistingRow({ side, record, buyer, campaign, onChanged }: {
   return (
     <tr ref={rowRef} onBlur={onRowBlur} className={rowCls}>
       {client ? (
-        <>
-          <td className={cellCls}>
-            {record.buyer_id != null
-              ? <Field value={buyerCode} onChange={setBuyerCode} />
-              : <span className="font-semibold">{record.buyer_code ?? '—'}</span>}
-          </td>
-          <td className={cellCls}>
-            {record.buyer_id != null
-              ? <Field value={buyerName} onChange={setBuyerName} placeholder="Buyer name" />
-              : <span className="text-slate-400">—</span>}
-          </td>
-        </>
+        <td className={cellCls}>
+          {record.buyer_id != null
+            ? <Field value={buyerCode} onChange={setBuyerCode} />
+            : <span className="font-semibold">{record.buyer_code ?? '—'}</span>}
+        </td>
       ) : (
         <>
           <td className={cellCls}>
@@ -414,7 +398,6 @@ function DraftRow({ side, date, entities, destinations, onActivate, onSaved }: {
 }) {
   const client = side === 'client'
   const [code, setCode] = useState('')          // destination (client) or camp (traffic)
-  const [name, setName] = useState('')          // buyer name (client)
   const [source, setSource] = useState('')      // traffic source
   const [answered, setAnswered] = useState('')
   const [missed, setMissed] = useState('')
@@ -470,11 +453,7 @@ function DraftRow({ side, date, entities, destinations, onActivate, onSaved }: {
       }
       payload[client ? 'buyer_code' : 'campaign_code'] = client ? typedCode : standardizeCampaignCode(typedCode)
       if (!client && source.trim()) payload.source = source.trim()
-      const created = await api.createRecord(payload)
-      // The code found-or-created the buyer; a typed name is then put on it.
-      if (client && name.trim() !== '' && created.buyer_id != null) {
-        await api.updateBuyer(created.buyer_id, { name: name.trim() })
-      }
+      await api.createRecord(payload)
       onSaved()
     } catch (e) { alert((e as Error).message) } finally { saving.current = false; setBusy(false) }
   }
@@ -488,11 +467,7 @@ function DraftRow({ side, date, entities, destinations, onActivate, onSaved }: {
         <Field value={code} onChange={onCodeType} placeholder={client ? 'Destination' : 'Camp'}
           onBlur={() => { if (!client && code.trim()) setCode(standardizeCampaignCode(code)) }} />
       </td>
-      <td className={cellCls}>
-        {client
-          ? <Field value={name} onChange={setName} placeholder="Buyer name" />
-          : <Field value={source} onChange={onSourceType} placeholder="Source" />}
-      </td>
+      {!client && <td className={cellCls}><Field value={source} onChange={onSourceType} placeholder="Source" /></td>}
       <td className={cellCls}><Field type="number" step="0.01" right value={rate} onChange={(v) => { rateTouched.current = true; setRate(v) }} /></td>
       <td className={cellCls}><Field type="number" right value={answered} onChange={setAnswered} /></td>
       <td className={cellCls}><Field type="number" right value={missed} onChange={setMissed} /></td>

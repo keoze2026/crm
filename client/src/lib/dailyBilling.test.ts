@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { Buyer, CallRecord } from '../types'
+import type { CallRecord } from '../types'
 import {
-  aggregateClientRows, aggregateTrafficRows, buyerDisplayName, buyersById, campCount, campsInCode,
+  aggregateClientRows, aggregateTrafficRows, campCount, campsInCode,
   clientCount, clientCountFollowsFormula, clientFinalCount, clientRows, finalProfit, marginPct,
   sortByPrice, sourceCount, totalBill, totalsOf, trafficFinalCount, trafficRows,
 } from './dailyBilling'
@@ -21,11 +21,6 @@ const client = (buyer_id: number, buyer_code: string, answered: number, missed: 
   rec({ record_type: 'buyer', buyer_id, buyer_code, answered, missed, replacement, counted, rate })
 const traffic = (campaign_code: string, source: string, answered: number, missed: number, counted: number, rate: number, replacement = 0) =>
   rec({ record_type: 'campaign', campaign_id: 1, campaign_code, source, answered, missed, replacement, counted, rate })
-
-const buyer = (id: number, code: string, name: string | null): Buyer => ({
-  id, code, name, status: 'active', notes: null, rate: 0, created_at: '', revenue: 0, counted: 0,
-  answered: 0, missed: 0, record_days: 0, records: 0, last_activity: null,
-})
 
 describe('formulas', () => {
   it('client Final Count = Answered + Missed − Replaced, never below zero', () => {
@@ -62,29 +57,20 @@ describe('formulas', () => {
 })
 
 describe('rows and totals', () => {
-  const buyers = buyersById([buyer(1, 'RTG 04', null), buyer(2, 'RTG 50', 'Northwind'), buyer(3, 'RTG 15', 'RTG 15')])
   const day = [
     client(3, 'RTG 15', 100, 8, 100, 50),
     client(1, 'RTG 04', 292, 9, 301, 55),
     client(2, 'RTG 50', 47, 4, 51, 52),
   ]
 
-  it('lists a day price high to low with the buyer name beside the code', () => {
-    const rows = clientRows(day, buyers)
+  it('lists a day price high to low', () => {
+    const rows = clientRows(day)
     expect(rows.map((r) => r.code)).toEqual(['RTG 04', 'RTG 50', 'RTG 15'])
-    expect(rows.map((r) => r.name)).toEqual(['', 'Northwind', ''])
     expect(rows[0]).toMatchObject({ answered: 292, missed: 9, replaced: 0, finalCount: 301, totalBill: 16555, records: 1 })
   })
 
-  it('a name that merely repeats the code is no name', () => {
-    expect(buyerDisplayName(buyer(9, 'ABC', 'ABC'))).toBe('')
-    expect(buyerDisplayName(buyer(9, 'ABC', ' ABC '))).toBe('')
-    expect(buyerDisplayName(buyer(9, 'ABC', 'Acme Ltd'))).toBe('Acme Ltd')
-    expect(buyerDisplayName(undefined)).toBe('')
-  })
-
   it('totals the columns and gives the average rate as bill ÷ count', () => {
-    const t = totalsOf(clientRows(day, buyers))
+    const t = totalsOf(clientRows(day))
     expect(t).toMatchObject({ answered: 439, missed: 21, replaced: 0, finalCount: 452, totalBill: 24207 })
     expect(t.avgRate).toBeCloseTo(24207 / 452, 10)
     expect(totalsOf([]).avgRate).toBe(0)
@@ -95,7 +81,7 @@ describe('rows and totals', () => {
       ...day,
       rec({ record_date: '2026-11-25', buyer_id: 1, buyer_code: 'RTG 04', answered: 10, missed: 0, counted: 10, rate: 50 }),
     ]
-    const rows = aggregateClientRows(range, buyers)
+    const rows = aggregateClientRows(range)
     expect(rows).toHaveLength(3)
     const rtg04 = rows.find((r) => r.code === 'RTG 04')!
     expect(rtg04).toMatchObject({ answered: 302, missed: 9, finalCount: 311, totalBill: 17055, records: 2 })

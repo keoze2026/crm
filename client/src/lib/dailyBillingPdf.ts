@@ -55,10 +55,11 @@ function tile(doc: jsPDF, x: number, y: number, w: number, h: number, fill: [num
   doc.text(sub, x + 9, y + 42)
 }
 
-function totalBand(cells: (string | number)[]): RowInput {
+/** The navy TOTAL band; `leftCells` says how many leading cells are labels, not figures. */
+function totalBand(cells: (string | number)[], leftCells = 1): RowInput {
   return cells.map((c, i) => ({
     content: String(c),
-    styles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', halign: i === 0 ? 'left' : i === 1 ? 'left' : 'right' },
+    styles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', halign: i < leftCells ? 'left' : 'right' },
   }))
 }
 
@@ -109,18 +110,18 @@ export function buildDailyBillingPdf(input: DailyBillingPdfInput): jsPDF {
   // Client Billing
   y = sectionTitle(doc, y, 'Client Billing', `${num(input.clients)} ${input.clients === 1 ? 'client' : 'clients'} · price high to low`)
   const clientBody: RowInput[] = input.client.map((r) => [
-    r.code, r.name, money2(r.rate), num(r.answered), num(r.missed), num(r.replaced), num(r.finalCount), money2(r.totalBill),
+    r.code, money2(r.rate), num(r.answered), num(r.missed), num(r.replaced), num(r.finalCount), money2(r.totalBill),
   ])
-  clientBody.push(totalBand(['TOTAL', '', money2(ct.avgRate), num(ct.answered), num(ct.missed), num(ct.replaced), num(ct.finalCount), money2(ct.totalBill)]))
+  clientBody.push(totalBand(['TOTAL', money2(ct.avgRate), num(ct.answered), num(ct.missed), num(ct.replaced), num(ct.finalCount), money2(ct.totalBill)]))
   autoTable(doc, {
     startY: y,
     theme: 'grid',
-    head: [['Destination', 'Buyer', 'Rate', 'Answered', 'Missed', 'Replaced', 'Final Count', 'Total Bill']],
+    head: [['Destination', 'Rate', 'Answered', 'Missed', 'Replaced', 'Final Count', 'Total Bill']],
     body: clientBody,
     styles: baseStyles,
     headStyles: navyHead,
     bodyStyles: { fillColor: CYAN },
-    columnStyles: { 0: { fontStyle: 'bold' }, 2: right, 3: right, 4: right, 5: right, 6: { ...right, fontStyle: 'bold' }, 7: { ...right, fontStyle: 'bold' } },
+    columnStyles: { 0: { fontStyle: 'bold' }, 1: right, 2: right, 3: right, 4: right, 5: { ...right, fontStyle: 'bold' }, 6: { ...right, fontStyle: 'bold' } },
     margin: { left: M, right: M },
   })
   y = ((doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y) + 20
@@ -136,7 +137,7 @@ export function buildDailyBillingPdf(input: DailyBillingPdfInput): jsPDF {
     trafficBody.push(totalBand([
       'TOTAL', `${num(input.sources)} ${input.sources === 1 ? 'source' : 'sources'}`, money2(tt.avgRate),
       num(tt.answered), num(tt.missed), num(tt.replaced), num(tt.finalCount), money2(tt.totalBill),
-    ]))
+    ], 2))
     autoTable(doc, {
       startY: y,
       theme: 'grid',

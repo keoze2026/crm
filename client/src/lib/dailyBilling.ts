@@ -1,5 +1,5 @@
 import { bundleCampaignRecords, effectiveCampaignReplacement, normalizeCode } from './bundle'
-import type { Buyer, CallRecord } from '../types'
+import type { CallRecord } from '../types'
 
 /**
  * The AHT Daily Billing page: the client (buyer, revenue) side and the traffic-source
@@ -60,10 +60,8 @@ export function marginPct(clientBilling: number, trafficCost: number): number | 
 /** One printed line of either table — a single record on a day, or a roll-up over a range. */
 export interface BillingRow {
   key: string
-  /** Destination (client) or Camp (traffic). */
+  /** Destination (client — the buyer itself) or Camp (traffic). */
   code: string
-  /** The buyer's name, when one has been given (client side only). */
-  name: string
   /** Traffic source (traffic side only). */
   source: string
   rate: number
@@ -91,22 +89,11 @@ export function sortByPrice<T extends { rate: number; totalBill: number; code: s
   return [...rows].sort((a, b) => b.rate - a.rate || b.totalBill - a.totalBill || a.code.localeCompare(b.code))
 }
 
-/** The name a buyer was given, or '' when it only has a code (a name equal to the code is no name). */
-export function buyerDisplayName(b: Pick<Buyer, 'code' | 'name'> | undefined): string {
-  if (!b || !b.name) return ''
-  return b.name.trim() === b.code.trim() ? '' : b.name
-}
-
-export function buyersById(buyers: Buyer[]): Map<number, Buyer> {
-  return new Map(buyers.map((b) => [b.id, b]))
-}
-
 /** A client record as one line, exactly as stored. */
-export function clientRecordRow(r: CallRecord, buyers: Map<number, Buyer>): BillingRow {
+export function clientRecordRow(r: CallRecord): BillingRow {
   return {
     key: String(r.id),
     code: r.buyer_code ?? '—',
-    name: buyerDisplayName(r.buyer_id == null ? undefined : buyers.get(r.buyer_id)),
     source: '',
     rate: Number(r.rate) || 0,
     answered: Number(r.answered) || 0,
@@ -123,7 +110,6 @@ export function trafficRecordRow(r: CallRecord): BillingRow {
   return {
     key: String(r.id),
     code: r.campaign_code ?? '—',
-    name: '',
     source: r.source ?? '—',
     rate: Number(r.rate) || 0,
     answered: Number(r.answered) || 0,
@@ -136,8 +122,8 @@ export function trafficRecordRow(r: CallRecord): BillingRow {
 }
 
 /** Single-day client lines, price high to low. */
-export function clientRows(records: CallRecord[], buyers: Map<number, Buyer>): BillingRow[] {
-  return sortByPrice(records.map((r) => clientRecordRow(r, buyers)))
+export function clientRows(records: CallRecord[]): BillingRow[] {
+  return sortByPrice(records.map(clientRecordRow))
 }
 
 /** Single-day traffic lines, price high to low. */
@@ -150,11 +136,11 @@ export function trafficRows(records: CallRecord[]): BillingRow[] {
  * the rate shown is the weighted average (Total Bill ÷ Final Count), which is the rate the
  * client was actually billed at across the days.
  */
-export function aggregateClientRows(records: CallRecord[], buyers: Map<number, Buyer>): BillingRow[] {
+export function aggregateClientRows(records: CallRecord[]): BillingRow[] {
   const groups = new Map<string, BillingRow>()
   for (const r of records) {
     const key = r.buyer_id != null ? `b${r.buyer_id}` : `c${normalizeCode(r.buyer_code)}`
-    const line = clientRecordRow(r, buyers)
+    const line = clientRecordRow(r)
     const g = groups.get(key)
     if (!g) { groups.set(key, { ...line, key }); continue }
     g.answered += line.answered
@@ -173,7 +159,6 @@ export function aggregateTrafficRows(records: CallRecord[]): BillingRow[] {
   return sortByPrice(bundleCampaignRecords(records).map((b) => ({
     key: b.key,
     code: b.camp,
-    name: '',
     source: b.source,
     rate: b.rate,
     answered: b.answered,

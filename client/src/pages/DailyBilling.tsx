@@ -6,7 +6,7 @@ import { DateRangeControl, type Range } from '../components/DateRange'
 import { PageHeader } from '../components/Layout'
 import { Button, Card, PageLoader, cx } from '../components/ui'
 import {
-  aggregateClientRows, aggregateTrafficRows, buyersById, campCount, clientCount, clientRows,
+  aggregateClientRows, aggregateTrafficRows, campCount, clientCount, clientRows,
   finalProfit, marginPct, sourceCount, totalsOf, trafficRows,
 } from '../lib/dailyBilling'
 import { buildDailyBillingPdf } from '../lib/dailyBillingPdf'
@@ -58,14 +58,13 @@ export default function DailyBillingPage() {
 
   const view = useMemo(() => {
     if (!data.data) return null
-    const { clientRecords, trafficRecords, buyers } = data.data
-    const byId = buyersById(buyers)
-    const client = single ? clientRows(clientRecords, byId) : aggregateClientRows(clientRecords, byId)
+    const { clientRecords, trafficRecords } = data.data
+    const client = single ? clientRows(clientRecords) : aggregateClientRows(clientRecords)
     const traffic = single ? trafficRows(trafficRecords) : aggregateTrafficRows(trafficRecords)
     const clientTotals = totalsOf(client)
     const trafficTotals = totalsOf(traffic)
     return {
-      byId, client, traffic, clientTotals, trafficTotals,
+      client, traffic, clientTotals, trafficTotals,
       clients: clientCount(clientRecords),
       camps: campCount(trafficRecords),
       sources: sourceCount(trafficRecords),
@@ -136,7 +135,6 @@ export default function DailyBillingPage() {
                 records={data.data!.clientRecords}
                 rows={view.client}
                 totals={view.clientTotals}
-                buyers={view.byId}
                 entities={entities}
                 destinations={[]}
                 campaigns={[]}
@@ -162,7 +160,6 @@ export default function DailyBillingPage() {
                   records={data.data!.trafficRecords}
                   rows={view.traffic}
                   totals={view.trafficTotals}
-                  buyers={view.byId}
                   entities={[]}
                   destinations={data.data!.destinations}
                   campaigns={data.data!.campaigns}

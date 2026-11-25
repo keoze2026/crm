@@ -99,12 +99,10 @@ function BuyerRow({ index, buyer, onChanged }: { index: number; buyer: Buyer; on
     if (saving.current || !dirty || code.trim() === '') return
     saving.current = true
     try {
-      // A buyer named on AHT Daily Billing keeps that name through a rename; one that only
-      // mirrors its code follows the new code. Total Leads Bought is never sent — it always
-      // auto-derives from the billing records for the selected range. Renaming onto an
-      // existing buyer's code offers to merge them (see lib/buyers).
-      const name = buyer.name && buyer.name.trim() !== buyer.code.trim() ? buyer.name : code.trim()
-      if (await saveBuyer(buyer.id, buyer.code, { code: code.trim(), name, rate: rateNum })) onChanged()
+      // Name doubles as the code, so keep them in sync. Total Leads Bought is never sent
+      // — it always auto-derives from the AHT Daily Billing records for the selected range.
+      // Renaming onto an existing buyer's code offers to merge them (see lib/buyers).
+      if (await saveBuyer(buyer.id, buyer.code, { code: code.trim(), name: code.trim(), rate: rateNum })) onChanged()
       else setCode(buyer.code)
     } catch (e) { alert((e as Error).message) } finally { saving.current = false }
   }
